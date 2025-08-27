@@ -154,10 +154,20 @@ export async function createMarketingCampaign(campaignData: any) {
 
 export async function updateCampaignStatus(id: string, status: string, stats?: any) {
   try {
-    const updateData: any = { status };
+    const updateData: any = { 
+      status: {
+        key: status.toLowerCase(),
+        value: status
+      }
+    };
     
     if (stats) {
       updateData.stats = stats;
+    }
+    
+    // Add send_date when campaign is sent
+    if (status === 'Sent') {
+      updateData.send_date = new Date().toISOString().split('T')[0];
     }
     
     return await cosmic.objects.updateOne(id, {
