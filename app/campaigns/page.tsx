@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { getMarketingCampaigns } from '@/lib/cosmic'
 import CampaignsList from '@/components/CampaignsList'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function CampaignsPage() {
   const campaigns = await getMarketingCampaigns()
 

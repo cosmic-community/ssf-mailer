@@ -1,11 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Force dynamic rendering for all pages
   experimental: {
-    typedRoutes: false
+    dynamicIO: true,
   },
-  images: {
-    domains: ['cdn.cosmicjs.com', 'imgix.cosmicjs.com'],
-  }
+  // Ensure no static optimization
+  trailingSlash: false,
+  output: 'standalone',
 }
 
 module.exports = nextConfig

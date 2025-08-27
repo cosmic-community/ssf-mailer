@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { getEmailContacts } from '@/lib/cosmic'
 import ContactsList from '@/components/ContactsList'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function ContactsPage() {
   const contacts = await getEmailContacts()
 
@@ -16,11 +20,16 @@ export default async function ContactsPage() {
                 ← Back to Dashboard
               </Link>
               <h1 className="text-3xl font-bold text-gray-900">Email Contacts</h1>
-              <p className="text-gray-600 mt-1">Manage your subscriber database</p>
+              <p className="text-gray-600 mt-1">Manage your subscriber list</p>
             </div>
-            <Link href="/contacts/new" className="btn-primary">
-              Add New Contact
-            </Link>
+            <div className="flex space-x-3">
+              <Link href="/contacts/upload" className="btn-secondary">
+                Upload CSV
+              </Link>
+              <Link href="/contacts/new" className="btn-primary">
+                Add New Contact
+              </Link>
+            </div>
           </div>
         </div>
       </header>

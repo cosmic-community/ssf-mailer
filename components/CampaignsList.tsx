@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import { MarketingCampaign } from '@/types'
 
 interface CampaignsListProps {
@@ -15,9 +16,9 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
         <p className="text-gray-500 mb-6">Create your first marketing campaign to get started.</p>
-        <a href="/campaigns/new" className="btn-primary">
+        <Link href="/campaigns/new" className="btn-primary">
           Create First Campaign
-        </a>
+        </Link>
       </div>
     )
   }
@@ -104,17 +105,23 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
 
           {/* Actions */}
           <div className="flex space-x-3 mt-4 pt-4 border-t border-gray-200">
-            <button className="text-sm bg-primary-50 text-primary-700 px-3 py-2 rounded-md hover:bg-primary-100 transition-colors duration-200">
+            <Link 
+              href={`/campaigns/${campaign.id}`}
+              className="text-sm bg-primary-50 text-primary-700 px-3 py-2 rounded-md hover:bg-primary-100 transition-colors duration-200"
+            >
               View Details
-            </button>
+            </Link>
             {campaign.metadata?.status?.value === 'Draft' && (
               <button className="text-sm bg-green-50 text-green-700 px-3 py-2 rounded-md hover:bg-green-100 transition-colors duration-200">
                 Send Campaign
               </button>
             )}
-            <button className="text-sm bg-gray-50 text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors duration-200">
+            <Link
+              href={`/campaigns/${campaign.id}`}
+              className="text-sm bg-gray-50 text-gray-700 px-3 py-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
+            >
               Edit
-            </button>
+            </Link>
           </div>
         </div>
       ))}

@@ -3,6 +3,10 @@ import { getEmailContacts, getEmailTemplates, getMarketingCampaigns } from '@/li
 import DashboardStats from '@/components/DashboardStats'
 import { EmailContact, EmailTemplate, MarketingCampaign } from '@/types'
 
+// Force dynamic rendering
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export default async function HomePage() {
   // Fetch data from Cosmic
   const [contacts, templates, campaigns] = await Promise.all([
