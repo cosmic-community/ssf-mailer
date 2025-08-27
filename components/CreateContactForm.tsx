@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface ContactFormData {
   first_name: string;
@@ -20,8 +21,9 @@ export default function CreateContactForm() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedStatus, setSelectedStatus] = useState<'Active' | 'Unsubscribed' | 'Bounced'>('Active')
   
-  const { register, handleSubmit, formState: { errors } } = useForm<ContactFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ContactFormData>({
     defaultValues: {
       status: 'Active',
       subscribe_date: new Date().toISOString().split('T')[0]
@@ -39,6 +41,7 @@ export default function CreateContactForm() {
         },
         body: JSON.stringify({
           ...data,
+          status: selectedStatus,
           tags: selectedTags
         })
       })
@@ -63,6 +66,12 @@ export default function CreateContactForm() {
         ? prev.filter(t => t !== tag)
         : [...prev, tag]
     )
+  }
+
+  const handleStatusChange = (value: string) => {
+    const status = value as 'Active' | 'Unsubscribed' | 'Bounced'
+    setSelectedStatus(status)
+    setValue('status', status)
   }
 
   return (
@@ -115,11 +124,16 @@ export default function CreateContactForm() {
         {/* Status */}
         <div>
           <label className="label">Subscription Status *</label>
-          <select className="input-field" {...register('status', { required: true })}>
-            <option value="Active">Active</option>
-            <option value="Unsubscribed">Unsubscribed</option>
-            <option value="Bounced">Bounced</option>
-          </select>
+          <Select value={selectedStatus} onValueChange={handleStatusChange}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Unsubscribed">Unsubscribed</SelectItem>
+              <SelectItem value="Bounced">Bounced</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Subscribe Date */}

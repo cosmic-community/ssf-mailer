@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MarketingCampaign, EmailTemplate, EmailContact } from '@/types'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface EditCampaignFormProps {
   campaign: MarketingCampaign
@@ -124,24 +125,25 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
 
         {/* Template Selection */}
         <div>
-          <label htmlFor="template" className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
             Email Template
           </label>
-          <select
-            id="template"
-            required
-            className="form-select"
+          <Select
             value={formData.template_id}
-            onChange={(e) => setFormData(prev => ({ ...prev, template_id: e.target.value }))}
+            onValueChange={(value) => setFormData(prev => ({ ...prev, template_id: value }))}
             disabled={!canEdit}
           >
-            <option value="">Select a template</option>
-            {templates.map((template) => (
-              <option key={template.id} value={template.id}>
-                {template.metadata?.name} ({template.metadata?.template_type?.value})
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Select a template" />
+            </SelectTrigger>
+            <SelectContent>
+              {templates.map((template) => (
+                <SelectItem key={template.id} value={template.id}>
+                  {template.metadata?.name} ({template.metadata?.template_type?.value})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Target Type Selection */}
@@ -290,6 +292,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
             >
               {isLoading ? 'Updating...' : 'Update Campaign'}
             </button>
+          </div>
           )}
         </div>
       </form>
