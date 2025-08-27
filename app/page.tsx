@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getEmailContacts, getEmailTemplates, getMarketingCampaigns } from '@/lib/cosmic'
 import DashboardStats from '@/components/DashboardStats'
+import LogoutButton from '@/components/LogoutButton'
 import { EmailContact, EmailTemplate, MarketingCampaign } from '@/types'
 
 // Force dynamic rendering
@@ -25,7 +26,8 @@ export default async function HomePage() {
               <h1 className="text-3xl font-bold text-gray-900">Email Marketing Hub</h1>
               <p className="text-gray-600 mt-1">Manage your email campaigns, contacts, and templates</p>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex items-center space-x-4">
+              <LogoutButton />
               <Link href="/contacts/new" className="btn-secondary">
                 Add Contact
               </Link>
