@@ -3,6 +3,13 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { EmailContact } from '@/types'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { Users, Edit, Trash2 } from 'lucide-react'
 
 interface ContactsListProps {
   contacts: EmailContact[]
@@ -12,6 +19,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const router = useRouter()
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingContact, setEditingContact] = useState<EmailContact | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
 
   const handleDelete = async (contactId: string) => {
     if (!confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
@@ -42,6 +50,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
 
   const handleEdit = (contact: EmailContact) => {
     setEditingContact(contact)
+    setIsEditDialogOpen(true)
   }
 
   const handleUpdateContact = async (updatedData: Partial<EmailContact['metadata']>) => {
@@ -65,6 +74,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
       }
 
       setEditingContact(null)
+      setIsEditDialogOpen(false)
       router.refresh()
     } catch (error) {
       console.error('Update error:', error)
@@ -76,15 +86,13 @@ export default function ContactsList({ contacts }: ContactsListProps) {
     return (
       <div className="card text-center py-12">
         <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-          </svg>
+          <Users className="w-12 h-12 text-gray-400" />
         </div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">No contacts yet</h3>
         <p className="text-gray-500 mb-6">Get started by adding your first email contact.</p>
-        <a href="/contacts/new" className="btn-primary">
-          Add First Contact
-        </a>
+        <Button asChild>
+          <a href="/contacts/new">Add First Contact</a>
+        </Button>
       </div>
     )
   }
@@ -167,19 +175,21 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleEdit(contact)}
-                        className="text-primary-600 hover:text-primary-900"
                       >
-                        Edit
-                      </button>
-                      <button
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         onClick={() => handleDelete(contact.id)}
                         disabled={deletingId === contact.id}
-                        className="text-red-600 hover:text-red-900 disabled:opacity-50"
                       >
-                        {deletingId === contact.id ? 'Deleting...' : 'Delete'}
-                      </button>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   </td>
                 </tr>
@@ -193,8 +203,13 @@ export default function ContactsList({ contacts }: ContactsListProps) {
       {editingContact && (
         <EditContactModal
           contact={editingContact}
+          isOpen={isEditDialogOpen}
+          onOpenChange={setIsEditDialogOpen}
           onUpdate={handleUpdateContact}
-          onClose={() => setEditingContact(null)}
+          onClose={() => {
+            setEditingContact(null)
+            setIsEditDialogOpen(false)
+          }}
         />
       )}
     </>
@@ -203,11 +218,13 @@ export default function ContactsList({ contacts }: ContactsListProps) {
 
 interface EditContactModalProps {
   contact: EmailContact
+  isOpen: boolean
+  onOpenChange: (open: boolean) => void
   onUpdate: (data: Partial<EmailContact['metadata']>) => void
   onClose: () => void
 }
 
-function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps) {
+function EditContactModal({ contact, isOpen, onOpenChange, onUpdate, onClose }: EditContactModalProps) {
   const [formData, setFormData] = useState({
     first_name: contact.metadata.first_name || '',
     last_name: contact.metadata.last_name || '',
@@ -243,137 +260,114 @@ function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps)
     }
   }
 
-  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const newStatus = e.target.value as 'Active' | 'Unsubscribed' | 'Bounced'
-    setFormData(prev => ({ ...prev, status: newStatus }))
-  }
-
   return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-      <div className="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-        <div className="mt-3">
-          <h3 className="text-lg font-medium text-gray-900 mb-4">Edit Contact</h3>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="first_name" className="block text-sm font-medium text-gray-700">
-                  First Name *
-                </label>
-                <input
-                  type="text"
-                  id="first_name"
-                  value={formData.first_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
-                  className="form-input"
-                  required
-                />
-              </div>
-              <div>
-                <label htmlFor="last_name" className="block text-sm font-medium text-gray-700">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  id="last_name"
-                  value={formData.last_name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
-                  className="form-input"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-                Email Address *
-              </label>
-              <input
-                type="email"
-                id="email"
-                value={formData.email}
-                onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
-                className="form-input"
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[600px]">
+        <DialogHeader>
+          <DialogTitle>Edit Contact</DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="first_name">First Name *</Label>
+              <Input
+                id="first_name"
+                value={formData.first_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, first_name: e.target.value }))}
                 required
               />
             </div>
-
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700">
-                Status
-              </label>
-              <select
-                id="status"
-                value={formData.status}
-                onChange={handleStatusChange}
-                className="form-input"
-              >
-                <option value="Active">Active</option>
-                <option value="Unsubscribed">Unsubscribed</option>
-                <option value="Bounced">Bounced</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="tags" className="block text-sm font-medium text-gray-700">
-                Tags (comma-separated)
-              </label>
-              <input
-                type="text"
-                id="tags"
-                value={formData.tags}
-                onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
-                placeholder="Newsletter, VIP Customer, etc."
-                className="form-input"
+            <div className="space-y-2">
+              <Label htmlFor="last_name">Last Name</Label>
+              <Input
+                id="last_name"
+                value={formData.last_name}
+                onChange={(e) => setFormData(prev => ({ ...prev, last_name: e.target.value }))}
               />
             </div>
+          </div>
 
-            <div>
-              <label htmlFor="subscribe_date" className="block text-sm font-medium text-gray-700">
-                Subscribe Date
-              </label>
-              <input
-                type="date"
-                id="subscribe_date"
-                value={formData.subscribe_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, subscribe_date: e.target.value }))}
-                className="form-input"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">Email Address *</Label>
+            <Input
+              type="email"
+              id="email"
+              value={formData.email}
+              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              required
+            />
+          </div>
 
-            <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-gray-700">
-                Notes
-              </label>
-              <textarea
-                id="notes"
-                rows={3}
-                value={formData.notes}
-                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
-                placeholder="Any additional notes about this contact..."
-                className="form-input"
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="status">Status</Label>
+            <Select
+              value={formData.status}
+              onValueChange={(value: 'Active' | 'Unsubscribed' | 'Bounced') => 
+                setFormData(prev => ({ ...prev, status: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Active">Active</SelectItem>
+                <SelectItem value="Unsubscribed">Unsubscribed</SelectItem>
+                <SelectItem value="Bounced">Bounced</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <div className="flex space-x-3 pt-4">
-              <button
+          <div className="space-y-2">
+            <Label htmlFor="tags">Tags (comma-separated)</Label>
+            <Input
+              id="tags"
+              value={formData.tags}
+              onChange={(e) => setFormData(prev => ({ ...prev, tags: e.target.value }))}
+              placeholder="Newsletter, VIP Customer, etc."
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="subscribe_date">Subscribe Date</Label>
+            <Input
+              type="date"
+              id="subscribe_date"
+              value={formData.subscribe_date}
+              onChange={(e) => setFormData(prev => ({ ...prev, subscribe_date: e.target.value }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="notes">Notes</Label>
+            <Textarea
+              id="notes"
+              rows={3}
+              value={formData.notes}
+              onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+              placeholder="Any additional notes about this contact..."
+            />
+          </div>
+
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button
                 type="button"
-                onClick={onClose}
-                className="btn-secondary"
+                variant="outline"
                 disabled={isSubmitting}
               >
                 Cancel
-              </button>
-              <button
-                type="submit"
-                className="btn-primary"
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Updating...' : 'Update Contact'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
+              </Button>
+            </DialogClose>
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Updating...' : 'Update Contact'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

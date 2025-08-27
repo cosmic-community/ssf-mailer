@@ -3,6 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
 
 interface ContactFormData {
   first_name: string;
@@ -20,8 +26,9 @@ export default function CreateContactForm() {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
+  const [selectedStatus, setSelectedStatus] = useState<'Active' | 'Unsubscribed' | 'Bounced'>('Active')
   
-  const { register, handleSubmit, formState: { errors } } = useForm<ContactFormData>({
+  const { register, handleSubmit, formState: { errors }, setValue } = useForm<ContactFormData>({
     defaultValues: {
       status: 'Active',
       subscribe_date: new Date().toISOString().split('T')[0]
@@ -39,6 +46,7 @@ export default function CreateContactForm() {
         },
         body: JSON.stringify({
           ...data,
+          status: selectedStatus,
           tags: selectedTags
         })
       })
@@ -65,39 +73,45 @@ export default function CreateContactForm() {
     )
   }
 
+  const handleStatusChange = (value: string) => {
+    const status = value as 'Active' | 'Unsubscribed' | 'Bounced'
+    setSelectedStatus(status)
+    setValue('status', status)
+  }
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* First Name */}
-        <div>
-          <label className="label">First Name *</label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="first_name">First Name *</Label>
+          <Input
+            id="first_name"
             type="text"
-            className="input-field"
             {...register('first_name', { required: 'First name is required' })}
           />
           {errors.first_name && (
-            <p className="text-red-500 text-sm mt-1">{errors.first_name.message}</p>
+            <p className="text-sm text-destructive">{errors.first_name.message}</p>
           )}
         </div>
 
         {/* Last Name */}
-        <div>
-          <label className="label">Last Name</label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="last_name">Last Name</Label>
+          <Input
+            id="last_name"
             type="text"
-            className="input-field"
             {...register('last_name')}
           />
         </div>
       </div>
 
       {/* Email */}
-      <div>
-        <label className="label">Email Address *</label>
-        <input
+      <div className="space-y-2">
+        <Label htmlFor="email">Email Address *</Label>
+        <Input
+          id="email"
           type="email"
-          className="input-field"
           {...register('email', { 
             required: 'Email is required',
             pattern: {
@@ -107,56 +121,65 @@ export default function CreateContactForm() {
           })}
         />
         {errors.email && (
-          <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>
+          <p className="text-sm text-destructive">{errors.email.message}</p>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Status */}
-        <div>
-          <label className="label">Subscription Status *</label>
-          <select className="input-field" {...register('status', { required: true })}>
-            <option value="Active">Active</option>
-            <option value="Unsubscribed">Unsubscribed</option>
-            <option value="Bounced">Bounced</option>
-          </select>
+        <div className="space-y-2">
+          <Label>Subscription Status *</Label>
+          <Select value={selectedStatus} onValueChange={handleStatusChange}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Active">Active</SelectItem>
+              <SelectItem value="Unsubscribed">Unsubscribed</SelectItem>
+              <SelectItem value="Bounced">Bounced</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Subscribe Date */}
-        <div>
-          <label className="label">Subscribe Date</label>
-          <input
+        <div className="space-y-2">
+          <Label htmlFor="subscribe_date">Subscribe Date</Label>
+          <Input
+            id="subscribe_date"
             type="date"
-            className="input-field"
             {...register('subscribe_date')}
           />
         </div>
       </div>
 
       {/* Tags */}
-      <div>
-        <label className="label">Tags</label>
+      <div className="space-y-3">
+        <Label>Tags</Label>
         <div className="grid grid-cols-2 gap-3">
           {AVAILABLE_TAGS.map(tag => (
-            <label key={tag} className="flex items-center">
-              <input
-                type="checkbox"
+            <div key={tag} className="flex items-center space-x-2">
+              <Checkbox
+                id={tag}
                 checked={selectedTags.includes(tag)}
-                onChange={() => handleTagToggle(tag)}
-                className="mr-2 rounded text-primary-600 focus:ring-primary-500"
+                onCheckedChange={() => handleTagToggle(tag)}
               />
-              <span className="text-sm text-gray-700">{tag}</span>
-            </label>
+              <Label 
+                htmlFor={tag}
+                className="text-sm font-normal cursor-pointer"
+              >
+                {tag}
+              </Label>
+            </div>
           ))}
         </div>
       </div>
 
       {/* Notes */}
-      <div>
-        <label className="label">Notes</label>
-        <textarea
+      <div className="space-y-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea
+          id="notes"
           rows={3}
-          className="input-field resize-none"
           placeholder="Add any additional notes about this contact..."
           {...register('notes')}
         />
@@ -164,20 +187,19 @@ export default function CreateContactForm() {
 
       {/* Submit Button */}
       <div className="flex justify-end space-x-4">
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => router.back()}
-          className="btn-secondary"
         >
           Cancel
-        </button>
-        <button
+        </Button>
+        <Button
           type="submit"
           disabled={isSubmitting}
-          className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isSubmitting ? 'Adding Contact...' : 'Add Contact'}
-        </button>
+        </Button>
       </div>
     </form>
   )
