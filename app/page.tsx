@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { getEmailContacts, getEmailTemplates, getMarketingCampaigns } from '@/lib/cosmic'
 import DashboardStats from '@/components/DashboardStats'
-import { EmailContact, EmailTemplate } from '@/types'
+import { EmailContact, EmailTemplate, MarketingCampaign } from '@/types'
 
 export default async function HomePage() {
   // Fetch data from Cosmic
@@ -141,7 +141,7 @@ export default async function HomePage() {
             </div>
             <p className="text-gray-600 mb-4">Your marketing campaigns</p>
             <div className="space-y-3">
-              {campaigns.slice(0, 3).map((campaign) => (
+              {campaigns.slice(0, 3).map((campaign: MarketingCampaign) => (
                 <div key={campaign.id} className="py-2 border-b border-gray-100 last:border-0">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
@@ -214,7 +214,7 @@ export default async function HomePage() {
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">3. Launch Campaign</h3>
               <p className="text-gray-600 text-sm mb-4">Send targeted email campaigns</p>
-              <Link href="/campaigns/new" className="btn-outline">
+              <Link href="/campaigns/new" className="btn-primary">
                 Create Campaign
               </Link>
             </div>
