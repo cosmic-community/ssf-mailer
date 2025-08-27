@@ -1,41 +1,54 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 
 interface UploadResult {
-  message: string;
-  success: number;
-  errors: string[];
+  success: boolean
+  imported: number
+  errors: number
+  details: {
+    successful: Array<{
+      row: number
+      name: string
+      email: string
+      success: boolean
+      id?: string
+    }>
+    failed: string[]
+  }
 }
 
 export default function CSVUploadForm() {
   const router = useRouter()
-  const [file, setFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const [result, setResult] = useState<UploadResult | null>(null)
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
-    if (selectedFile) {
-      setFile(selectedFile)
-      setResult(null)
-      setError('')
-    }
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
+    setUploadResult(null)
     
+    const fileInput = fileInputRef.current
+    if (!fileInput) {
+      setError('File input not found')
+      return
+    }
+
+    const file = fileInput.files?.[0]
     if (!file) {
       setError('Please select a CSV file')
       return
     }
 
+    if (file.type !== 'text/csv' && !file.name.toLowerCase().endsWith('.csv')) {
+      setError('Please upload a CSV file')
+      return
+    }
+
     setIsUploading(true)
-    setError('')
-    setResult(null)
 
     try {
       const formData = new FormData()
@@ -46,33 +59,33 @@ export default function CSVUploadForm() {
         body: formData,
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || 'Upload failed')
+        throw new Error(result.error || 'Upload failed')
       }
 
-      setResult(data)
+      // Safely handle the response with proper type checking
+      if (result && typeof result === 'object' && 'success' in result) {
+        setUploadResult(result as UploadResult)
+      } else {
+        throw new Error('Invalid response format')
+      }
+
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Upload failed. Please try again.'
-      setError(errorMessage)
+      console.error('Upload error:', err)
+      setError(err instanceof Error ? err.message : 'Failed to upload CSV file')
     } finally {
       setIsUploading(false)
     }
   }
 
-  const downloadTemplate = () => {
-    const csvContent = 'first_name,last_name,email,status,tags,subscribe_date,notes\nJohn,Doe,john.doe@example.com,Active,"Newsletter,VIP",2024-01-15,Sample contact\nJane,Smith,jane.smith@example.com,Active,Newsletter,2024-01-16,'
-    const blob = new Blob([csvContent], { type: 'text/csv' })
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.style.display = 'none'
-    a.href = url
-    a.download = 'contacts_template.csv'
-    document.body.appendChild(a)
-    a.click()
-    window.URL.revokeObjectURL(url)
-    document.body.removeChild(a)
+  const resetForm = () => {
+    setUploadResult(null)
+    setError('')
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   return (
@@ -80,105 +93,124 @@ export default function CSVUploadForm() {
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Contacts from CSV</h2>
       
       {/* Instructions */}
-      <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
-        <h3 className="text-sm font-medium text-blue-900 mb-2">CSV Format Requirements:</h3>
+      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
+        <h3 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements</h3>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• <strong>first_name</strong> (required): Contact's first name</li>
-          <li>• <strong>email</strong> (required): Valid email address</li>
-          <li>• <strong>last_name</strong> (optional): Contact's last name</li>
-          <li>• <strong>status</strong> (optional): Active, Unsubscribed, or Bounced (defaults to Active)</li>
-          <li>• <strong>tags</strong> (optional): Comma-separated list (e.g., "Newsletter,VIP")</li>
-          <li>• <strong>subscribe_date</strong> (optional): YYYY-MM-DD format</li>
-          <li>• <strong>notes</strong> (optional): Additional information</li>
+          <li>• Required columns: <code>first_name</code>, <code>email</code></li>
+          <li>• Optional columns: <code>last_name</code>, <code>tags</code>, <code>status</code>, <code>subscribe_date</code>, <code>notes</code></li>
+          <li>• Use semicolons (;) to separate multiple tags</li>
+          <li>• Status values: Active, Unsubscribed, Bounced (defaults to Active)</li>
+          <li>• Date format: YYYY-MM-DD</li>
         </ul>
-        <button 
-          onClick={downloadTemplate}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
-        >
-          Download CSV Template →
-        </button>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* File Upload */}
-        <div>
-          <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700 mb-2">
-            Select CSV File
-          </label>
-          <input
-            type="file"
-            id="csvFile"
-            accept=".csv"
-            onChange={handleFileChange}
-            className="block w-full text-sm text-gray-500
-                     file:mr-4 file:py-2 file:px-4
-                     file:rounded-md file:border-0
-                     file:text-sm file:font-medium
-                     file:bg-primary-50 file:text-primary-700
-                     hover:file:bg-primary-100
-                     file:cursor-pointer cursor-pointer"
-          />
-          {file && (
-            <p className="mt-2 text-sm text-gray-600">
-              Selected: {file.name} ({(file.size / 1024).toFixed(2)} KB)
-            </p>
+      {/* Upload Form */}
+      {!uploadResult && (
+        <form onSubmit={handleFileUpload} className="space-y-6">
+          <div>
+            <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700 mb-2">
+              Select CSV File
+            </label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              id="csvFile"
+              accept=".csv,text/csv"
+              className="form-input"
+              disabled={isUploading}
+              required
+            />
+          </div>
+
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+              <p className="text-red-600">{error}</p>
+            </div>
           )}
-        </div>
 
-        {/* Error Message */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-600">{error}</p>
+          <div className="flex space-x-4">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="btn-secondary"
+              disabled={isUploading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isUploading}
+            >
+              {isUploading ? 'Uploading...' : 'Upload CSV'}
+            </button>
           </div>
-        )}
+        </form>
+      )}
 
-        {/* Upload Result */}
-        {result && (
-          <div className={`p-4 border rounded-md ${
-            result.errors && result.errors.length > 0 
-              ? 'bg-yellow-50 border-yellow-200' 
-              : 'bg-green-50 border-green-200'
-          }`}>
-            <p className={`font-medium ${
-              result.errors && result.errors.length > 0 
-                ? 'text-yellow-800' 
-                : 'text-green-800'
-            }`}>
-              {result.message}
-            </p>
-            
-            {result.errors && result.errors.length > 0 && (
-              <div className="mt-3">
-                <p className="text-sm font-medium text-yellow-800 mb-2">Errors encountered:</p>
-                <ul className="text-sm text-yellow-700 space-y-1 max-h-32 overflow-y-auto">
-                  {result.errors.map((err, index) => (
-                    <li key={index}>• {err}</li>
-                  ))}
-                </ul>
+      {/* Upload Results */}
+      {uploadResult && (
+        <div className="space-y-6">
+          <div className="flex items-center space-x-4">
+            <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-full">
+              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
+              <p className="text-gray-600">
+                {uploadResult.imported} contacts imported successfully
+                {uploadResult.errors > 0 && `, ${uploadResult.errors} errors`}
+              </p>
+            </div>
+          </div>
+
+          {/* Success Summary */}
+          {uploadResult.imported > 0 && (
+            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+              <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.imported})</h4>
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {uploadResult.details.successful.map((contact, index) => (
+                  <div key={index} className="text-sm text-green-700">
+                    Row {contact.row}: {contact.name} ({contact.email})
+                  </div>
+                ))}
               </div>
-            )}
-          </div>
-        )}
+            </div>
+          )}
 
-        {/* Actions */}
-        <div className="flex space-x-4 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn-secondary"
-            disabled={isUploading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={!file || isUploading}
-          >
-            {isUploading ? 'Uploading...' : 'Upload CSV'}
-          </button>
+          {/* Error Summary */}
+          {uploadResult.errors > 0 && uploadResult.details.failed.length > 0 && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+              <h4 className="font-medium text-red-800 mb-2">Errors ({uploadResult.errors})</h4>
+              <div className="max-h-32 overflow-y-auto space-y-1">
+                {uploadResult.details.failed.map((error, index) => (
+                  <div key={index} className="text-sm text-red-700">
+                    {error}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="flex space-x-4">
+            <button
+              onClick={resetForm}
+              className="btn-secondary"
+            >
+              Upload Another File
+            </button>
+            <button
+              onClick={() => router.push('/contacts')}
+              className="btn-primary"
+            >
+              View All Contacts
+            </button>
+          </div>
         </div>
-      </form>
+      )}
     </div>
   )
 }
