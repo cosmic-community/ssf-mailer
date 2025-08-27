@@ -41,7 +41,7 @@ Please generate only the HTML content without any explanatory text or formatting
       // Create streaming response
       const stream = await cosmic.ai.generateText({
         prompt: detailedPrompt,
-        max_tokens: 2000,
+        max_tokens: 60000,
         stream: true
       }) as TextStreamingResponse
 
