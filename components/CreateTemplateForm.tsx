@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Eye, Code, Wand2, Loader2 } from 'lucide-react'
+import { Eye, Code, Wand2, Loader2, Square } from 'lucide-react'
 
 interface TemplateFormData {
   name: string
@@ -25,6 +25,9 @@ export default function CreateTemplateForm() {
   const [viewMode, setViewMode] = useState<'code' | 'preview'>('code')
   const [error, setError] = useState('')
   const [aiPrompt, setAiPrompt] = useState('')
+  const [streamingContent, setStreamingContent] = useState('')
+  const [streamingComplete, setStreamingComplete] = useState(false)
+  const abortControllerRef = useRef<AbortController | null>(null)
   
   const [formData, setFormData] = useState<TemplateFormData>({
     name: '',
@@ -41,6 +44,15 @@ export default function CreateTemplateForm() {
     }))
   }
 
+  const stopAIGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      setIsGeneratingAI(false)
+      setStreamingComplete(true)
+    }
+  }
+
   const generateWithAI = async () => {
     if (!aiPrompt.trim()) {
       setError('Please enter a prompt for AI generation')
@@ -48,7 +60,12 @@ export default function CreateTemplateForm() {
     }
 
     setIsGeneratingAI(true)
+    setStreamingComplete(false)
+    setStreamingContent('')
     setError('')
+
+    // Create abort controller for streaming
+    abortControllerRef.current = new AbortController()
 
     try {
       const response = await fetch('/api/templates/generate-ai', {
@@ -58,30 +75,87 @@ export default function CreateTemplateForm() {
         },
         body: JSON.stringify({
           prompt: aiPrompt,
-          template_type: formData.template_type || 'Newsletter'
-        })
+          template_type: formData.template_type || 'Newsletter',
+          stream: true
+        }),
+        signal: abortControllerRef.current.signal
       })
 
-      const result = await response.json()
-
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to generate content with AI')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to generate content with AI')
       }
 
-      // Update form with AI-generated content
-      setFormData(prev => ({
-        ...prev,
-        content: result.content,
-        subject: result.subject || prev.subject,
-        name: result.name || prev.name
-      }))
+      if (!response.body) {
+        throw new Error('No response body for streaming')
+      }
+
+      // Handle streaming response
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      let fullContent = ''
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) break
+
+          const chunk = decoder.decode(value)
+          const lines = chunk.split('\n')
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                switch (data.type) {
+                  case 'text':
+                    setStreamingContent(data.fullContent || '')
+                    fullContent = data.fullContent || ''
+                    break
+                    
+                  case 'usage':
+                    console.log('Token usage:', data.usage)
+                    break
+                    
+                  case 'complete':
+                    // Update form with final AI-generated content
+                    setFormData(prev => ({
+                      ...prev,
+                      content: data.content || fullContent,
+                      subject: data.subject || prev.subject,
+                      name: data.name || prev.name
+                    }))
+                    setStreamingContent(data.content || fullContent)
+                    setStreamingComplete(true)
+                    break
+                    
+                  case 'error':
+                    throw new Error(data.error)
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse streaming data:', parseError)
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
 
       setAiPrompt('')
     } catch (err) {
-      console.error('AI generation error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to generate content with AI')
+      if (err instanceof Error && err.name === 'AbortError') {
+        console.log('AI generation was stopped by user')
+      } else {
+        console.error('AI generation error:', err)
+        setError(err instanceof Error ? err.message : 'Failed to generate content with AI')
+      }
     } finally {
       setIsGeneratingAI(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -132,6 +206,9 @@ export default function CreateTemplateForm() {
 
     return previewContent
   }
+
+  // Get the content to display (either final form content or streaming content)
+  const displayContent = isGeneratingAI ? streamingContent : formData.content
 
   return (
     <div className="card max-w-4xl">
@@ -184,9 +261,24 @@ export default function CreateTemplateForm() {
 
         {/* AI Content Generation */}
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
-          <div className="flex items-center space-x-2">
-            <Wand2 className="h-5 w-5 text-blue-600" />
-            <Label className="text-blue-800 font-medium">Generate Content with AI</Label>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Wand2 className="h-5 w-5 text-blue-600" />
+              <Label className="text-blue-800 font-medium">Generate Content with AI</Label>
+            </div>
+            
+            {isGeneratingAI && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={stopAIGeneration}
+                className="text-red-600 border-red-300 hover:bg-red-50"
+              >
+                <Square className="mr-2 h-4 w-4" />
+                Stop Generation
+              </Button>
+            )}
           </div>
           
           <div className="space-y-3">
@@ -195,6 +287,7 @@ export default function CreateTemplateForm() {
               onChange={(e) => setAiPrompt(e.target.value)}
               placeholder="Describe the email you want to create (e.g., 'Create a welcome email for new subscribers to a fitness newsletter with tips and motivation')"
               rows={3}
+              disabled={isGeneratingAI}
             />
             
             <Button
@@ -202,7 +295,7 @@ export default function CreateTemplateForm() {
               variant="outline"
               onClick={generateWithAI}
               disabled={isGeneratingAI || !aiPrompt.trim()}
-              className="bg-blue-600 text-white hover:bg-blue-700"
+              className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400"
             >
               {isGeneratingAI ? (
                 <>
@@ -216,6 +309,15 @@ export default function CreateTemplateForm() {
                 </>
               )}
             </Button>
+            
+            {isGeneratingAI && (
+              <div className="text-sm text-blue-700">
+                <p className="mb-2">✨ AI is generating your content in real-time...</p>
+                <div className="bg-white/50 rounded p-2 text-xs font-mono max-h-32 overflow-y-auto">
+                  {streamingContent || 'Starting generation...'}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -251,23 +353,25 @@ export default function CreateTemplateForm() {
           {viewMode === 'code' ? (
             <div className="space-y-2">
               <Textarea
-                value={formData.content}
+                value={displayContent}
                 onChange={(e) => handleInputChange('content', e.target.value)}
                 placeholder="Enter HTML email content..."
                 rows={12}
                 className="font-mono text-sm"
                 required
+                disabled={isGeneratingAI}
               />
               <p className="text-sm text-gray-500">
                 Use HTML tags for formatting. Variables like {`{{first_name}}`} will be replaced when sending.
+                {isGeneratingAI && ' Content is being generated above...'}
               </p>
             </div>
           ) : (
             <div className="border rounded-lg p-4 bg-white min-h-[300px]">
               <div className="prose prose-sm max-w-none">
-                {formData.content ? (
+                {displayContent ? (
                   <div 
-                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(formData.content) }}
+                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(displayContent) }}
                     className="email-preview"
                   />
                 ) : (
@@ -276,6 +380,15 @@ export default function CreateTemplateForm() {
                   </p>
                 )}
               </div>
+              
+              {isGeneratingAI && (
+                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
+                  <div className="flex items-center space-x-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+                    <span className="text-sm text-blue-700">Generating preview in real-time...</span>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -302,13 +415,13 @@ export default function CreateTemplateForm() {
             type="button"
             variant="outline"
             onClick={() => router.back()}
-            disabled={isSubmitting}
+            disabled={isSubmitting || isGeneratingAI}
           >
             Cancel
           </Button>
           <Button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isGeneratingAI}
           >
             {isSubmitting ? (
               <>
