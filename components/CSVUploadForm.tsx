@@ -2,6 +2,10 @@
 
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { CheckCircle, AlertCircle, Upload } from 'lucide-react'
 
 interface UploadResult {
   success: boolean
@@ -96,8 +100,8 @@ export default function CSVUploadForm() {
       <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
         <h3 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements</h3>
         <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Required columns: <code>first_name</code>, <code>email</code></li>
-          <li>• Optional columns: <code>last_name</code>, <code>tags</code>, <code>status</code>, <code>subscribe_date</code>, <code>notes</code></li>
+          <li>• Required columns: <code className="bg-blue-100 px-1 rounded">first_name</code>, <code className="bg-blue-100 px-1 rounded">email</code></li>
+          <li>• Optional columns: <code className="bg-blue-100 px-1 rounded">last_name</code>, <code className="bg-blue-100 px-1 rounded">tags</code>, <code className="bg-blue-100 px-1 rounded">status</code>, <code className="bg-blue-100 px-1 rounded">subscribe_date</code>, <code className="bg-blue-100 px-1 rounded">notes</code></li>
           <li>• Use semicolons (;) to separate multiple tags</li>
           <li>• Status values: Active, Unsubscribed, Bounced (defaults to Active)</li>
           <li>• Date format: YYYY-MM-DD</li>
@@ -107,43 +111,50 @@ export default function CSVUploadForm() {
       {/* Upload Form */}
       {!uploadResult && (
         <form onSubmit={handleFileUpload} className="space-y-6">
-          <div>
-            <label htmlFor="csvFile" className="block text-sm font-medium text-gray-700 mb-2">
-              Select CSV File
-            </label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="csvFile">Select CSV File</Label>
+            <Input
               ref={fileInputRef}
               type="file"
               id="csvFile"
               accept=".csv,text/csv"
-              className="form-input"
               disabled={isUploading}
               required
             />
           </div>
 
           {error && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
+              <AlertCircle className="h-5 w-5 text-red-600" />
               <p className="text-red-600">{error}</p>
             </div>
           )}
 
           <div className="flex space-x-4">
-            <button
+            <Button
               type="button"
+              variant="outline"
               onClick={() => router.back()}
-              className="btn-secondary"
               disabled={isUploading}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
-              className="btn-primary"
               disabled={isUploading}
             >
-              {isUploading ? 'Uploading...' : 'Upload CSV'}
-            </button>
+              {isUploading ? (
+                <>
+                  <Upload className="mr-2 h-4 w-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload CSV
+                </>
+              )}
+            </Button>
           </div>
         </form>
       )}
@@ -153,9 +164,7 @@ export default function CSVUploadForm() {
         <div className="space-y-6">
           <div className="flex items-center space-x-4">
             <div className="flex items-center justify-center w-12 h-12 bg-green-100 rounded-full">
-              <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
+              <CheckCircle className="w-6 h-6 text-green-600" />
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
@@ -196,18 +205,17 @@ export default function CSVUploadForm() {
 
           {/* Actions */}
           <div className="flex space-x-4">
-            <button
+            <Button
+              variant="outline"
               onClick={resetForm}
-              className="btn-secondary"
             >
               Upload Another File
-            </button>
-            <button
+            </Button>
+            <Button
               onClick={() => router.push('/contacts')}
-              className="btn-primary"
             >
               View All Contacts
-            </button>
+            </Button>
           </div>
         </div>
       )}
