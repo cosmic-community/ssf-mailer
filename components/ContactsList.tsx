@@ -212,7 +212,7 @@ function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps)
     first_name: contact.metadata.first_name || '',
     last_name: contact.metadata.last_name || '',
     email: contact.metadata.email || '',
-    status: contact.metadata.status?.value || 'Active',
+    status: contact.metadata.status?.value || 'Active' as 'Active' | 'Unsubscribed' | 'Bounced',
     tags: contact.metadata.tags ? contact.metadata.tags.join(', ') : '',
     subscribe_date: contact.metadata.subscribe_date || '',
     notes: contact.metadata.notes || ''
@@ -230,7 +230,7 @@ function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps)
         email: formData.email,
         status: {
           key: formData.status.toLowerCase(),
-          value: formData.status as 'Active' | 'Unsubscribed' | 'Bounced'
+          value: formData.status
         },
         tags: formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
         subscribe_date: formData.subscribe_date,
@@ -241,6 +241,11 @@ function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  const handleStatusChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newStatus = e.target.value as 'Active' | 'Unsubscribed' | 'Bounced'
+    setFormData(prev => ({ ...prev, status: newStatus }))
   }
 
   return (
@@ -299,7 +304,7 @@ function EditContactModal({ contact, onUpdate, onClose }: EditContactModalProps)
               <select
                 id="status"
                 value={formData.status}
-                onChange={(e) => setFormData(prev => ({ ...prev, status: e.target.value }))}
+                onChange={handleStatusChange}
                 className="form-input"
               >
                 <option value="Active">Active</option>
