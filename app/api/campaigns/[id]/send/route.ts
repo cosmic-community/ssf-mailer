@@ -1,18 +1,16 @@
 // app/api/campaigns/[id]/send/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { getMarketingCampaign, updateCampaignStatus } from '@/lib/cosmic'
-import { sendEmail } from '@/lib/resend'
-import { EmailContact } from '@/types'
+import { resend } from '@/lib/resend'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    // Await params as required in Next.js 15+
     const { id } = await params
-
-    // Get the campaign
+    
+    // Get campaign data
     const campaign = await getMarketingCampaign(id)
     
     if (!campaign) {
@@ -22,102 +20,110 @@ export async function POST(
       )
     }
 
-    // Check if campaign is in draft status
-    if (campaign.metadata?.status?.value !== 'Draft') {
+    if (campaign.metadata.status.value !== 'Draft') {
       return NextResponse.json(
         { error: 'Campaign has already been sent or is not in draft status' },
         { status: 400 }
       )
     }
 
-    // Check if we have a template
-    if (!campaign.metadata?.template) {
-      return NextResponse.json(
-        { error: 'Campaign does not have a template' },
-        { status: 400 }
-      )
-    }
+    const template = campaign.metadata.template
+    const targetContacts = campaign.metadata.target_contacts || []
 
-    // Get target contacts
-    const targetContacts = campaign.metadata?.target_contacts || []
-    
     if (targetContacts.length === 0) {
       return NextResponse.json(
-        { error: 'Campaign has no target contacts' },
+        { error: 'No target contacts specified for this campaign' },
         { status: 400 }
       )
     }
 
-    // Send emails to each contact with proper TypeScript typing
-    const emailResults = []
-    const errors = []
+    if (!template || !template.metadata) {
+      return NextResponse.json(
+        { error: 'Campaign template not found or invalid' },
+        { status: 400 }
+      )
+    }
 
-    for (const contact of targetContacts as EmailContact[]) {
+    let sent = 0
+    let failed = 0
+    const errors: string[] = []
+
+    // Send emails to each contact
+    for (const contact of targetContacts) {
+      if (!contact.metadata?.email) {
+        failed++
+        errors.push(`Contact ${contact.title} has no email address`)
+        continue
+      }
+
       try {
-        // Replace template placeholders with contact data
-        let emailContent = campaign.metadata.template.metadata?.content || ''
-        let emailSubject = campaign.metadata.template.metadata?.subject || ''
+        // Replace template variables in content
+        let emailContent = template.metadata.content || ''
+        let emailSubject = template.metadata.subject || ''
 
-        // Replace placeholders
-        emailContent = emailContent.replace(/\{\{first_name\}\}/g, contact.metadata?.first_name || '')
-        emailContent = emailContent.replace(/\{\{last_name\}\}/g, contact.metadata?.last_name || '')
-        emailContent = emailContent.replace(/\{\{email\}\}/g, contact.metadata?.email || '')
+        if (contact.metadata.first_name) {
+          emailContent = emailContent.replace(/\{\{first_name\}\}/g, contact.metadata.first_name)
+          emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name)
+        }
 
-        emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, contact.metadata?.first_name || '')
-        emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata?.last_name || '')
+        if (contact.metadata.last_name) {
+          emailContent = emailContent.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
+          emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
+        }
 
-        // Send email
-        const result = await sendEmail({
-          to: contact.metadata?.email || '',
+        // Send email with proper from field and error handling
+        const result = await resend.emails.send({
+          from: 'noreply@cosmicjs.com', // Add the required from field
+          to: contact.metadata.email,
           subject: emailSubject,
-          html: emailContent
+          html: emailContent,
         })
 
-        emailResults.push({
-          contactId: contact.id,
-          email: contact.metadata?.email,
-          success: result.success,
-          messageId: result.messageId
-        })
+        // Properly handle the result with null checks and correct property access
+        if (result && result.data) {
+          sent++
+        } else if (result && result.error) {
+          failed++
+          errors.push(`Failed to send to ${contact.metadata.email}: ${result.error.message || 'Unknown error'}`)
+        } else {
+          failed++
+          errors.push(`Failed to send to ${contact.metadata.email}: Unknown error`)
+        }
 
       } catch (error) {
-        console.error(`Error sending email to ${contact.metadata?.email}:`, error)
-        errors.push({
-          contactId: contact.id,
-          email: contact.metadata?.email,
-          error: error instanceof Error ? error.message : 'Unknown error'
-        })
+        failed++
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        errors.push(`Failed to send to ${contact.metadata.email}: ${errorMessage}`)
+        console.error(`Email send error for ${contact.metadata.email}:`, error)
       }
     }
 
-    // Calculate stats
-    const successful = emailResults.filter(r => r.success)
-    const failed = emailResults.filter(r => !r.success) 
-
+    // Update campaign status and stats
     const stats = {
-      sent: successful.length,
-      delivered: successful.length, // Assume delivered = sent for now
+      sent,
+      delivered: sent, // Assume all sent emails are delivered for now
       opened: 0,
       clicked: 0,
-      bounced: failed.length,
+      bounced: failed,
       unsubscribed: 0,
-      open_rate: "0%",
-      click_rate: "0%"
+      open_rate: '0%',
+      click_rate: '0%'
     }
 
-    // Update campaign status to 'Sent'
     await updateCampaignStatus(id, 'Sent', stats)
 
     return NextResponse.json({
       success: true,
-      message: `Campaign sent to ${successful.length} contacts`,
-      stats,
-      results: emailResults,
-      errors
+      message: `Campaign sent successfully. ${sent} emails sent, ${failed} failed.`,
+      stats: {
+        sent,
+        failed,
+        errors: errors.slice(0, 10) // Limit error messages to first 10
+      }
     })
 
   } catch (error) {
-    console.error('Error sending campaign:', error)
+    console.error('Campaign send error:', error)
     return NextResponse.json(
       { error: 'Failed to send campaign' },
       { status: 500 }
