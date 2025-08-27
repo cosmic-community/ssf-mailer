@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { getMarketingCampaigns } from '@/lib/cosmic'
 import CampaignsList from '@/components/CampaignsList'
+import { MarketingCampaign } from '@/types'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -9,11 +10,10 @@ export const revalidate = 0
 export default async function CampaignsPage() {
   const campaigns = await getMarketingCampaigns()
 
-  // Filter campaigns by status for tabs
-  const allCampaigns = campaigns || []
-  const draftCampaigns = allCampaigns.filter(c => c.metadata?.status?.value === 'Draft')
-  const scheduledCampaigns = allCampaigns.filter(c => c.metadata?.status?.value === 'Scheduled')
-  const sentCampaigns = allCampaigns.filter(c => c.metadata?.status?.value === 'Sent')
+  // Type the campaigns properly to fix TS7006 errors
+  const draftCampaigns = campaigns.filter((c: MarketingCampaign) => c.metadata?.status?.value === 'Draft')
+  const scheduledCampaigns = campaigns.filter((c: MarketingCampaign) => c.metadata?.status?.value === 'Scheduled') 
+  const sentCampaigns = campaigns.filter((c: MarketingCampaign) => c.metadata?.status?.value === 'Sent')
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -26,7 +26,7 @@ export default async function CampaignsPage() {
                 ← Back to Dashboard
               </Link>
               <h1 className="text-3xl font-bold text-gray-900">Marketing Campaigns</h1>
-              <p className="text-gray-600 mt-1">Manage your email marketing campaigns</p>
+              <p className="text-gray-600 mt-1">Create and manage your email campaigns</p>
             </div>
             <Link href="/campaigns/new" className="btn-primary">
               Create New Campaign
@@ -35,29 +35,30 @@ export default async function CampaignsPage() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="border-b border-gray-200 bg-white">
-          <nav className="-mb-px flex space-x-8" aria-label="Tabs">
-            <a href="#all" className="border-primary-500 text-primary-600 py-2 px-1 border-b-2 font-medium text-sm">
-              All Campaigns ({allCampaigns.length})
-            </a>
-            <a href="#draft" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm">
-              Draft ({draftCampaigns.length})
-            </a>
-            <a href="#scheduled" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm">
-              Scheduled ({scheduledCampaigns.length})
-            </a>
-            <a href="#sent" className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 py-2 px-1 border-b-2 font-medium text-sm">
-              Sent ({sentCampaigns.length})
-            </a>
-          </nav>
-        </div>
-      </div>
-
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CampaignsList campaigns={allCampaigns} />
+        {/* Campaign Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="card text-center">
+            <div className="text-3xl font-bold text-gray-900">{campaigns.length}</div>
+            <div className="text-sm text-gray-600 mt-1">Total Campaigns</div>
+          </div>
+          <div className="card text-center">
+            <div className="text-3xl font-bold text-blue-600">{draftCampaigns.length}</div>
+            <div className="text-sm text-gray-600 mt-1">Draft</div>
+          </div>
+          <div className="card text-center">
+            <div className="text-3xl font-bold text-yellow-600">{scheduledCampaigns.length}</div>
+            <div className="text-sm text-gray-600 mt-1">Scheduled</div>
+          </div>
+          <div className="card text-center">
+            <div className="text-3xl font-bold text-green-600">{sentCampaigns.length}</div>
+            <div className="text-sm text-gray-600 mt-1">Sent</div>
+          </div>
+        </div>
+
+        {/* Campaigns List */}
+        <CampaignsList campaigns={campaigns} />
       </main>
     </div>
   )

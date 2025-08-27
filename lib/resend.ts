@@ -1,71 +1,51 @@
-import { MarketingCampaign, EmailContact } from '@/types'
+import { Resend } from 'resend'
 
-interface EmailResult {
-  successful: number
-  failed: number
-  details: {
-    sent: string[]
-    errors: string[]
+const resend = new Resend(process.env.RESEND_API_KEY)
+
+interface SendEmailOptions {
+  to: string
+  subject: string
+  html: string
+  from: string
+  text?: string
+}
+
+export async function sendEmail({ to, subject, html, from, text }: SendEmailOptions) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from,
+      to: [to],
+      subject,
+      html,
+      text: text || undefined,
+    })
+
+    if (error) {
+      throw new Error(`Resend API error: ${error.message}`)
+    }
+
+    return data
+  } catch (error) {
+    console.error('Email sending failed:', error)
+    throw new Error(`Failed to send email: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
-export async function sendCampaignEmails(campaign: MarketingCampaign): Promise<EmailResult> {
-  const results: EmailResult = {
-    successful: 0,
-    failed: 0,
-    details: {
-      sent: [],
-      errors: []
-    }
-  }
-
-  // Get recipients
-  const recipients: EmailContact[] = []
+export async function sendBulkEmail(emails: SendEmailOptions[]) {
+  const results = []
   
-  // Add specific contacts
-  if (campaign.metadata?.target_contacts) {
-    recipients.push(...campaign.metadata.target_contacts)
-  }
-
-  // For now, we'll simulate email sending since we don't have Resend configured
-  // In a real implementation, you would:
-  // 1. Get template content
-  // 2. Replace variables with contact data
-  // 3. Send via Resend API
-  
-  console.log(`Simulating email send to ${recipients.length} recipients`)
-  
-  for (const contact of recipients) {
+  for (const emailData of emails) {
     try {
-      // Simulate email sending delay
-      await new Promise(resolve => setTimeout(resolve, 100))
-      
-      // In real implementation, you would:
-      // const emailContent = replaceTemplateVariables(campaign.metadata.template.metadata.content, contact)
-      // await resend.emails.send({
-      //   from: 'noreply@yourdomain.com',
-      //   to: contact.metadata.email,
-      //   subject: replaceTemplateVariables(campaign.metadata.template.metadata.subject, contact),
-      //   html: emailContent
-      // })
-      
-      results.successful++
-      results.details.sent.push(contact.metadata?.email || 'Unknown email')
-      
+      const result = await sendEmail(emailData)
+      results.push({ success: true, data: result })
     } catch (error) {
-      console.error(`Failed to send email to ${contact.metadata?.email}:`, error)
-      results.failed++
-      results.details.errors.push(`Failed to send to ${contact.metadata?.email}: ${error}`)
+      results.push({ 
+        success: false, 
+        error: error instanceof Error ? error.message : 'Unknown error',
+        to: emailData.to 
+      })
     }
   }
-
+  
   return results
-}
-
-// Helper function to replace template variables
-function replaceTemplateVariables(template: string, contact: EmailContact): string {
-  return template
-    .replace(/\{\{first_name\}\}/g, contact.metadata?.first_name || 'Subscriber')
-    .replace(/\{\{last_name\}\}/g, contact.metadata?.last_name || '')
-    .replace(/\{\{email\}\}/g, contact.metadata?.email || '')
 }
