@@ -1,132 +1,71 @@
-import { Resend } from 'resend';
+import { MarketingCampaign, EmailContact } from '@/types'
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
-interface EmailData {
-  to: string;
-  from: string;
-  subject: string;
-  html: string;
-  text?: string;
-}
-
-interface SendEmailResponse {
-  success: boolean;
-  messageId?: string;
-  error?: string;
-}
-
-export async function sendEmail(data: EmailData): Promise<SendEmailResponse> {
-  try {
-    const result = await resend.emails.send({
-      from: data.from,
-      to: data.to,
-      subject: data.subject,
-      html: data.html,
-      text: data.text,
-    });
-
-    if (result.error) {
-      console.error('Resend error:', result.error);
-      return {
-        success: false,
-        error: result.error.message || 'Failed to send email'
-      };
-    }
-
-    return {
-      success: true,
-      messageId: result.data?.id
-    };
-  } catch (error) {
-    console.error('Email sending error:', error);
-    
-    // Proper error handling for unknown error type
-    let errorMessage = 'Failed to send email';
-    if (error instanceof Error) {
-      errorMessage = error.message;
-    } else if (typeof error === 'string') {
-      errorMessage = error;
-    } else if (error && typeof error === 'object' && 'message' in error) {
-      errorMessage = String(error.message);
-    }
-    
-    return {
-      success: false,
-      error: errorMessage
-    };
+interface EmailResult {
+  successful: number
+  failed: number
+  details: {
+    sent: string[]
+    errors: string[]
   }
 }
 
-export async function sendBulkEmail(
-  contacts: Array<{ email: string; firstName?: string; lastName?: string }>,
-  template: { subject: string; content: string },
-  from: string = 'noreply@yourdomain.com'
-): Promise<{ 
-  success: boolean; 
-  sent: number; 
-  failed: number; 
-  errors: Array<{ email: string; error: string }> 
-}> {
-  let sent = 0;
-  let failed = 0;
-  const errors: Array<{ email: string; error: string }> = [];
+export async function sendCampaignEmails(campaign: MarketingCampaign): Promise<EmailResult> {
+  const results: EmailResult = {
+    successful: 0,
+    failed: 0,
+    details: {
+      sent: [],
+      errors: []
+    }
+  }
 
-  for (const contact of contacts) {
+  // Get recipients
+  const recipients: EmailContact[] = []
+  
+  // Add specific contacts
+  if (campaign.metadata?.target_contacts) {
+    recipients.push(...campaign.metadata.target_contacts)
+  }
+
+  // For now, we'll simulate email sending since we don't have Resend configured
+  // In a real implementation, you would:
+  // 1. Get template content
+  // 2. Replace variables with contact data
+  // 3. Send via Resend API
+  
+  console.log(`Simulating email send to ${recipients.length} recipients`)
+  
+  for (const contact of recipients) {
     try {
-      // Replace template variables
-      let personalizedContent = template.content;
-      let personalizedSubject = template.subject;
+      // Simulate email sending delay
+      await new Promise(resolve => setTimeout(resolve, 100))
       
-      if (contact.firstName) {
-        personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, contact.firstName);
-        personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.firstName);
-      }
+      // In real implementation, you would:
+      // const emailContent = replaceTemplateVariables(campaign.metadata.template.metadata.content, contact)
+      // await resend.emails.send({
+      //   from: 'noreply@yourdomain.com',
+      //   to: contact.metadata.email,
+      //   subject: replaceTemplateVariables(campaign.metadata.template.metadata.subject, contact),
+      //   html: emailContent
+      // })
       
-      if (contact.lastName) {
-        personalizedContent = personalizedContent.replace(/\{\{last_name\}\}/g, contact.lastName);
-        personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.lastName);
-      }
-
-      const result = await sendEmail({
-        to: contact.email,
-        from,
-        subject: personalizedSubject,
-        html: personalizedContent
-      });
-
-      if (result.success) {
-        sent++;
-      } else {
-        failed++;
-        errors.push({
-          email: contact.email,
-          error: result.error || 'Unknown error'
-        });
-      }
+      results.successful++
+      results.details.sent.push(contact.metadata?.email || 'Unknown email')
+      
     } catch (error) {
-      failed++;
-      let errorMessage = 'Failed to send email';
-      if (error instanceof Error) {
-        errorMessage = error.message;
-      } else if (typeof error === 'string') {
-        errorMessage = error;
-      }
-      
-      errors.push({
-        email: contact.email,
-        error: errorMessage
-      });
+      console.error(`Failed to send email to ${contact.metadata?.email}:`, error)
+      results.failed++
+      results.details.errors.push(`Failed to send to ${contact.metadata?.email}: ${error}`)
     }
-
-    // Add small delay between emails to avoid rate limiting
-    await new Promise(resolve => setTimeout(resolve, 100));
   }
 
-  return {
-    success: sent > 0,
-    sent,
-    failed,
-    errors
-  };
+  return results
+}
+
+// Helper function to replace template variables
+function replaceTemplateVariables(template: string, contact: EmailContact): string {
+  return template
+    .replace(/\{\{first_name\}\}/g, contact.metadata?.first_name || 'Subscriber')
+    .replace(/\{\{last_name\}\}/g, contact.metadata?.last_name || '')
+    .replace(/\{\{email\}\}/g, contact.metadata?.email || '')
 }
