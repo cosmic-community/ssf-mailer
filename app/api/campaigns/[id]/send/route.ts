@@ -79,10 +79,10 @@ export async function POST(
           html: emailContent,
         })
 
-        // Properly handle the result with null checks and correct property access
-        if (result && result.data) {
+        // Properly handle the result - check if it's successful or has an error
+        if (result.data) {
           sent++
-        } else if (result && result.error) {
+        } else if (result.error) {
           failed++
           errors.push(`Failed to send to ${contact.metadata.email}: ${result.error.message || 'Unknown error'}`)
         } else {
