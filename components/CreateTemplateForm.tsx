@@ -119,6 +119,20 @@ export default function CreateTemplateForm() {
     }
   }
 
+  // Function to render preview content with sample data
+  const renderPreviewContent = (htmlContent: string) => {
+    // Replace common template variables with sample data for preview
+    const previewContent = htmlContent
+      .replace(/\{\{first_name\}\}/g, 'John')
+      .replace(/\{\{last_name\}\}/g, 'Doe')
+      .replace(/\{\{email\}\}/g, 'john.doe@example.com')
+      .replace(/\{\{company_name\}\}/g, 'Your Company')
+      .replace(/\{\{unsubscribe_url\}\}/g, '#')
+      .replace(/\{\{website_url\}\}/g, 'https://yourwebsite.com')
+
+    return previewContent
+  }
+
   return (
     <div className="card max-w-4xl">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Email Template</h2>
@@ -245,7 +259,7 @@ export default function CreateTemplateForm() {
                 required
               />
               <p className="text-sm text-gray-500">
-                Use HTML tags for formatting. Variables like {{first_name}} will be replaced when sending.
+                Use HTML tags for formatting. Variables like {`{{first_name}}`} will be replaced when sending.
               </p>
             </div>
           ) : (
@@ -253,7 +267,7 @@ export default function CreateTemplateForm() {
               <div className="prose prose-sm max-w-none">
                 {formData.content ? (
                   <div 
-                    dangerouslySetInnerHTML={{ __html: formData.content }}
+                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(formData.content) }}
                     className="email-preview"
                   />
                 ) : (
