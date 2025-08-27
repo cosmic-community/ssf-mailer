@@ -17,22 +17,22 @@ export default async function HomePage() {
   ])
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Hero Header */}
-      <header className="relative bg-white/80 backdrop-blur-sm shadow-sm border-b">
+      <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center space-x-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center">
+              <div className="w-12 h-12 bg-slate-800 rounded-xl flex items-center justify-center">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                 </svg>
               </div>
               <div>
-                <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                <h1 className="text-3xl font-bold text-slate-800">
                   Email Marketing Hub
                 </h1>
-                <p className="text-gray-600 mt-1">Professional email campaigns made simple</p>
+                <p className="text-slate-600 mt-1">Professional email campaigns made simple</p>
               </div>
             </div>
             <div className="flex items-center space-x-4">
@@ -43,7 +43,7 @@ export default async function HomePage() {
                 </svg>
                 Add Contact
               </Link>
-              <Link href="/campaigns/new" className="btn-primary bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+              <Link href="/campaigns/new" className="btn-primary">
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                 </svg>
@@ -57,19 +57,19 @@ export default async function HomePage() {
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Feature Showcase Banner */}
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-2xl shadow-xl p-8 mb-8 text-white">
+        <div className="bg-slate-800 rounded-xl shadow-lg p-8 mb-8 text-white">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-center">
             <div>
               <h2 className="text-3xl font-bold mb-4">
                 Complete Email Marketing Solution
               </h2>
-              <p className="text-blue-100 mb-6 text-lg">
+              <p className="text-slate-300 mb-6 text-lg">
                 Everything you need to create, manage, and send professional email campaigns. 
                 Build your audience, craft beautiful templates, and track your success.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
@@ -77,7 +77,7 @@ export default async function HomePage() {
                   <span className="font-medium">Contact Management</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
@@ -85,7 +85,7 @@ export default async function HomePage() {
                   <span className="font-medium">Template Builder</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                     </svg>
@@ -93,7 +93,7 @@ export default async function HomePage() {
                   <span className="font-medium">Campaign Analytics</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-white/20 rounded-lg flex items-center justify-center">
+                  <div className="w-8 h-8 bg-white/10 rounded-lg flex items-center justify-center">
                     <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
@@ -104,8 +104,8 @@ export default async function HomePage() {
             </div>
             <div className="hidden lg:block">
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-white/5 rounded-xl transform rotate-3"></div>
-                <div className="relative bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/20">
+                <div className="absolute inset-0 bg-white/5 rounded-xl transform rotate-3"></div>
+                <div className="relative bg-white/10 backdrop-blur-sm rounded-xl p-6 border border-white/10">
                   <div className="space-y-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-3 h-3 bg-green-400 rounded-full"></div>
@@ -116,7 +116,7 @@ export default async function HomePage() {
                       <div className="h-4 bg-white/20 rounded w-3/4"></div>
                       <div className="h-4 bg-white/30 rounded w-1/2"></div>
                       <div className="h-4 bg-white/20 rounded w-5/6"></div>
-                      <div className="h-8 bg-gradient-to-r from-green-400 to-blue-400 rounded w-1/3 opacity-80"></div>
+                      <div className="h-8 bg-slate-600 rounded w-1/3 opacity-80"></div>
                     </div>
                   </div>
                 </div>
@@ -137,18 +137,18 @@ export default async function HomePage() {
         {/* Enhanced Quick Actions Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
           {/* Contacts Section */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-            <div className="bg-gradient-to-r from-green-500 to-emerald-500 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300">
+            <div className="bg-slate-800 p-6">
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
                   <div>
                     <h3 className="text-xl font-bold">Contacts</h3>
-                    <p className="text-green-100 text-sm">Manage your audience</p>
+                    <p className="text-slate-300 text-sm">Manage your audience</p>
                   </div>
                 </div>
                 <Link href="/contacts" className="text-white/80 hover:text-white">
@@ -163,7 +163,7 @@ export default async function HomePage() {
                 {contacts.slice(0, 3).map((contact: EmailContact) => (
                   <div key={contact.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-green-400 to-emerald-500 rounded-full flex items-center justify-center text-white font-semibold">
+                      <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-semibold">
                         {contact.metadata?.first_name?.charAt(0) || '?'}
                       </div>
                       <div>
@@ -194,7 +194,7 @@ export default async function HomePage() {
                 )}
               </div>
               <div className="mt-6 pt-4 border-t border-gray-200">
-                <Link href="/contacts/new" className="w-full btn-outline text-center hover:bg-green-50 hover:border-green-200 hover:text-green-700">
+                <Link href="/contacts/new" className="w-full btn-outline text-center">
                   Add New Contact
                 </Link>
               </div>
@@ -202,18 +202,18 @@ export default async function HomePage() {
           </div>
 
           {/* Templates Section */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300">
+            <div className="bg-slate-700 p-6">
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </div>
                   <div>
                     <h3 className="text-xl font-bold">Templates</h3>
-                    <p className="text-blue-100 text-sm">Email designs</p>
+                    <p className="text-slate-300 text-sm">Email designs</p>
                   </div>
                 </div>
                 <Link href="/templates" className="text-white/80 hover:text-white">
@@ -229,7 +229,7 @@ export default async function HomePage() {
                   <div key={template.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-indigo-500 rounded-lg flex items-center justify-center">
+                        <div className="w-8 h-8 bg-slate-600 rounded-lg flex items-center justify-center">
                           <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                           </svg>
@@ -261,7 +261,7 @@ export default async function HomePage() {
                 )}
               </div>
               <div className="mt-6 pt-4 border-t border-gray-200">
-                <Link href="/templates/new" className="w-full btn-outline text-center hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700">
+                <Link href="/templates/new" className="w-full btn-outline text-center">
                   Create Template
                 </Link>
               </div>
@@ -269,18 +269,18 @@ export default async function HomePage() {
           </div>
 
           {/* Campaigns Section */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden hover:shadow-xl transition-all duration-300">
-            <div className="bg-gradient-to-r from-purple-500 to-pink-500 p-6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-all duration-300">
+            <div className="bg-slate-600 p-6">
               <div className="flex items-center justify-between text-white">
                 <div className="flex items-center space-x-3">
-                  <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center">
+                  <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center">
                     <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
                   </div>
                   <div>
                     <h3 className="text-xl font-bold">Campaigns</h3>
-                    <p className="text-purple-100 text-sm">Marketing campaigns</p>
+                    <p className="text-slate-300 text-sm">Marketing campaigns</p>
                   </div>
                 </div>
                 <Link href="/campaigns" className="text-white/80 hover:text-white">
@@ -296,7 +296,7 @@ export default async function HomePage() {
                   <div key={campaign.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-gradient-to-br from-purple-400 to-pink-500 rounded-lg flex items-center justify-center">
+                        <div className="w-8 h-8 bg-slate-500 rounded-lg flex items-center justify-center">
                           <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                           </svg>
@@ -330,7 +330,7 @@ export default async function HomePage() {
                 )}
               </div>
               <div className="mt-6 pt-4 border-t border-gray-200">
-                <Link href="/campaigns/new" className="w-full btn-primary bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                <Link href="/campaigns/new" className="w-full btn-primary">
                   Create Campaign
                 </Link>
               </div>
@@ -339,11 +339,11 @@ export default async function HomePage() {
         </div>
 
         {/* Enhanced Quick Start Guide */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-          <div className="bg-gradient-to-r from-gray-900 to-gray-800 p-8">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div className="bg-slate-800 p-8">
             <div className="text-center text-white">
               <h2 className="text-3xl font-bold mb-4">Get Started in 3 Simple Steps</h2>
-              <p className="text-gray-300 text-lg max-w-2xl mx-auto">
+              <p className="text-slate-300 text-lg max-w-2xl mx-auto">
                 Launch your first email marketing campaign in minutes with our streamlined workflow
               </p>
             </div>
@@ -353,22 +353,22 @@ export default async function HomePage() {
               {/* Step 1 */}
               <div className="text-center group hover:scale-105 transition-transform duration-300">
                 <div className="relative mb-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg group-hover:shadow-xl transition-shadow">
+                  <div className="w-20 h-20 bg-slate-700 rounded-2xl flex items-center justify-center mx-auto shadow-md group-hover:shadow-lg transition-shadow">
                     <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-green-100 text-green-800 rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center text-sm font-bold">
                     1
                   </div>
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Build Your Audience</h3>
                 <p className="text-gray-600 mb-6">Import existing contacts or add them manually. Organize with tags and segments for targeted campaigns.</p>
                 <div className="space-y-2">
-                  <Link href="/contacts/new" className="block w-full btn-outline hover:bg-green-50 hover:border-green-200 hover:text-green-700">
+                  <Link href="/contacts/new" className="block w-full btn-outline">
                     Add Contacts
                   </Link>
-                  <Link href="/contacts/upload" className="block w-full text-green-600 hover:text-green-700 text-sm font-medium">
+                  <Link href="/contacts/upload" className="block w-full text-slate-600 hover:text-slate-700 text-sm font-medium">
                     Upload CSV →
                   </Link>
                 </div>
@@ -377,22 +377,22 @@ export default async function HomePage() {
               {/* Step 2 */}
               <div className="text-center group hover:scale-105 transition-transform duration-300">
                 <div className="relative mb-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg group-hover:shadow-xl transition-shadow">
+                  <div className="w-20 h-20 bg-slate-600 rounded-2xl flex items-center justify-center mx-auto shadow-md group-hover:shadow-lg transition-shadow">
                     <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                     </svg>
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center text-sm font-bold">
                     2
                   </div>
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Design Beautiful Emails</h3>
                 <p className="text-gray-600 mb-6">Create professional templates with our easy-to-use editor. Support for HTML and personalization tags.</p>
                 <div className="space-y-2">
-                  <Link href="/templates/new" className="block w-full btn-outline hover:bg-blue-50 hover:border-blue-200 hover:text-blue-700">
+                  <Link href="/templates/new" className="block w-full btn-outline">
                     Create Template
                   </Link>
-                  <Link href="/templates" className="block w-full text-blue-600 hover:text-blue-700 text-sm font-medium">
+                  <Link href="/templates" className="block w-full text-slate-600 hover:text-slate-700 text-sm font-medium">
                     Browse Templates →
                   </Link>
                 </div>
@@ -401,22 +401,22 @@ export default async function HomePage() {
               {/* Step 3 */}
               <div className="text-center group hover:scale-105 transition-transform duration-300">
                 <div className="relative mb-6">
-                  <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center mx-auto shadow-lg group-hover:shadow-xl transition-shadow">
+                  <div className="w-20 h-20 bg-slate-500 rounded-2xl flex items-center justify-center mx-auto shadow-md group-hover:shadow-lg transition-shadow">
                     <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
                   </div>
-                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-purple-100 text-purple-800 rounded-full flex items-center justify-center text-sm font-bold">
+                  <div className="absolute -top-2 -right-2 w-8 h-8 bg-slate-100 text-slate-800 rounded-full flex items-center justify-center text-sm font-bold">
                     3
                   </div>
                 </div>
                 <h3 className="text-xl font-bold text-gray-900 mb-3">Launch & Track</h3>
                 <p className="text-gray-600 mb-6">Send targeted campaigns and track their performance with detailed analytics and reporting.</p>
                 <div className="space-y-2">
-                  <Link href="/campaigns/new" className="block w-full btn-primary bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600">
+                  <Link href="/campaigns/new" className="block w-full btn-primary">
                     Create Campaign
                   </Link>
-                  <Link href="/campaigns" className="block w-full text-purple-600 hover:text-purple-700 text-sm font-medium">
+                  <Link href="/campaigns" className="block w-full text-slate-600 hover:text-slate-700 text-sm font-medium">
                     View Campaigns →
                   </Link>
                 </div>
@@ -427,8 +427,8 @@ export default async function HomePage() {
 
         {/* Feature Highlights */}
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 bg-green-50 rounded-xl flex items-center justify-center mb-4">
               <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
@@ -437,8 +437,8 @@ export default async function HomePage() {
             <p className="text-gray-600 text-sm">Professional email delivery with Resend ensuring your emails reach the inbox.</p>
           </div>
           
-          <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 bg-blue-50 rounded-xl flex items-center justify-center mb-4">
               <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
@@ -447,9 +447,9 @@ export default async function HomePage() {
             <p className="text-gray-600 text-sm">Send thousands of emails in seconds with our optimized delivery system.</p>
           </div>
           
-          <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
-              <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 bg-slate-50 rounded-xl flex items-center justify-center mb-4">
+              <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </div>
@@ -457,8 +457,8 @@ export default async function HomePage() {
             <p className="text-gray-600 text-sm">Track opens, clicks, and conversions with detailed campaign analytics.</p>
           </div>
           
-          <div className="bg-white rounded-xl p-6 shadow-md border border-gray-100 hover:shadow-lg transition-shadow">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center mb-4">
+          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
+            <div className="w-12 h-12 bg-orange-50 rounded-xl flex items-center justify-center mb-4">
               <svg className="w-6 h-6 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 100 4m0-4v2m0-6V4" />
               </svg>
