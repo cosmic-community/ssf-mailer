@@ -71,23 +71,22 @@ export async function POST(
           emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
         }
 
-        // Send email with proper from field and error handling
+        // Send email with proper error handling for Resend API
+        // The Resend library returns a promise that resolves with success data or rejects with an error
         const result = await resend.emails.send({
-          from: 'noreply@cosmicjs.com', // Add the required from field
+          from: 'noreply@cosmicjs.com',
           to: contact.metadata.email,
           subject: emailSubject,
           html: emailContent,
         })
 
-        // Properly handle the result - check if it's successful or has an error
-        if (result.data) {
+        // If we get here, the email was sent successfully
+        // The Resend library returns an object with an 'id' property on success
+        if (result && typeof result === 'object' && 'id' in result) {
           sent++
-        } else if (result.error) {
-          failed++
-          errors.push(`Failed to send to ${contact.metadata.email}: ${result.error.message || 'Unknown error'}`)
         } else {
           failed++
-          errors.push(`Failed to send to ${contact.metadata.email}: Unknown error`)
+          errors.push(`Failed to send to ${contact.metadata.email}: Unexpected response format`)
         }
 
       } catch (error) {
