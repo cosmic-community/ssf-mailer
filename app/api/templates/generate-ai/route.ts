@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     
     // Create a detailed prompt for AI generation
     const detailedPrompt = `Create a professional HTML email template for a ${templateType.toLowerCase()}. 
-    
+
 User request: ${body.prompt}
 
 Please generate:
