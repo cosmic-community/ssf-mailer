@@ -4,7 +4,7 @@ import { cosmic } from '@/lib/cosmic'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    
+
     if (!body.prompt) {
       return NextResponse.json(
         { error: 'Prompt is required' },
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     }
 
     const templateType = body.template_type || 'Newsletter'
-    
+
     // Create a detailed prompt for AI generation
     const detailedPrompt = `Create a professional HTML email template for a ${templateType.toLowerCase()}. 
 
@@ -41,6 +41,49 @@ The template should be production-ready and follow email marketing best practice
 
     // Extract HTML content from AI response
     let content = aiResponse.text.trim()
-    
+
     // Clean up the response if it includes markdown code blocks
-    if (content.includes('
+    if (content.includes('```html')) {
+      const htmlMatch = content.match(/```html\n([\s\S]*?)\n```/)
+      if (htmlMatch && htmlMatch[1]) {
+        content = htmlMatch[1].trim()
+      }
+    } else if (content.includes('```')) {
+      // Handle generic code blocks
+      const codeMatch = content.match(/```\n([\s\S]*?)\n```/)
+      if (codeMatch && codeMatch[1]) {
+        content = codeMatch[1].trim()
+      }
+    }
+
+    // Try to extract subject and name from AI response
+    let subject = ''
+    let name = ''
+
+    // Look for subject line patterns in the response
+    const subjectMatch = content.match(/subject:\s*(.+)/i) ||
+      content.match(/subject line:\s*(.+)/i) ||
+      content.match(/<title>(.+)<\/title>/i)
+
+    if (subjectMatch && subjectMatch[1]) {
+      subject = subjectMatch[1].trim().replace(/['"]/g, '')
+    }
+
+    // Generate a default name based on template type and prompt
+    const promptWords = body.prompt.split(' ').slice(0, 3).join(' ')
+    name = `AI ${templateType} - ${promptWords}`
+
+    return NextResponse.json({
+      content,
+      subject,
+      name
+    })
+
+  } catch (error) {
+    console.error('AI generation error:', error)
+    return NextResponse.json(
+      { error: 'Failed to generate template with AI' },
+      { status: 500 }
+    )
+  }
+}
