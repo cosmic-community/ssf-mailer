@@ -134,6 +134,25 @@ export async function createEmailTemplate(templateData: any) {
   }
 }
 
+export async function updateEmailTemplate(id: string, templateData: any) {
+  try {
+    return await cosmic.objects.updateOne(id, {
+      title: templateData.name,
+      metadata: templateData
+    });
+  } catch (error) {
+    throw new Error('Failed to update email template');
+  }
+}
+
+export async function deleteEmailTemplate(id: string) {
+  try {
+    return await cosmic.objects.deleteOne(id);
+  } catch (error) {
+    throw new Error('Failed to delete email template');
+  }
+}
+
 // Marketing Campaigns functions
 export async function getMarketingCampaigns() {
   try {
