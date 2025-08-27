@@ -22,7 +22,7 @@ export default function RootLayout({
         {/* Console capture script for dashboard debugging */}
         <script src="/dashboard-console-capture.js" />
       </head>
-      <body className="bg-gray-50 min-h-screen">
+      <body className="bg-slate-50 min-h-screen">
         {children}
         <CosmicBadge bucketSlug={bucketSlug} />
       </body>
