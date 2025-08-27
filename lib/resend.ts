@@ -1,66 +1,132 @@
 import { Resend } from 'resend';
 
-if (!process.env.RESEND_API_KEY) {
-  throw new Error('RESEND_API_KEY is not set in environment variables');
-}
-
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export interface EmailData {
-  to: string[];
+interface EmailData {
+  to: string;
+  from: string;
   subject: string;
   html: string;
-  from?: string;
+  text?: string;
 }
 
-export async function sendEmail(emailData: EmailData) {
+interface SendEmailResponse {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+export async function sendEmail(data: EmailData): Promise<SendEmailResponse> {
   try {
-    const { data, error } = await resend.emails.send({
-      from: emailData.from || 'noreply@yourdomain.com',
-      to: emailData.to,
-      subject: emailData.subject,
-      html: emailData.html,
+    const result = await resend.emails.send({
+      from: data.from,
+      to: data.to,
+      subject: data.subject,
+      html: data.html,
+      text: data.text,
     });
 
-    if (error) {
-      throw new Error(`Failed to send email: ${error.message}`);
+    if (result.error) {
+      console.error('Resend error:', result.error);
+      return {
+        success: false,
+        error: result.error.message || 'Failed to send email'
+      };
     }
 
-    return data;
+    return {
+      success: true,
+      messageId: result.data?.id
+    };
   } catch (error) {
     console.error('Email sending error:', error);
-    throw error;
-  }
-}
-
-export async function sendBulkEmails(emails: EmailData[]) {
-  const results = [];
-  
-  for (const email of emails) {
-    try {
-      const result = await sendEmail(email);
-      results.push({ success: true, data: result });
-    } catch (error) {
-      results.push({ success: false, error: error.message });
+    
+    // Proper error handling for unknown error type
+    let errorMessage = 'Failed to send email';
+    if (error instanceof Error) {
+      errorMessage = error.message;
+    } else if (typeof error === 'string') {
+      errorMessage = error;
+    } else if (error && typeof error === 'object' && 'message' in error) {
+      errorMessage = String(error.message);
     }
+    
+    return {
+      success: false,
+      error: errorMessage
+    };
   }
-  
-  return results;
 }
 
-// Template personalization function
-export function personalizeTemplate(template: string, contact: any): string {
-  let personalizedTemplate = template;
-  
-  // Replace common merge tags
-  personalizedTemplate = personalizedTemplate.replace(/\{\{first_name\}\}/g, contact.first_name || 'there');
-  personalizedTemplate = personalizedTemplate.replace(/\{\{last_name\}\}/g, contact.last_name || '');
-  personalizedTemplate = personalizedTemplate.replace(/\{\{email\}\}/g, contact.email || '');
-  
-  // Add more personalizations as needed
-  const currentDate = new Date();
-  personalizedTemplate = personalizedTemplate.replace(/\{\{month\}\}/g, currentDate.toLocaleDateString('en-US', { month: 'long' }));
-  personalizedTemplate = personalizedTemplate.replace(/\{\{year\}\}/g, currentDate.getFullYear().toString());
-  
-  return personalizedTemplate;
+export async function sendBulkEmail(
+  contacts: Array<{ email: string; firstName?: string; lastName?: string }>,
+  template: { subject: string; content: string },
+  from: string = 'noreply@yourdomain.com'
+): Promise<{ 
+  success: boolean; 
+  sent: number; 
+  failed: number; 
+  errors: Array<{ email: string; error: string }> 
+}> {
+  let sent = 0;
+  let failed = 0;
+  const errors: Array<{ email: string; error: string }> = [];
+
+  for (const contact of contacts) {
+    try {
+      // Replace template variables
+      let personalizedContent = template.content;
+      let personalizedSubject = template.subject;
+      
+      if (contact.firstName) {
+        personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, contact.firstName);
+        personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.firstName);
+      }
+      
+      if (contact.lastName) {
+        personalizedContent = personalizedContent.replace(/\{\{last_name\}\}/g, contact.lastName);
+        personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.lastName);
+      }
+
+      const result = await sendEmail({
+        to: contact.email,
+        from,
+        subject: personalizedSubject,
+        html: personalizedContent
+      });
+
+      if (result.success) {
+        sent++;
+      } else {
+        failed++;
+        errors.push({
+          email: contact.email,
+          error: result.error || 'Unknown error'
+        });
+      }
+    } catch (error) {
+      failed++;
+      let errorMessage = 'Failed to send email';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      }
+      
+      errors.push({
+        email: contact.email,
+        error: errorMessage
+      });
+    }
+
+    // Add small delay between emails to avoid rate limiting
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return {
+    success: sent > 0,
+    sent,
+    failed,
+    errors
+  };
 }

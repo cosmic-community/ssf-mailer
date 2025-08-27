@@ -123,8 +123,8 @@ export function isMarketingCampaign(obj: CosmicObject): obj is MarketingCampaign
   return obj.type === 'marketing-campaigns';
 }
 
-// Utility types
-export type OptionalMetadata<T> = Partial<T['metadata']>;
+// Utility types - Fixed the generic constraint issue
+export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
 export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
 export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;
 export type CreateCampaignFormData = Omit<MarketingCampaign, 'id' | 'created_at' | 'modified_at'>;
