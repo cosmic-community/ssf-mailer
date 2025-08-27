@@ -28,6 +28,22 @@ export async function getEmailContacts() {
   }
 }
 
+export async function getEmailContact(id: string) {
+  try {
+    const response = await cosmic.objects.findOne({
+      type: 'email-contacts',
+      id
+    }).depth(1);
+    
+    return response.object;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return null;
+    }
+    throw new Error('Failed to fetch email contact');
+  }
+}
+
 export async function createEmailContact(contactData: any) {
   try {
     return await cosmic.objects.insertOne({
@@ -45,6 +61,25 @@ export async function createEmailContact(contactData: any) {
     });
   } catch (error) {
     throw new Error('Failed to create email contact');
+  }
+}
+
+export async function updateEmailContact(id: string, contactData: any) {
+  try {
+    return await cosmic.objects.updateOne(id, {
+      title: `${contactData.first_name} ${contactData.last_name || ''}`.trim(),
+      metadata: contactData
+    });
+  } catch (error) {
+    throw new Error('Failed to update email contact');
+  }
+}
+
+export async function deleteEmailContact(id: string) {
+  try {
+    return await cosmic.objects.deleteOne(id);
+  } catch (error) {
+    throw new Error('Failed to delete email contact');
   }
 }
 
