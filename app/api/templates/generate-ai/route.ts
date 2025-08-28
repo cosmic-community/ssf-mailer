@@ -4,167 +4,174 @@ import { TextStreamingResponse } from '@cosmicjs/sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-
-    if (!body.prompt) {
+    const { prompt, type } = await request.json()
+    
+    if (!prompt || !type) {
       return NextResponse.json(
-        { error: 'Prompt is required' },
+        { error: 'Prompt and type are required' },
         { status: 400 }
       )
     }
 
-    const templateType = body.template_type || 'Newsletter'
+    // Create a readable stream for Server-Sent Events
+    const stream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder()
+        
+        // Send initial loading message
+        controller.enqueue(
+          encoder.encode('data: {"type":"status","message":"Connecting to Cosmic AI...","progress":10}\n\n')
+        )
+        
+        // Generate AI content using Cosmic AI streaming
+        setTimeout(async () => {
+          try {
+            controller.enqueue(
+              encoder.encode('data: {"type":"status","message":"Generating email content...","progress":30}\n\n')
+            )
 
-    // Create a detailed prompt for AI generation with specific instructions
-    const detailedPrompt = `Create a professional HTML email template for a ${templateType.toLowerCase()}. 
+            // Create AI prompt based on template type - ONLY for body content
+            let aiPrompt = ''
+            if (type === 'Newsletter') {
+              aiPrompt = `Create ONLY the HTML body content for an email newsletter template based on "${prompt}". Include:
+              - A header with gradient background
+              - Welcome greeting with {{first_name}} placeholder
+              - Main content section with highlights and bullet points
+              - Call-to-action button
+              - Professional footer with unsubscribe link
+              - Responsive design with modern styling
+              - Use inline CSS for email compatibility
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+            } else if (type === 'Welcome Email') {
+              aiPrompt = `Create ONLY the HTML body content for a welcome email template for "${prompt}". Include:
+              - Warm welcome header with celebration emoji
+              - Personalized greeting with {{first_name}} placeholder
+              - Welcome message explaining what to expect
+              - Getting started section with benefits
+              - Prominent call-to-action button
+              - Friendly footer with contact information
+              - Modern, friendly design with inline CSS
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+            } else {
+              aiPrompt = `Create ONLY the HTML body content for an email template for "${prompt}" (${type}). Include:
+              - Professional header design
+              - Personalized greeting with {{first_name}} placeholder
+              - Clear main content section
+              - Call-to-action button
+              - Footer with contact information
+              - Clean, modern styling with inline CSS for email compatibility
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+            }
 
-User request: ${body.prompt}
+            controller.enqueue(
+              encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
+            )
 
-IMPORTANT INSTRUCTIONS:
-- Do not use markdown code blocks or backticks in your response
-- Provide clean HTML without any formatting markers
-- Return the content directly as HTML
-- Include inline CSS styling for email compatibility
-- Use a maximum width of 600px with proper responsive design
-- Include placeholder variables like {{first_name}}, {{company_name}} where appropriate
-- Use professional styling with good color contrast and typography
-- Make it mobile-friendly with proper email-safe HTML structure
-- Follow email marketing best practices
-- The template should be production-ready
-
-Please generate only the HTML content without any explanatory text or formatting markers.`
-
-    // Check if streaming is requested
-    const isStreaming = body.stream === true
-
-    if (isStreaming) {
-      // Create streaming response
-      const stream = await cosmic.ai.generateText({
-        prompt: detailedPrompt,
-        max_tokens: 60000,
-        stream: true
-      }) as TextStreamingResponse
-
-      // Create a readable stream for the response
-      const readableStream = new ReadableStream({
-        start(controller) {
-          let fullContent = ''
-          
-          stream.on('text', (text: string) => {
-            fullContent += text
-            
-            // Send streaming data as Server-Sent Events
-            const data = JSON.stringify({
-              type: 'text',
-              content: text,
-              fullContent
+            // Generate content with Cosmic AI streaming
+            const aiResponse = await cosmic.ai.generateText({
+              prompt: aiPrompt,
+              max_tokens: 2000,
+              stream: true
             })
-            
-            controller.enqueue(`data: ${data}\n\n`)
-          })
 
-          stream.on('usage', (usage: any) => {
-            const data = JSON.stringify({
-              type: 'usage',
-              usage
-            })
-            
-            controller.enqueue(`data: ${data}\n\n`)
-          })
+            // Check if aiResponse is a streaming response by checking for the 'on' method
+            const isStreamingResponse = aiResponse && 
+              typeof aiResponse === 'object' && 
+              'on' in aiResponse && 
+              typeof aiResponse.on === 'function';
 
-          stream.on('end', () => {
-            // Process the final content to extract components
-            const result = processGeneratedContent(fullContent, templateType, body.prompt)
+            if (!isStreamingResponse) {
+              throw new Error('AI stream not available or invalid')
+            }
+
+            // Now we can safely use the streaming response
+            const aiStream = aiResponse as TextStreamingResponse;
             
-            const data = JSON.stringify({
-              type: 'complete',
-              ...result
+            let generatedContent = ''
+            let isComplete = false
+
+            // Process the AI stream using event listeners
+            aiStream.on('text', (text: string) => {
+              generatedContent += text
+              
+              // Stream the content in real-time
+              controller.enqueue(
+                encoder.encode(`data: {"type":"content","text":"${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","progress":70}\n\n`)
+              )
             })
-            
-            controller.enqueue(`data: ${data}\n\n`)
+
+            aiStream.on('usage', () => {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Finalizing template...","progress":80}\n\n')
+              )
+            })
+
+            aiStream.on('end', () => {
+              try {
+                if (isComplete) return
+                isComplete = true
+
+                controller.enqueue(
+                  encoder.encode('data: {"type":"status","message":"Template generated successfully!","progress":100}\n\n')
+                )
+
+                // Use the content as-is since we instructed AI not to use backticks
+                const finalContent = generatedContent.trim()
+
+                // Send complete response
+                controller.enqueue(
+                  encoder.encode(`data: {"type":"complete","data":{"content":"${finalContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"}}\n\n`)
+                )
+
+                // Close the stream
+                controller.close()
+
+              } catch (endError) {
+                console.error('Stream end error:', endError)
+                controller.enqueue(
+                  encoder.encode('data: {"type":"error","error":"Failed to finalize content"}\n\n')
+                )
+                controller.close()
+              }
+            })
+
+            aiStream.on('error', (error: any) => {
+              console.error('AI stream error:', error)
+              if (!isComplete) {
+                controller.enqueue(
+                  encoder.encode('data: {"type":"error","error":"AI generation failed"}\n\n')
+                )
+                controller.close()
+              }
+            })
+
+          } catch (error) {
+            console.error('Generation error:', error)
+            controller.enqueue(
+              encoder.encode('data: {"type":"error","error":"Failed to generate content"}\n\n')
+            )
             controller.close()
-          })
-
-          stream.on('error', (error: any) => {
-            const data = JSON.stringify({
-              type: 'error',
-              error: error.message || 'Stream error occurred'
-            })
-            
-            controller.enqueue(`data: ${data}\n\n`)
-            controller.close()
-          })
-        }
-      })
-
-      return new Response(readableStream, {
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'POST',
-          'Access-Control-Allow-Headers': 'Content-Type'
-        }
-      })
-    } else {
-      // Non-streaming response (backward compatibility)
-      const aiResponse = await cosmic.ai.generateText({
-        prompt: detailedPrompt,
-        max_tokens: 2000
-      })
-
-      if (!aiResponse.text) {
-        throw new Error('No content generated from AI')
+          }
+        }, 1000)
       }
+    })
 
-      const result = processGeneratedContent(aiResponse.text, templateType, body.prompt)
-
-      return NextResponse.json(result)
-    }
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    })
 
   } catch (error) {
-    console.error('AI generation error:', error)
-    
-    // Return the exact error from the API
-    if (error && typeof error === 'object' && 'message' in error) {
-      return NextResponse.json(
-        { error: error.message },
-        { status: 500 }
-      )
-    }
-    
+    console.error('API Error:', error)
     return NextResponse.json(
-      { error: 'Failed to generate template with AI' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
-  }
-}
-
-// Helper function to process generated content
-function processGeneratedContent(content: string, templateType: string, prompt: string) {
-  let processedContent = content.trim()
-
-  // Try to extract subject and name from AI response
-  let subject = ''
-  let name = ''
-
-  // Look for subject line patterns in the response
-  const subjectMatch = processedContent.match(/subject:\s*(.+)/i) ||
-    processedContent.match(/subject line:\s*(.+)/i) ||
-    processedContent.match(/<title>(.+)<\/title>/i)
-
-  if (subjectMatch && subjectMatch[1]) {
-    subject = subjectMatch[1].trim().replace(/['"]/g, '')
-  }
-
-  // Generate a default name based on template type and prompt
-  const promptWords = prompt.split(' ').slice(0, 3).join(' ')
-  name = `AI ${templateType} - ${promptWords}`
-
-  return {
-    content: processedContent,
-    subject,
-    name
   }
 }
