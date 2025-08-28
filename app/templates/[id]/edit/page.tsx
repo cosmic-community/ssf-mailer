@@ -9,9 +9,10 @@ interface AIEditFormProps {
   onEdit: (prompt: string) => void
   currentContent: string
   isGenerating: boolean
+  streamContent?: string
 }
 
-function AIEditForm({ onEdit, currentContent, isGenerating }: AIEditFormProps) {
+function AIEditForm({ onEdit, currentContent, isGenerating, streamContent }: AIEditFormProps) {
   const [showEditForm, setShowEditForm] = useState(false)
   const [editPrompt, setEditPrompt] = useState('')
 
@@ -91,6 +92,18 @@ function AIEditForm({ onEdit, currentContent, isGenerating }: AIEditFormProps) {
           </form>
         </div>
       )}
+
+      {/* AI Streaming Content Preview */}
+      {isGenerating && streamContent && (
+        <div className="border border-slate-200 rounded-lg p-4 bg-blue-50">
+          <div className="text-sm font-medium text-slate-700 mb-2">AI is editing your template...</div>
+          <div className="max-h-40 overflow-y-auto text-sm text-slate-600">
+            <div dangerouslySetInnerHTML={{ 
+              __html: streamContent.slice(0, 300) + (streamContent.length > 300 ? '...' : '') 
+            }} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -104,6 +117,7 @@ export default function EditTemplate() {
   const [saving, setSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit')
+  const [aiStreamContent, setAiStreamContent] = useState('')
   
   // Form state
   const [formData, setFormData] = useState({
@@ -163,6 +177,8 @@ export default function EditTemplate() {
 
   const handleAIEdit = async (prompt: string) => {
     setIsGenerating(true)
+    setAiStreamContent('')
+    
     try {
       const response = await fetch('/api/templates/edit-ai', {
         method: 'POST',
@@ -170,29 +186,66 @@ export default function EditTemplate() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt,
-          currentContent: formData.content,
-          templateType: formData.template_type,
-          subjectLine: formData.subject_line
+          edit_instructions: prompt,
+          current_content: formData.content,
+          current_subject: formData.subject_line,
+          current_name: formData.title,
+          template_type: formData.template_type,
+          stream: true
         }),
       })
       
       if (!response.ok) throw new Error('Failed to edit template')
       
-      const data = await response.json()
-      
-      // Update form data with edited content
-      setFormData(prev => ({
-        ...prev,
-        content: data.content,
-        subject_line: data.subject_line || prev.subject_line
-      }))
-      
-      // Switch to preview tab to show the edited content
-      setActiveTab('preview')
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'text') {
+                setAiStreamContent(data.fullContent || '')
+              } else if (data.type === 'complete') {
+                // Update form data with edited content
+                if (data.content) {
+                  setFormData(prev => ({
+                    ...prev,
+                    content: data.content,
+                    subject_line: data.subject || prev.subject_line,
+                    title: data.name || prev.title
+                  }))
+                }
+                
+                // Switch to preview tab to show the edited content
+                setActiveTab('preview')
+                setAiStreamContent('')
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+              continue
+            }
+          }
+        }
+      }
     } catch (error) {
       console.error('Error editing template:', error)
-      alert('Failed to edit template content')
+      alert(error instanceof Error ? error.message : 'Failed to edit template content')
     } finally {
       setIsGenerating(false)
     }
@@ -328,6 +381,7 @@ export default function EditTemplate() {
             onEdit={handleAIEdit}
             currentContent={formData.content}
             isGenerating={isGenerating}
+            streamContent={aiStreamContent}
           />
 
           {/* Tab Navigation */}
