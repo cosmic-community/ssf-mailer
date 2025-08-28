@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
               - Responsive design with modern styling
               - Use inline CSS for email compatibility
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             } else if (type === 'Welcome Email') {
               aiPrompt = `Create ONLY the HTML body content for a welcome email template for "${prompt}". Include:
               - Warm welcome header with celebration emoji
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
               - Friendly footer with contact information
               - Modern, friendly design with inline CSS
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             } else {
               aiPrompt = `Create ONLY the HTML body content for an email template for "${prompt}" (${type}). Include:
               - Professional header design
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
               - Footer with contact information
               - Clean, modern styling with inline CSS for email compatibility
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             }
 
             controller.enqueue(
@@ -118,8 +118,60 @@ export async function POST(request: NextRequest) {
                   encoder.encode('data: {"type":"status","message":"Template generated successfully!","progress":100}\n\n')
                 )
 
-                // Clean up the AI response - remove backticks and code block markers
-                let cleanContent = generatedContent.trim()
-                
-                // Remove markdown code block markers with properly escaped regex
-                cleanContent = cleanContent.replace(/^
+                // Use the content as-is since we instructed AI not to use backticks
+                const finalContent = generatedContent.trim()
+
+                // Send complete response
+                controller.enqueue(
+                  encoder.encode(`data: {"type":"complete","data":{"content":"${finalContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"}}\n\n`)
+                )
+
+                // Close the stream
+                controller.close()
+
+              } catch (endError) {
+                console.error('Stream end error:', endError)
+                controller.enqueue(
+                  encoder.encode('data: {"type":"error","error":"Failed to finalize content"}\n\n')
+                )
+                controller.close()
+              }
+            })
+
+            aiStream.on('error', (error: any) => {
+              console.error('AI stream error:', error)
+              if (!isComplete) {
+                controller.enqueue(
+                  encoder.encode('data: {"type":"error","error":"AI generation failed"}\n\n')
+                )
+                controller.close()
+              }
+            })
+
+          } catch (error) {
+            console.error('Generation error:', error)
+            controller.enqueue(
+              encoder.encode('data: {"type":"error","error":"Failed to generate content"}\n\n')
+            )
+            controller.close()
+          }
+        }, 1000)
+      }
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    })
+
+  } catch (error) {
+    console.error('API Error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}

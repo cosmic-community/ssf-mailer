@@ -47,7 +47,7 @@ Instructions:
 - Use inline CSS for email client compatibility
 - Make improvements that enhance readability and visual appeal
 
-IMPORTANT: Return ONLY the improved HTML email template without any backticks, code block markers, or additional text.`
+IMPORTANT: Return ONLY the improved HTML email template without any backticks, code block markers, or additional text. Start directly with the HTML content.`
 
             controller.enqueue(
               encoder.encode('data: {"type":"status","message":"Applying AI improvements...","progress":60}\n\n')
@@ -85,8 +85,76 @@ IMPORTANT: Return ONLY the improved HTML email template without any backticks, c
                     encoder.encode('data: {"type":"status","message":"AI editing completed successfully!","progress":100}\n\n')
                   )
 
-                  // Clean up the AI response - remove backticks and code block markers
-                  let finalContent = improvedContent.trim()
-                  
-                  // Remove markdown code block markers with properly escaped regex
-                  finalContent = finalContent.replace(/^
+                  // Use the content as-is since we instructed AI not to use backticks
+                  const finalContent = improvedContent.trim()
+
+                  // Send complete response with content only
+                  controller.enqueue(
+                    encoder.encode(`data: {"type":"complete","data":{"content":"${finalContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
+                  )
+
+                  controller.close()
+                } catch (endError) {
+                  console.error('Stream end error:', endError)
+                  controller.enqueue(
+                    encoder.encode('data: {"type":"error","error":"Failed to complete editing"}\n\n')
+                  )
+                  controller.close()
+                }
+              })
+
+              aiStream.on('error', (error: any) => {
+                console.error('AI stream error:', error)
+                if (!isComplete) {
+                  controller.enqueue(
+                    encoder.encode('data: {"type":"error","error":"AI editing failed"}\n\n')
+                  )
+                  controller.close()
+                }
+              })
+
+            } else {
+              // Non-streaming response fallback
+              const content = typeof aiResponse === 'string' ? aiResponse : 'Failed to generate content'
+              
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Processing complete!","progress":100}\n\n')
+              )
+              
+              controller.enqueue(
+                encoder.encode(`data: {"type":"complete","data":{"content":"${content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
+              )
+              
+              controller.close()
+            }
+
+          } catch (error) {
+            console.error('AI editing error:', error)
+            controller.enqueue(
+              encoder.encode('data: {"type":"error","error":"Failed to edit content"}\n\n')
+            )
+            controller.close()
+          }
+        }, 1000)
+      }
+    })
+
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+      },
+    })
+
+  } catch (error) {
+    console.error('API Error:', error)
+    return new Response(
+      JSON.stringify({ error: 'Internal server error' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    )
+  }
+}
