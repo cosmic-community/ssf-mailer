@@ -22,7 +22,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [isPending, startTransition] = useTransition()
   const [isAIEditing, setIsAIEditing] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
-  const [aiStreamText, setAiStreamText] = useState<string[]>([])
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [activeTab, setActiveTab] = useState('preview')
@@ -59,15 +58,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
+    // Fixed: Add proper null check for template.id
+    if (!template.id) {
+      setError('Template ID is missing')
+      return
+    }
+
     setIsAIEditing(true)
     setError('')
     setSuccess('')
-    setAiStreamText([])
     
     try {
-      // Create the request body
+      // Create the request body with guaranteed string templateId
       const requestBody = {
-        templateId: template.id,
+        templateId: template.id, // Now safely guaranteed to be a string
         currentContent: formData.content,
         currentSubject: formData.subject,
         prompt: aiPrompt
@@ -91,6 +95,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
+      let editedContent = ''
 
       try {
         while (true) {
@@ -99,32 +104,39 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           if (done) break
           
           const chunk = decoder.decode(value, { stream: true })
-          const lines = chunk.split('\n')
           
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                
-                if (data.type === 'status') {
-                  setAiStreamText(prev => [...prev, data.message])
-                } else if (data.type === 'complete') {
-                  setFormData(prev => ({
-                    ...prev,
-                    content: data.data.content,
-                    subject: data.data.subject || prev.subject
-                  }))
-                  setAiStreamText(prev => [...prev, '✅ Template updated successfully!'])
-                  setSuccess('Template updated with AI suggestions!')
-                  setAiPrompt('')
-                  showToast()
-                } else if (data.type === 'error') {
-                  throw new Error(data.error)
-                }
-              } catch (parseError) {
-                console.warn('Failed to parse SSE data:', parseError)
-              }
+          // Check for completion or error signals
+          if (chunk.includes('__COMPLETE__')) {
+            const parts = chunk.split('__COMPLETE__')
+            if (parts[0]) {
+              editedContent += parts[0]
             }
+            
+            try {
+              const completionData = JSON.parse(parts[1])
+              setFormData(prev => ({
+                ...prev,
+                content: editedContent,
+                subject: completionData.subject || prev.subject
+              }))
+              
+              setSuccess('Template updated with AI suggestions!')
+              setAiPrompt('')
+              showToast()
+            } catch (parseError) {
+              console.warn('Failed to parse completion data')
+            }
+            break
+          } else if (chunk.includes('__ERROR__')) {
+            const parts = chunk.split('__ERROR__')
+            throw new Error(parts[1] || 'AI editing failed')
+          } else {
+            // Regular content chunk - stream directly to preview
+            editedContent += chunk
+            setFormData(prev => ({
+              ...prev,
+              content: editedContent
+            }))
           }
         }
       } finally {
@@ -134,7 +146,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     } catch (error) {
       console.error('AI edit error:', error)
       setError(error instanceof Error ? error.message : 'Failed to edit template with AI')
-      setAiStreamText(prev => [...prev, '❌ Error: ' + (error instanceof Error ? error.message : 'Failed to edit template with AI')])
     } finally {
       setIsAIEditing(false)
     }
@@ -160,8 +171,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
+    // Fixed: Add null check for template.id before making API call
+    if (!template.id) {
+      setError('Template ID is missing')
+      return
+    }
+
     startTransition(async () => {
       try {
+        // template.id is now safely guaranteed to be a string due to the check above
         const response = await fetch(`/api/templates/${template.id}`, {
           method: 'PUT',
           headers: {
@@ -231,26 +249,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   disabled={isAIEditing}
                 />
               </div>
-              
-              {/* AI Stream Text Display */}
-              {aiStreamText.length > 0 && (
-                <div className="space-y-2">
-                  <Label className="text-sm font-medium text-purple-700">AI Processing:</Label>
-                  <div className="bg-white border border-purple-200 rounded-lg p-4 max-h-32 overflow-y-auto">
-                    {aiStreamText.map((message, index) => (
-                      <div key={index} className="text-sm text-purple-800 mb-1">
-                        {message}
-                      </div>
-                    ))}
-                    {isAIEditing && (
-                      <div className="flex items-center space-x-2 text-sm text-purple-600">
-                        <div className="animate-pulse">●</div>
-                        <span>Processing...</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
               
               <Button 
                 onClick={handleAIEdit}
