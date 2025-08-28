@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate } from '@/types'
-import { ArrowLeft, Eye, Edit, Save, Zap, Loader2 } from 'lucide-react'
+import { ArrowLeft, Eye, Edit, Save, Zap, Loader2, CheckCircle } from 'lucide-react'
 import Link from 'next/link'
 
 const formSchema = z.object({
@@ -35,12 +35,13 @@ interface EditTemplateFormProps {
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('preview') // Changed default to preview
+  const [activeTab, setActiveTab] = useState('preview')
   const [iframeKey, setIframeKey] = useState(0)
   const [showAIDialog, setShowAIDialog] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiStreamContent, setAiStreamContent] = useState('')
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
   const aiInputRef = useRef<HTMLTextAreaElement>(null)
 
   const {
@@ -52,11 +53,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   } = useForm<FormData>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      name: template.metadata.name,
-      subject: template.metadata.subject || '', // Fixed: use subject instead of subject_line
-      content: template.metadata.content,
-      template_type: template.metadata.template_type.value,
-      active: template.metadata.active
+      name: template.metadata?.name || '',
+      subject: template.metadata?.subject || '',
+      content: template.metadata?.content || '',
+      template_type: template.metadata?.template_type?.value || 'Newsletter',
+      active: template.metadata?.active !== false
     }
   })
 
@@ -74,17 +75,27 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          name: data.name,
+          subject: data.subject,
+          content: data.content,
+          template_type: data.template_type,
+          active: data.active
+        }),
       })
+
+      const result = await response.json()
 
       if (response.ok) {
         router.push('/templates')
         router.refresh()
       } else {
-        console.error('Failed to update template')
+        console.error('Failed to update template:', result.error)
+        alert(result.error || 'Failed to update template')
       }
     } catch (error) {
       console.error('Error updating template:', error)
+      alert('Failed to update template')
     } finally {
       setLoading(false)
     }
@@ -104,7 +115,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setIframeKey(prev => prev + 1)
   }, [watchedContent])
 
-  // Focus AI input when dialog opens
+  // Focus and auto-resize AI input when dialog opens
   useEffect(() => {
     if (showAIDialog && aiInputRef.current) {
       // Small delay to ensure dialog is fully rendered
@@ -113,6 +124,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }, 100)
     }
   }, [showAIDialog])
+
+  // Auto-hide success toast after 3 seconds
+  useEffect(() => {
+    if (showSuccessToast) {
+      const timer = setTimeout(() => {
+        setShowSuccessToast(false)
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [showSuccessToast])
 
   // Generate complete HTML document for iframe
   const generatePreviewHTML = (content: string) => {
@@ -193,11 +214,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         if (aiPrompt.trim() && !aiLoading) {
           editWithAI()
         }
-      } else {
-        // Regular Enter: Allow default behavior (new line and auto-expand)
-        // The textarea will auto-expand due to resize-none being removed and rows being dynamic
       }
+      // Regular Enter: Allow default behavior for new line
     }
+  }
+
+  // Auto-resize textarea based on content
+  const handleAIPromptChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setAiPrompt(e.target.value)
+    
+    // Auto-resize textarea
+    const textarea = e.target
+    textarea.style.height = 'auto'
+    textarea.style.height = Math.max(100, Math.min(300, textarea.scrollHeight)) + 'px'
   }
 
   const editWithAI = async () => {
@@ -265,9 +294,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 if (data.name) {
                   setValue('name', data.name)
                 }
+                
+                // Show success toast and close dialog
+                setShowSuccessToast(true)
                 setShowAIDialog(false)
                 setAiPrompt('')
                 setAiStreamContent('')
+                
+                // Switch to preview tab to show the updated content
+                setActiveTab('preview')
               } else if (data.type === 'error') {
                 throw new Error(data.error)
               }
@@ -289,6 +324,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Success Toast */}
+        {showSuccessToast && (
+          <div className="fixed top-4 right-4 z-50 bg-green-50 border border-green-200 rounded-md p-4 shadow-md">
+            <div className="flex items-center">
+              <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+              <div className="text-sm font-medium text-green-800">
+                Template updated successfully with AI!
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
@@ -338,7 +385,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Template Details - Single Column */}
+              {/* Template Details */}
               <div className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
@@ -498,10 +545,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 id="ai-prompt"
                 placeholder="e.g., Change the color scheme to blue and white, add a promotional banner at the top, update the call-to-action button text to 'Shop Now'..."
                 value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
+                onChange={handleAIPromptChange}
                 onKeyDown={handleAIPromptKeyDown}
-                className="min-h-[100px]"
-                rows={Math.max(3, aiPrompt.split('\n').length)}
+                className="min-h-[100px] resize-none overflow-hidden"
+                style={{ height: 'auto' }}
                 disabled={aiLoading}
               />
               <p className="text-xs text-muted-foreground">
