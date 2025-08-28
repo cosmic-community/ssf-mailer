@@ -36,16 +36,15 @@ IMPORTANT: Return ONLY the subject line text, no quotes, no explanation, no addi
       // Handle the response with proper type checking
       let generatedSubject: string = ''
       
-      if (aiResponse && typeof aiResponse === 'object' && 'text' in aiResponse) {
-        const response = aiResponse as any
-        const responseText = response.text
-        if (typeof responseText === 'string') {
-          generatedSubject = responseText.trim()
+      if (aiResponse) {
+        if (typeof aiResponse === 'string') {
+          generatedSubject = aiResponse.trim()
+        } else if (typeof aiResponse === 'object' && 'text' in aiResponse) {
+          const responseData = aiResponse as { text: unknown }
+          if (typeof responseData.text === 'string') {
+            generatedSubject = responseData.text.trim()
+          }
         }
-      } else if (typeof aiResponse === 'string') {
-        generatedSubject = aiResponse.trim()
-      } else {
-        throw new Error('Invalid AI response format')
       }
 
       if (!generatedSubject) {
