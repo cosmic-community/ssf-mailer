@@ -54,17 +54,25 @@ Return the improved HTML email template.`
             )
 
             // Generate improved content with Cosmic AI streaming
-            const aiStream = await cosmic.ai.generateText({
+            const aiResponse = await cosmic.ai.generateText({
               prompt: aiPrompt,
               max_tokens: 3000,
               stream: true
             })
 
-            // Check if aiStream is a TextStreamingResponse
-            if (!aiStream || typeof aiStream.on !== 'function') {
+            // Check if aiResponse is a streaming response by checking for the 'on' method
+            const isStreamingResponse = aiResponse && 
+              typeof aiResponse === 'object' && 
+              'on' in aiResponse && 
+              typeof aiResponse.on === 'function';
+
+            if (!isStreamingResponse) {
               throw new Error('AI stream not available or invalid')
             }
 
+            // Now we can safely use the streaming response
+            const aiStream = aiResponse as TextStreamingResponse;
+            
             let improvedContent = ''
             let isComplete = false
 
@@ -91,16 +99,6 @@ Return the improved HTML email template.`
                 // Clean up the AI response - ensure we have proper HTML
                 let finalContent = improvedContent.trim()
                 
-                // If AI response doesn't contain full HTML, apply manual improvements
-                if (!finalContent.includes('<!DOCTYPE html>') || !finalContent.includes('<html')) {
-                  finalContent = applyManualImprovements(currentContent, prompt)
-                }
-
-                // Ensure the content is properly formatted
-                if (finalContent.length < 100) {
-                  finalContent = applyManualImprovements(currentContent, prompt)
-                }
-
                 // Send the final result
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({
@@ -118,20 +116,12 @@ Return the improved HTML email template.`
               } catch (error: unknown) {
                 if (!isComplete) {
                   console.error('Error finalizing AI editing:', error)
-                  // Fallback to manual improvements
-                  const fallbackContent = applyManualImprovements(currentContent, prompt)
-                  
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({
-                      type: 'complete',
-                      data: {
-                        content: fallbackContent,
-                        subject: currentSubject
-                      },
-                      message: 'Template improved successfully!'
+                      type: 'error',
+                      error: error instanceof Error ? error.message : 'Unknown error'
                     })}\n\n`)
                   )
-                  
                   controller.close()
                 }
               }
@@ -140,42 +130,24 @@ Return the improved HTML email template.`
             aiStream.on('error', (error: Error) => {
               if (!isComplete) {
                 console.error('Cosmic AI stream error:', error)
-                
-                // Fallback to manual improvements
-                const fallbackContent = applyManualImprovements(currentContent, prompt)
-                
                 controller.enqueue(
                   encoder.encode(`data: ${JSON.stringify({
-                    type: 'complete',
-                    data: {
-                      content: fallbackContent,
-                      subject: currentSubject
-                    },
-                    message: 'Template improved with fallback enhancements!'
+                    type: 'error',
+                    error: error.message
                   })}\n\n`)
                 )
-                
                 controller.close()
               }
             })
 
           } catch (error) {
             console.error('Error starting AI editing:', error)
-            
-            // Fallback to manual improvements
-            const fallbackContent = applyManualImprovements(currentContent, prompt)
-            
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
-                type: 'complete',
-                data: {
-                  content: fallbackContent,
-                  subject: currentSubject
-                },
-                message: 'Template improved successfully!'
+                type: 'error',
+                error: error instanceof Error ? error.message : 'Failed to process AI editing'
               })}\n\n`)
             )
-            
             controller.close()
           }
         }, 500)
@@ -200,57 +172,4 @@ Return the improved HTML email template.`
       }
     )
   }
-}
-
-// Manual improvement fallback function
-function applyManualImprovements(currentContent: string, prompt: string): string {
-  let improvedContent = currentContent
-  
-  // Apply different improvements based on the prompt
-  if (prompt.toLowerCase().includes('cosmic blue') || prompt.toLowerCase().includes('cosmic cms')) {
-    // Apply Cosmic blue theme
-    improvedContent = improvedContent
-      .replace(/#007bff/g, '#4F46E5') // Primary blue to Cosmic indigo
-      .replace(/#0056b3/g, '#3730A3') // Darker blue to darker indigo
-      .replace(/#f8f9fa/g, '#F8FAFC') // Light background
-      .replace(/background-color:\s*#007bff/g, 'background-color: #4F46E5')
-      .replace(/color:\s*#007bff/g, 'color: #4F46E5')
-      .replace(/border[^;]*#007bff/g, 'border: 1px solid #4F46E5')
-      .replace(/#667eea/g, '#4F46E5') // Update gradient colors too
-      .replace(/#764ba2/g, '#3730A3')
-  } else if (prompt.toLowerCase().includes('improve') || prompt.toLowerCase().includes('enhance')) {
-    improvedContent = improvedContent
-      .replace(/font-size:\s*14px/g, 'font-size: 16px')
-      .replace(/color:\s*#666/g, 'color: #555555')
-      .replace(/padding:\s*20px/g, 'padding: 30px')
-      .replace(/margin:\s*10px/g, 'margin: 15px')
-      .replace(/line-height:\s*1\.\d+/g, 'line-height: 1.6')
-  } else if (prompt.toLowerCase().includes('modern') || prompt.toLowerCase().includes('update')) {
-    improvedContent = improvedContent
-      .replace(/border-radius:\s*\d+px/g, 'border-radius: 12px')
-      .replace(/box-shadow:[^;]+/g, 'box-shadow: 0 10px 25px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)')
-      .replace(/font-family:[^;]+/g, 'font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif')
-  } else if (prompt.toLowerCase().includes('professional')) {
-    improvedContent = improvedContent
-      .replace(/color:\s*#[a-fA-F0-9]{6}/g, 'color: #1a1a1a')
-      .replace(/background-color:\s*#f8f9fa/g, 'background-color: #ffffff')
-      .replace(/padding:\s*\d+px/g, (match) => {
-        const value = parseInt(match.match(/\d+/)?.[0] || '20')
-        return `padding: ${Math.max(value + 5, 25)}px`
-      })
-  } else if (prompt.toLowerCase().includes('colorful') || prompt.toLowerCase().includes('vibrant')) {
-    improvedContent = improvedContent
-      .replace(/background:\s*linear-gradient[^;]+/g, 'background: linear-gradient(135deg, #ff6b6b 0%, #4ecdc4 100%)')
-      .replace(/background-color:\s*#667eea/g, 'background-color: #ff6b6b')
-      .replace(/color:\s*#333333/g, 'color: #2d3748')
-  } else {
-    // Default improvements
-    improvedContent = improvedContent
-      .replace(/line-height:\s*1\.\d+/g, 'line-height: 1.6')
-      .replace(/margin:\s*10px/g, 'margin: 15px')
-      .replace(/padding:\s*15px/g, 'padding: 20px')
-      .replace(/font-size:\s*13px/g, 'font-size: 14px')
-  }
-  
-  return improvedContent
 }
