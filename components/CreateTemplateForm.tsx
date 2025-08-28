@@ -3,6 +3,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Sparkles, CheckCircle, AlertCircle } from 'lucide-react'
 
 export default function CreateTemplateForm() {
   const router = useRouter()
@@ -14,6 +22,8 @@ export default function CreateTemplateForm() {
   const [aiPrompt, setAIPrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
   const [aiStreamText, setAiStreamText] = useState<string[]>([])
+  const [activeTab, setActiveTab] = useState('preview')
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -54,12 +64,25 @@ export default function CreateTemplateForm() {
     if (type === 'success') {
       setSuccess(message)
       setError('')
-      setTimeout(() => setSuccess(''), 3000)
+      setShowSuccessToast(true)
+      setTimeout(() => {
+        setSuccess('')
+        setShowSuccessToast(false)
+      }, 3000)
     } else {
       setError(message)
       setSuccess('')
       setTimeout(() => setError(''), 5000)
     }
+  }
+
+  const handleInputChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }))
+    setError('')
+    setSuccess('')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -83,7 +106,10 @@ export default function CreateTemplateForm() {
       }
 
       showToast('Template created successfully!')
-      router.push('/templates')
+      
+      setTimeout(() => {
+        router.push('/templates')
+      }, 1500)
     } catch (err: any) {
       showToast(err.message || 'Failed to create template. Please try again.', 'error')
       console.error('Template creation error:', err)
@@ -281,93 +307,73 @@ export default function CreateTemplateForm() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
-      {/* Toast Messages */}
-      {success && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-          <p className="text-green-600">{success}</p>
-        </div>
-      )}
-      
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600">{error}</p>
+    <div className="space-y-6">
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2">
+          <CheckCircle className="h-5 w-5" />
+          <span>Template created successfully!</span>
         </div>
       )}
 
-      <div className="card">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Template</h2>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Create New Template</h2>
+        <p className="text-gray-600">Use AI to generate content or create your template manually</p>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Template Name */}
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-              Template Name
-            </label>
-            <input
-              type="text"
-              id="name"
-              required
-              className="form-input"
-              value={formData.name}
-              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-              placeholder="Enter template name"
-            />
-          </div>
-
-          {/* Template Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Template Type
-            </label>
-            <Select
-              value={formData.template_type}
-              onValueChange={(value) => setFormData(prev => ({ ...prev, template_type: value }))}
-            >
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Newsletter">Newsletter</SelectItem>
-                <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                <SelectItem value="Promotional">Promotional</SelectItem>
-                <SelectItem value="Transactional">Transactional</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* AI Content Generation */}
-          <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-              <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              AI Content Generation with Cosmic AI
-            </h3>
-            
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Describe what you want to create:
-                </label>
-                <textarea
+      {/* 2-Column Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* Left Column: AI Content Generator */}
+        <div className="space-y-6">
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardHeader>
+              <CardTitle className="flex items-center space-x-2 text-blue-800">
+                <Sparkles className="h-5 w-5" />
+                <span>AI Content Generator</span>
+              </CardTitle>
+              <p className="text-blue-700 text-sm">
+                Describe what you want to create with Cosmic AI
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Template Type</Label>
+                <Select
+                  value={formData.template_type}
+                  onValueChange={(value) => handleInputChange('template_type', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Newsletter">Newsletter</SelectItem>
+                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                    <SelectItem value="Promotional">Promotional</SelectItem>
+                    <SelectItem value="Transactional">Transactional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <div className="space-y-2">
+                <Textarea
                   ref={aiPromptRef}
-                  className="form-input min-h-[60px] resize-none overflow-hidden"
+                  placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
                   value={aiPrompt}
                   onChange={(e) => {
                     setAIPrompt(e.target.value)
                     autoResize(e.target)
                   }}
                   onFocus={() => handleAISectionFocus(aiPromptRef)}
-                  placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
-                  rows={2}
+                  className="min-h-[100px] resize-none"
+                  disabled={isAIGenerating}
                 />
               </div>
               
               {/* AI Stream Text Display */}
-              {aiStreamText.length > 0 && (
+              {aiStreamText.length > 0 && !isAIEditing && (
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-blue-700">AI Processing:</label>
+                  <Label className="text-sm font-medium text-blue-700">AI Processing:</Label>
                   <div className="bg-white border border-blue-200 rounded-lg p-4 max-h-32 overflow-y-auto">
                     {aiStreamText.map((message, index) => (
                       <div key={index} className="text-sm text-blue-800 mb-1">
@@ -384,76 +390,58 @@ export default function CreateTemplateForm() {
                 </div>
               )}
               
-              <button
-                type="button"
+              <Button 
                 onClick={handleAIGenerate}
                 disabled={isAIGenerating || !aiPrompt.trim()}
-                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
               >
                 {isAIGenerating ? (
                   <>
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
+                    <Sparkles className="mr-2 h-4 w-4 animate-spin" />
                     Generating with Cosmic AI...
                   </>
                 ) : (
-                  'Generate with Cosmic AI'
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    Generate with Cosmic AI
+                  </>
                 )}
-              </button>
-            </div>
-          </div>
+              </Button>
+            </CardContent>
+          </Card>
 
-          {/* Subject Line */}
-          <div>
-            <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
-              Subject Line
-            </label>
-            <input
-              type="text"
-              id="subject"
-              required
-              className="form-input"
-              value={formData.subject}
-              onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
-              placeholder="Enter email subject"
-            />
-          </div>
-
-          {/* AI Content Editing */}
+          {/* AI Content Editor */}
           {formData.content && (
-            <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-purple-50 to-pink-50">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
-                <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                AI Content Editor with Cosmic AI
-              </h3>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    How should we improve the current content?
-                  </label>
-                  <textarea
+            <Card className="border-purple-200 bg-purple-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-purple-800">
+                  <Sparkles className="h-5 w-5" />
+                  <span>AI Content Editor</span>
+                </CardTitle>
+                <p className="text-purple-700 text-sm">
+                  How should we improve the current content?
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Textarea
                     ref={editPromptRef}
-                    className="form-input min-h-[60px] resize-none overflow-hidden"
+                    placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button'"
                     value={editPrompt}
                     onChange={(e) => {
                       setEditPrompt(e.target.value)
                       autoResize(e.target)
                     }}
                     onFocus={() => handleAISectionFocus(editPromptRef)}
-                    placeholder="e.g., 'Make it more professional and add a call-to-action button', 'Apply cosmic blue theme like cosmic cms website'"
-                    rows={2}
+                    className="min-h-[100px] resize-none"
+                    disabled={isAIEditing}
                   />
                 </div>
                 
                 {/* AI Stream Text Display for Editing */}
                 {aiStreamText.length > 0 && isAIEditing && (
                   <div className="space-y-2">
-                    <label className="block text-sm font-medium text-purple-700">AI Processing:</label>
+                    <Label className="text-sm font-medium text-purple-700">AI Processing:</Label>
                     <div className="bg-white border border-purple-200 rounded-lg p-4 max-h-32 overflow-y-auto">
                       {aiStreamText.map((message, index) => (
                         <div key={index} className="text-sm text-purple-800 mb-1">
@@ -470,84 +458,186 @@ export default function CreateTemplateForm() {
                   </div>
                 )}
                 
-                <button
-                  type="button"
+                <Button 
                   onClick={handleAIEdit}
                   disabled={isAIEditing || !editPrompt.trim()}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   {isAIEditing ? (
                     <>
-                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                      Editing with Cosmic AI...
+                      <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                      Editing with AI...
                     </>
                   ) : (
-                    'Edit with Cosmic AI'
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Edit with AI
+                    </>
                   )}
-                </button>
-              </div>
-            </div>
+                </Button>
+              </CardContent>
+            </Card>
           )}
 
-          {/* Email Content */}
-          <div>
-            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Content (HTML)
-            </label>
-            <textarea
-              ref={contentRef}
-              id="content"
-              required
-              className="form-input min-h-[300px] font-mono text-sm resize-none overflow-hidden"
-              value={formData.content}
-              onChange={(e) => {
-                setFormData(prev => ({ ...prev, content: e.target.value }))
-                autoResize(e.target)
-              }}
-              placeholder="Enter HTML email content or use AI to generate"
-              rows={15}
-            />
-            <p className="text-sm text-gray-500 mt-2">
-              Use template variables like {`{{first_name}}`} and {`{{last_name}}`} for personalization.
-            </p>
-          </div>
+          {/* Error Messages */}
+          {error && (
+            <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
+              <AlertCircle className="h-5 w-5 text-red-600" />
+              <p className="text-red-600">{error}</p>
+            </div>
+          )}
+        </div>
 
-          {/* Active Status */}
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              id="active"
-              checked={formData.active}
-              onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
-              className="form-checkbox"
-            />
-            <label htmlFor="active" className="ml-2 text-sm text-gray-700">
-              Template is active
-            </label>
-          </div>
+        {/* Right Column: Preview / Edit */}
+        <div className="space-y-6">
+          <Card>
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+                <TabsTrigger value="edit">Edit</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="preview" className="mt-6 p-6">
+                <div className="space-y-6">
+                  <div className="border-b pb-4">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Email Preview</h3>
+                    <p className="text-sm text-gray-600">
+                      This is how your email will appear to recipients
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                    <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          <strong>Subject:</strong> {formData.subject || 'No subject'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formData.template_type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-6 max-h-96 overflow-y-auto">
+                      {formData.content ? (
+                        <div 
+                          className="prose max-w-none"
+                          dangerouslySetInnerHTML={{ 
+                            __html: formData.content
+                          }} 
+                        />
+                      ) : (
+                        <div className="text-center py-12 text-gray-500">
+                          <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                          <p>No content yet</p>
+                          <p className="text-sm">Use the AI generator to create content</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
 
-          {/* Actions */}
-          <div className="flex space-x-4 pt-6 border-t border-gray-200">
-            <button
-              type="button"
-              onClick={() => router.back()}
-              className="btn-secondary"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={isLoading}
-            >
-              {isLoading ? 'Creating...' : 'Create Template'}
-            </button>
-          </div>
-        </form>
+              <TabsContent value="edit" className="mt-6 p-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* Template Name */}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Template Name *</Label>
+                    <Input
+                      id="name"
+                      type="text"
+                      value={formData.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      placeholder="Enter template name"
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+
+                  {/* Subject Line */}
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Email Subject *</Label>
+                    <Input
+                      id="subject"
+                      type="text"
+                      value={formData.subject}
+                      onChange={(e) => handleInputChange('subject', e.target.value)}
+                      placeholder="Enter email subject line"
+                      disabled={isLoading}
+                      required
+                    />
+                  </div>
+
+                  {/* Email Content */}
+                  <div className="space-y-2">
+                    <Label htmlFor="content">Email Content *</Label>
+                    <Textarea
+                      ref={contentRef}
+                      id="content"
+                      value={formData.content}
+                      onChange={(e) => {
+                        handleInputChange('content', e.target.value)
+                        autoResize(e.target)
+                      }}
+                      placeholder="Enter email content (HTML supported) or use AI to generate"
+                      rows={8}
+                      disabled={isLoading}
+                      required
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-sm text-gray-500">
+                      You can use HTML tags and merge fields like {'{{first_name}}'} for personalization
+                    </p>
+                  </div>
+
+                  {/* Active Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div className="space-y-1">
+                      <Label htmlFor="active" className="text-base font-medium">
+                        Active Template
+                      </Label>
+                      <p className="text-sm text-gray-600">
+                        Active templates are available for creating campaigns
+                      </p>
+                    </div>
+                    <Switch
+                      id="active"
+                      checked={formData.active}
+                      onCheckedChange={(checked) => handleInputChange('active', checked)}
+                      disabled={isLoading}
+                    />
+                  </div>
+
+                  {/* Success Messages */}
+                  {success && (
+                    <div className="flex items-center space-x-2 p-4 bg-green-50 border border-green-200 rounded-md">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                      <p className="text-green-600">{success}</p>
+                    </div>
+                  )}
+
+                  {/* Form Actions */}
+                  <div className="flex space-x-4 pt-6">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => router.back()}
+                      disabled={isLoading}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="bg-slate-800 hover:bg-slate-900 text-white"
+                    >
+                      {isLoading ? 'Creating...' : 'Create Template'}
+                    </Button>
+                  </div>
+                </form>
+              </TabsContent>
+            </Tabs>
+          </Card>
+        </div>
       </div>
     </div>
   )
