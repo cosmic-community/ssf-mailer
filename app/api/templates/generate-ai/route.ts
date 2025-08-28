@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
             // Generate content with Cosmic AI streaming
             const aiResponse = await cosmic.ai.generateText({
               prompt: aiPrompt,
-              max_tokens: 2000,
+              max_tokens: 60000,
               stream: true
             })
 
