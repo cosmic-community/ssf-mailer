@@ -56,7 +56,7 @@ IMPORTANT: Return ONLY the improved HTML email template without any backticks, c
             // Generate improved content with Cosmic AI streaming
             const aiResponse = await cosmic.ai.generateText({
               prompt: aiPrompt,
-              max_tokens: 3000,
+              max_tokens: 60000,
               stream: true
             })
 
