@@ -15,7 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate } from '@/types'
-import { ArrowLeft, Eye, Edit, Save, Sparkles, Loader2 } from 'lucide-react'
+import { ArrowLeft, Eye, Edit, Save, Zap, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const formSchema = z.object({
@@ -262,7 +262,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   return (
     <div className="min-h-screen bg-slate-50 py-8">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center space-x-4 mb-4">
@@ -286,7 +286,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 onClick={() => setShowAIDialog(true)}
                 className="flex items-center gap-2"
               >
-                <Sparkles className="w-4 h-4" />
+                <Zap className="w-4 h-4" />
                 Edit with AI
               </Button>
               <div className="flex items-center space-x-2">
@@ -312,122 +312,125 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-              {/* Template Details */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Template Name</Label>
-                  <Input
-                    id="name"
-                    {...register('name')}
-                    placeholder="Enter template name"
-                    className={errors.name ? 'border-red-500' : ''}
-                  />
-                  {errors.name && (
-                    <p className="text-sm text-red-500">{errors.name.message}</p>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="template_type">Template Type</Label>
-                  <Select 
-                    value={watch('template_type')} 
-                    onValueChange={(value: any) => setValue('template_type', value)}
-                  >
-                    <SelectTrigger className={errors.template_type ? 'border-red-500' : ''}>
-                      <SelectValue placeholder="Select template type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                      <SelectItem value="Newsletter">Newsletter</SelectItem>
-                      <SelectItem value="Promotional">Promotional</SelectItem>
-                      <SelectItem value="Transactional">Transactional</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {errors.template_type && (
-                    <p className="text-sm text-red-500">{errors.template_type.message}</p>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="subject">Subject Line</Label>
-                <Input
-                  id="subject"
-                  {...register('subject')}
-                  placeholder="Enter email subject"
-                  className={errors.subject ? 'border-red-500' : ''}
-                />
-                {errors.subject && (
-                  <p className="text-sm text-red-500">{errors.subject.message}</p>
-                )}
-              </div>
-
-              {/* Email Content with Tabs */}
-              <div className="space-y-2">
-                <Label>Email Content (HTML)</Label>
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="edit" className="flex items-center gap-2">
-                      <Edit className="w-4 h-4" />
-                      Edit
-                    </TabsTrigger>
-                    <TabsTrigger value="preview" className="flex items-center gap-2">
-                      <Eye className="w-4 h-4" />
-                      Preview
-                    </TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="edit" className="space-y-2">
-                    <Textarea
-                      {...register('content')}
-                      placeholder="Enter your email HTML content here..."
-                      className={`min-h-[400px] font-mono text-sm ${errors.content ? 'border-red-500' : ''}`}
+              {/* Template Details - Single Column */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Template Name</Label>
+                    <Input
+                      id="name"
+                      {...register('name')}
+                      placeholder="Enter template name"
+                      className={errors.name ? 'border-red-500' : ''}
                     />
-                    {errors.content && (
-                      <p className="text-sm text-red-500">{errors.content.message}</p>
+                    {errors.name && (
+                      <p className="text-sm text-red-500">{errors.name.message}</p>
                     )}
-                    <div className="text-sm text-muted-foreground">
-                      <p className="mb-2">Available merge tags:</p>
-                      <div className="flex flex-wrap gap-2">
-                        <code className="bg-muted px-2 py-1 rounded text-xs">{'{{first_name}}'}</code>
-                        <code className="bg-muted px-2 py-1 rounded text-xs">{'{{last_name}}'}</code>
-                        <code className="bg-muted px-2 py-1 rounded text-xs">{'{{email}}'}</code>
-                        <code className="bg-muted px-2 py-1 rounded text-xs">{'{{company}}'}</code>
-                      </div>
-                    </div>
-                  </TabsContent>
-                  
-                  <TabsContent value="preview" className="space-y-2">
-                    <div className="border rounded-md bg-white">
-                      {/* Email Preview Header */}
-                      <div className="bg-muted p-4 border-b">
-                        <div className="text-sm text-muted-foreground space-y-1">
-                          <div><strong>Subject:</strong> {watchedSubject || 'Enter subject line'}</div>
-                          <div><strong>From:</strong> your-email@yourdomain.com</div>
-                          <div><strong>To:</strong> john.doe@example.com</div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="template_type">Template Type</Label>
+                    <Select 
+                      value={watch('template_type')} 
+                      onValueChange={(value: any) => setValue('template_type', value)}
+                    >
+                      <SelectTrigger className={errors.template_type ? 'border-red-500' : ''}>
+                        <SelectValue placeholder="Select template type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                        <SelectItem value="Newsletter">Newsletter</SelectItem>
+                        <SelectItem value="Promotional">Promotional</SelectItem>
+                        <SelectItem value="Transactional">Transactional</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {errors.template_type && (
+                      <p className="text-sm text-red-500">{errors.template_type.message}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="subject">Subject Line</Label>
+                  <Input
+                    id="subject"
+                    {...register('subject')}
+                    placeholder="Enter email subject"
+                    className={errors.subject ? 'border-red-500' : ''}
+                  />
+                  {errors.subject && (
+                    <p className="text-sm text-red-500">{errors.subject.message}</p>
+                  )}
+                </div>
+
+                {/* Email Content with Tabs */}
+                <div className="space-y-2">
+                  <Label>Email Content (HTML)</Label>
+                  <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                    <TabsList className="grid w-full grid-cols-2">
+                      <TabsTrigger value="edit" className="flex items-center gap-2">
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </TabsTrigger>
+                      <TabsTrigger value="preview" className="flex items-center gap-2">
+                        <Eye className="w-4 h-4" />
+                        Preview
+                      </TabsTrigger>
+                    </TabsList>
+                    
+                    <TabsContent value="edit" className="space-y-2">
+                      <Textarea
+                        {...register('content')}
+                        placeholder="Enter your email HTML content here..."
+                        className={`min-h-[200px] font-mono text-sm resize-y ${errors.content ? 'border-red-500' : ''}`}
+                        rows={2}
+                      />
+                      {errors.content && (
+                        <p className="text-sm text-red-500">{errors.content.message}</p>
+                      )}
+                      <div className="text-sm text-muted-foreground">
+                        <p className="mb-2">Available merge tags:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{first_name}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{last_name}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{email}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{company}}'}</code>
                         </div>
                       </div>
-                      
-                      {/* Email Preview Content - Iframe */}
-                      <div className="relative">
-                        <iframe
-                          key={iframeKey}
-                          srcDoc={generatePreviewHTML(watchedContent || '<p style="padding: 20px;">Enter your email content to see the preview</p>')}
-                          className="w-full min-h-[500px] border-0"
-                          sandbox="allow-same-origin"
-                          title="Email Preview"
-                          style={{
-                            background: 'white',
-                            minHeight: '500px'
-                          }}
-                        />
+                    </TabsContent>
+                    
+                    <TabsContent value="preview" className="space-y-2">
+                      <div className="border rounded-md bg-white">
+                        {/* Email Preview Header */}
+                        <div className="bg-muted p-4 border-b">
+                          <div className="text-sm text-muted-foreground space-y-1">
+                            <div><strong>Subject:</strong> {watchedSubject || 'Enter subject line'}</div>
+                            <div><strong>From:</strong> your-email@yourdomain.com</div>
+                            <div><strong>To:</strong> john.doe@example.com</div>
+                          </div>
+                        </div>
+                        
+                        {/* Email Preview Content - Iframe */}
+                        <div className="relative">
+                          <iframe
+                            key={iframeKey}
+                            srcDoc={generatePreviewHTML(watchedContent || '<p style="padding: 20px;">Enter your email content to see the preview</p>')}
+                            className="w-full min-h-[500px] border-0"
+                            sandbox="allow-same-origin"
+                            title="Email Preview"
+                            style={{
+                              background: 'white',
+                              minHeight: '500px'
+                            }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      This preview shows how your email will appear with sample data. Merge tags like {'{{first_name}}'} will be replaced with actual contact data when sent.
-                    </p>
-                  </TabsContent>
-                </Tabs>
+                      <p className="text-sm text-muted-foreground">
+                        This preview shows how your email will appear with sample data. Merge tags like {'{{first_name}}'} will be replaced with actual contact data when sent.
+                      </p>
+                    </TabsContent>
+                  </Tabs>
+                </div>
               </div>
 
               {/* Action Buttons */}
@@ -454,7 +457,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5" />
+              <Zap className="w-5 h-5" />
               Edit Template with AI
             </DialogTitle>
             <DialogDescription>
@@ -469,7 +472,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 placeholder="e.g., Change the color scheme to blue and white, add a promotional banner at the top, update the call-to-action button text to 'Shop Now'..."
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                className="min-h-[100px]"
+                className="min-h-[100px] resize-y"
+                rows={2}
                 disabled={aiLoading}
               />
             </div>
@@ -511,9 +515,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4" />
+                    <Zap className="w-4 h-4" />
                     Apply Changes
-                  </>
+                  </Button>
                 )}
               </Button>
             </div>
