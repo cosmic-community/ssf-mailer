@@ -30,34 +30,40 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Generating email content...","progress":30}\n\n')
             )
 
-            // Create AI prompt based on template type
+            // Create AI prompt based on template type - ONLY for body content
             let aiPrompt = ''
             if (type === 'Newsletter') {
-              aiPrompt = `Create a professional HTML email newsletter template for "${prompt}". Include:
+              aiPrompt = `Create ONLY the HTML body content for an email newsletter template based on "${prompt}". Include:
               - A header with gradient background
               - Welcome greeting with {{first_name}} placeholder
               - Main content section with highlights and bullet points
               - Call-to-action button
               - Professional footer with unsubscribe link
               - Responsive design with modern styling
-              - Use inline CSS for email compatibility`
+              - Use inline CSS for email compatibility
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
             } else if (type === 'Welcome Email') {
-              aiPrompt = `Create a welcoming HTML email template for new users joining "${prompt}". Include:
+              aiPrompt = `Create ONLY the HTML body content for a welcome email template for "${prompt}". Include:
               - Warm welcome header with celebration emoji
               - Personalized greeting with {{first_name}} placeholder
               - Welcome message explaining what to expect
               - Getting started section with benefits
               - Prominent call-to-action button
               - Friendly footer with contact information
-              - Modern, friendly design with inline CSS`
+              - Modern, friendly design with inline CSS
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
             } else {
-              aiPrompt = `Create a professional HTML email template for "${prompt}" (${type}). Include:
+              aiPrompt = `Create ONLY the HTML body content for an email template for "${prompt}" (${type}). Include:
               - Professional header design
               - Personalized greeting with {{first_name}} placeholder
               - Clear main content section
               - Call-to-action button
               - Footer with contact information
-              - Clean, modern styling with inline CSS for email compatibility`
+              - Clean, modern styling with inline CSS for email compatibility
+              
+              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks, no explanation text.`
             }
 
             controller.enqueue(
@@ -112,83 +118,8 @@ export async function POST(request: NextRequest) {
                   encoder.encode('data: {"type":"status","message":"Template generated successfully!","progress":100}\n\n')
                 )
 
-                // Generate subject line based on type and prompt
-                let generatedSubject = ''
-                if (type === 'Newsletter') {
-                  generatedSubject = `${prompt} - Monthly Newsletter`
-                } else if (type === 'Welcome Email') {
-                  generatedSubject = `Welcome to ${prompt}! 🎉`
-                } else {
-                  generatedSubject = `${prompt} - ${type}`
-                }
-
-                // Send the final result
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({
-                    type: 'complete',
-                    data: {
-                      subject: generatedSubject,
-                      content: generatedContent
-                    },
-                    message: 'Template generated successfully!'
-                  })}\n\n`)
-                )
+                // Clean up the AI response - remove backticks and code block markers
+                let cleanContent = generatedContent.trim()
                 
-                controller.close()
-              } catch (error: unknown) {
-                if (!isComplete) {
-                  const errorMessage = error instanceof Error ? error.message : 'Failed to finalize template generation'
-                  controller.enqueue(
-                    encoder.encode(`data: ${JSON.stringify({
-                      type: 'error',
-                      error: errorMessage
-                    })}\n\n`)
-                  )
-                  controller.close()
-                }
-              }
-            })
-
-            aiStream.on('error', (error: Error) => {
-              if (!isComplete) {
-                console.error('Cosmic AI stream error:', error)
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({
-                    type: 'error',
-                    error: 'AI generation failed. Please try again.'
-                  })}\n\n`)
-                )
-                controller.close()
-              }
-            })
-
-          } catch (error) {
-            console.error('Error starting AI generation:', error)
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({
-                type: 'error',
-                error: error instanceof Error ? error.message : 'Failed to generate template'
-              })}\n\n`)
-            )
-            controller.close()
-          }
-        }, 500)
-      }
-    })
-
-    return new Response(stream, {
-      headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      },
-    })
-
-  } catch (error) {
-    console.error('Error in AI template generation:', error)
-    return NextResponse.json(
-      { error: 'Failed to generate AI template' },
-      { status: 500 }
-    )
-  }
-}
+                // Remove markdown code block markers
+                cleanContent = cleanContent.replace(/^

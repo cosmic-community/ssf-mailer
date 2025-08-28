@@ -19,6 +19,7 @@ export default function CreateTemplateForm() {
   const [success, setSuccess] = useState('')
   const [isAIGenerating, setIsAIGenerating] = useState(false)
   const [isAIEditing, setIsAIEditing] = useState(false)
+  const [isGeneratingSubject, setIsGeneratingSubject] = useState(false)
   const [aiPrompt, setAIPrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
   const [activeTab, setActiveTab] = useState('preview')
@@ -182,8 +183,7 @@ export default function CreateTemplateForm() {
                 } else if (data.type === 'complete') {
                   setFormData(prev => ({
                     ...prev,
-                    subject: data.data.subject,
-                    content: data.data.content
+                    content: data.data.content // Only set content, no subject
                   }))
                   setAIPrompt('')
                   setAiStatus('Generation complete!')
@@ -219,6 +219,49 @@ export default function CreateTemplateForm() {
         setAiStatus('')
         setAiProgress(0)
       }, 2000)
+    }
+  }
+
+  const handleGenerateSubject = async () => {
+    if (!formData.content.trim()) {
+      showToast('Please generate or add email content first', 'error')
+      return
+    }
+
+    setIsGeneratingSubject(true)
+    try {
+      const response = await fetch('/api/templates/generate-subject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: formData.content,
+          templateType: formData.template_type
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to generate subject line')
+      }
+
+      const result = await response.json()
+      
+      if (result.success && result.subject) {
+        setFormData(prev => ({
+          ...prev,
+          subject: result.subject
+        }))
+        showToast(result.fallback ? 'Subject generated (fallback)' : 'Subject generated successfully!')
+      } else {
+        throw new Error('No subject received')
+      }
+
+    } catch (error) {
+      console.error('Subject generation error:', error)
+      showToast('Failed to generate subject line. Please try again.', 'error')
+    } finally {
+      setIsGeneratingSubject(false)
     }
   }
 
@@ -399,7 +442,7 @@ export default function CreateTemplateForm() {
                     autoResize(e.target)
                   }}
                   onFocus={() => handleAISectionFocus(aiPromptRef)}
-                  className="min-h-[100px] resize-none"
+                  className="min-h-[80px] resize-none"
                   disabled={isAIGenerating}
                 />
               </div>
@@ -440,7 +483,7 @@ export default function CreateTemplateForm() {
             </CardContent>
           </Card>
 
-          {/* AI Content Editor */}
+          {/* AI Content Editor - Only show when content exists */}
           {formData.content && (
             <Card className="border-purple-200 bg-purple-50/50">
               <CardHeader>
@@ -463,7 +506,7 @@ export default function CreateTemplateForm() {
                       autoResize(e.target)
                     }}
                     onFocus={() => handleAISectionFocus(editPromptRef)}
-                    className="min-h-[100px] resize-none"
+                    className="min-h-[80px] resize-none"
                     disabled={isAIEditing}
                   />
                 </div>
@@ -579,18 +622,39 @@ export default function CreateTemplateForm() {
                     />
                   </div>
 
-                  {/* Subject Line */}
+                  {/* Subject Line with AI Generate Button */}
                   <div className="space-y-2">
                     <Label htmlFor="subject">Email Subject *</Label>
-                    <Input
-                      id="subject"
-                      type="text"
-                      value={formData.subject}
-                      onChange={(e) => handleInputChange('subject', e.target.value)}
-                      placeholder="Enter email subject line"
-                      disabled={isLoading}
-                      required
-                    />
+                    <div className="flex space-x-2">
+                      <Input
+                        id="subject"
+                        type="text"
+                        value={formData.subject}
+                        onChange={(e) => handleInputChange('subject', e.target.value)}
+                        placeholder="Enter email subject line"
+                        disabled={isLoading}
+                        required
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        onClick={handleGenerateSubject}
+                        disabled={isGeneratingSubject || !formData.content.trim()}
+                        className="bg-amber-600 hover:bg-amber-700 text-white px-3"
+                        title="Generate subject from email content"
+                      >
+                        {isGeneratingSubject ? (
+                          <Sparkles className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </div>
+                    {!formData.content.trim() && (
+                      <p className="text-xs text-gray-500">
+                        Generate or add email content first to use AI subject generation
+                      </p>
+                    )}
                   </div>
 
                   {/* Email Content */}
