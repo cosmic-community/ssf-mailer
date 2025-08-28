@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -35,12 +35,13 @@ interface EditTemplateFormProps {
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('edit')
+  const [activeTab, setActiveTab] = useState('preview') // Changed default to preview
   const [iframeKey, setIframeKey] = useState(0)
   const [showAIDialog, setShowAIDialog] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiStreamContent, setAiStreamContent] = useState('')
+  const aiInputRef = useRef<HTMLTextAreaElement>(null)
 
   const {
     register,
@@ -52,7 +53,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: template.metadata.name,
-      subject: template.metadata.subject,
+      subject: template.metadata.subject || '', // Ensure subject is never undefined
       content: template.metadata.content,
       template_type: template.metadata.template_type.value,
       active: template.metadata.active
@@ -102,6 +103,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   useEffect(() => {
     setIframeKey(prev => prev + 1)
   }, [watchedContent])
+
+  // Focus AI input when dialog opens
+  useEffect(() => {
+    if (showAIDialog && aiInputRef.current) {
+      // Small delay to ensure dialog is fully rendered
+      setTimeout(() => {
+        aiInputRef.current?.focus()
+      }, 100)
+    }
+  }, [showAIDialog])
 
   // Generate complete HTML document for iframe
   const generatePreviewHTML = (content: string) => {
@@ -172,6 +183,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     </div>
 </body>
 </html>`
+  }
+
+  const handleAIPromptKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter') {
+      if (e.metaKey || e.ctrlKey) {
+        // Command/Ctrl + Enter: Submit form
+        e.preventDefault()
+        if (aiPrompt.trim() && !aiLoading) {
+          editWithAI()
+        }
+      } else {
+        // Regular Enter: Allow default behavior (new line and auto-expand)
+        // The textarea will auto-expand due to resize-none being removed and rows being dynamic
+      }
+    }
   }
 
   const editWithAI = async () => {
@@ -368,36 +394,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <Label>Email Content (HTML)</Label>
                   <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="edit" className="flex items-center gap-2">
-                        <Edit className="w-4 h-4" />
-                        Edit
-                      </TabsTrigger>
                       <TabsTrigger value="preview" className="flex items-center gap-2">
                         <Eye className="w-4 h-4" />
                         Preview
                       </TabsTrigger>
+                      <TabsTrigger value="edit" className="flex items-center gap-2">
+                        <Edit className="w-4 h-4" />
+                        Edit
+                      </TabsTrigger>
                     </TabsList>
-                    
-                    <TabsContent value="edit" className="space-y-2">
-                      <Textarea
-                        {...register('content')}
-                        placeholder="Enter your email HTML content here..."
-                        className={`min-h-[200px] font-mono text-sm resize-y ${errors.content ? 'border-red-500' : ''}`}
-                        rows={2}
-                      />
-                      {errors.content && (
-                        <p className="text-sm text-red-500">{errors.content.message}</p>
-                      )}
-                      <div className="text-sm text-muted-foreground">
-                        <p className="mb-2">Available merge tags:</p>
-                        <div className="flex flex-wrap gap-2">
-                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{first_name}}'}</code>
-                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{last_name}}'}</code>
-                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{email}}'}</code>
-                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{company}}'}</code>
-                        </div>
-                      </div>
-                    </TabsContent>
                     
                     <TabsContent value="preview" className="space-y-2">
                       <div className="border rounded-md bg-white">
@@ -428,6 +433,27 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <p className="text-sm text-muted-foreground">
                         This preview shows how your email will appear with sample data. Merge tags like {'{{first_name}}'} will be replaced with actual contact data when sent.
                       </p>
+                    </TabsContent>
+                    
+                    <TabsContent value="edit" className="space-y-2">
+                      <Textarea
+                        {...register('content')}
+                        placeholder="Enter your email HTML content here..."
+                        className={`min-h-[200px] font-mono text-sm ${errors.content ? 'border-red-500' : ''}`}
+                        rows={2}
+                      />
+                      {errors.content && (
+                        <p className="text-sm text-red-500">{errors.content.message}</p>
+                      )}
+                      <div className="text-sm text-muted-foreground">
+                        <p className="mb-2">Available merge tags:</p>
+                        <div className="flex flex-wrap gap-2">
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{first_name}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{last_name}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{email}}'}</code>
+                          <code className="bg-muted px-2 py-1 rounded text-xs">{'{{company}}'}</code>
+                        </div>
+                      </div>
                     </TabsContent>
                   </Tabs>
                 </div>
@@ -461,21 +487,26 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               Edit Template with AI
             </DialogTitle>
             <DialogDescription>
-              Describe the changes you want to make to your email template and AI will apply them.
+              Describe the changes you want to make to your email template and AI will apply them. Press Cmd+Enter to submit.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="ai-prompt">Describe your changes</Label>
               <Textarea
+                ref={aiInputRef}
                 id="ai-prompt"
                 placeholder="e.g., Change the color scheme to blue and white, add a promotional banner at the top, update the call-to-action button text to 'Shop Now'..."
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                className="min-h-[100px] resize-y"
-                rows={2}
+                onKeyDown={handleAIPromptKeyDown}
+                className="min-h-[100px]"
+                rows={Math.max(3, aiPrompt.split('\n').length)}
                 disabled={aiLoading}
               />
+              <p className="text-xs text-muted-foreground">
+                Press Enter for new line, Cmd+Enter to submit
+              </p>
             </div>
 
             {aiLoading && aiStreamContent && (
