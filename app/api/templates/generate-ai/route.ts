@@ -121,5 +121,5 @@ export async function POST(request: NextRequest) {
                 // Clean up the AI response - remove backticks and code block markers
                 let cleanContent = generatedContent.trim()
                 
-                // Remove markdown code block markers
+                // Remove markdown code block markers with properly escaped regex
                 cleanContent = cleanContent.replace(/^

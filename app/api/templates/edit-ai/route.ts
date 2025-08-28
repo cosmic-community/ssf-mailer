@@ -88,5 +88,5 @@ IMPORTANT: Return ONLY the improved HTML email template without any backticks, c
                   // Clean up the AI response - remove backticks and code block markers
                   let finalContent = improvedContent.trim()
                   
-                  // Remove markdown code block markers
+                  // Remove markdown code block markers with properly escaped regex
                   finalContent = finalContent.replace(/^
