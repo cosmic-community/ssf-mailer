@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
-import { Template } from '@/types'
+import { EmailTemplate } from '@/types'
 
 interface AIGenerateFormProps {
   onGenerate: (content: string) => void
@@ -166,7 +166,7 @@ export default function EditTemplate() {
   const params = useParams()
   const router = useRouter()
   const id = params.id as string
-  const [template, setTemplate] = useState<Template | null>(null)
+  const [template, setTemplate] = useState<EmailTemplate | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
