@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { ArrowLeft, Eye, Edit, Plus, Sparkles } from 'lucide-react'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ArrowLeft, Eye, Edit, Plus, Sparkles, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const formSchema = z.object({
@@ -62,6 +63,10 @@ export default function CreateTemplateForm() {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('edit')
   const [iframeKey, setIframeKey] = useState(0)
+  const [showAIDialog, setShowAIDialog] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiStreamContent, setAiStreamContent] = useState('')
 
   const {
     register,
@@ -83,6 +88,7 @@ export default function CreateTemplateForm() {
   const watchedContent = watch('content')
   const watchedSubject = watch('subject')
   const watchedActive = watch('active')
+  const watchedTemplateType = watch('template_type')
 
   const onSubmit = async (data: FormData) => {
     setLoading(true)
@@ -194,8 +200,86 @@ export default function CreateTemplateForm() {
   }
 
   const generateWithAI = async () => {
-    // This would integrate with your AI generation endpoint
-    console.log('Generate with AI clicked')
+    if (!aiPrompt.trim()) {
+      alert('Please enter a prompt for AI generation')
+      return
+    }
+
+    setAiLoading(true)
+    setAiStreamContent('')
+    
+    try {
+      const response = await fetch('/api/templates/generate-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          template_type: watchedTemplateType,
+          stream: true
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to generate with AI')
+      }
+
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'text') {
+                setAiStreamContent(data.fullContent || '')
+                fullContent = data.fullContent || ''
+              } else if (data.type === 'complete') {
+                // Apply the generated content to the form
+                if (data.content) {
+                  setValue('content', data.content)
+                }
+                if (data.subject) {
+                  setValue('subject', data.subject)
+                }
+                if (data.name) {
+                  setValue('name', data.name)
+                }
+                setShowAIDialog(false)
+                setAiPrompt('')
+                setAiStreamContent('')
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+              continue
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AI generation error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to generate with AI')
+    } finally {
+      setAiLoading(false)
+    }
   }
 
   return (
@@ -221,7 +305,7 @@ export default function CreateTemplateForm() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={generateWithAI}
+                onClick={() => setShowAIDialog(true)}
                 className="flex items-center gap-2"
               >
                 <Sparkles className="w-4 h-4" />
@@ -386,6 +470,78 @@ export default function CreateTemplateForm() {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Generation Dialog */}
+      <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              Generate Template with AI
+            </DialogTitle>
+            <DialogDescription>
+              Describe the email template you want to create and AI will generate it for you.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-prompt">Describe your template</Label>
+              <Textarea
+                id="ai-prompt"
+                placeholder="e.g., Create a welcome email for new subscribers with a professional design, company logo placeholder, and a call-to-action button..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                className="min-h-[100px]"
+                disabled={aiLoading}
+              />
+            </div>
+
+            {aiLoading && aiStreamContent && (
+              <div className="space-y-2">
+                <Label>AI Generated Content Preview</Label>
+                <div className="border rounded-md p-4 bg-muted max-h-40 overflow-y-auto">
+                  <div 
+                    className="text-sm whitespace-pre-wrap" 
+                    dangerouslySetInnerHTML={{ __html: aiStreamContent.slice(0, 500) + (aiStreamContent.length > 500 ? '...' : '') }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAIDialog(false)
+                  setAiPrompt('')
+                  setAiStreamContent('')
+                }}
+                disabled={aiLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={generateWithAI}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

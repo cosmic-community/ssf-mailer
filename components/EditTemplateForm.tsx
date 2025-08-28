@@ -13,8 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate } from '@/types'
-import { ArrowLeft, Eye, Edit, Save } from 'lucide-react'
+import { ArrowLeft, Eye, Edit, Save, Sparkles, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
 const formSchema = z.object({
@@ -36,6 +37,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('edit')
   const [iframeKey, setIframeKey] = useState(0)
+  const [showAIDialog, setShowAIDialog] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiStreamContent, setAiStreamContent] = useState('')
 
   const {
     register,
@@ -57,6 +62,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const watchedContent = watch('content')
   const watchedSubject = watch('subject')
   const watchedActive = watch('active')
+  const watchedName = watch('name')
+  const watchedTemplateType = watch('template_type')
 
   const onSubmit = async (data: FormData) => {
     setLoading(true)
@@ -167,6 +174,92 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 </html>`
   }
 
+  const editWithAI = async () => {
+    if (!aiPrompt.trim()) {
+      alert('Please enter instructions for AI editing')
+      return
+    }
+
+    setAiLoading(true)
+    setAiStreamContent('')
+    
+    try {
+      const response = await fetch('/api/templates/edit-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          edit_instructions: aiPrompt,
+          current_content: watchedContent,
+          current_subject: watchedSubject,
+          current_name: watchedName,
+          template_type: watchedTemplateType,
+          stream: true
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to edit with AI')
+      }
+
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let fullContent = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'text') {
+                setAiStreamContent(data.fullContent || '')
+                fullContent = data.fullContent || ''
+              } else if (data.type === 'complete') {
+                // Apply the edited content to the form
+                if (data.content) {
+                  setValue('content', data.content)
+                }
+                if (data.subject) {
+                  setValue('subject', data.subject)
+                }
+                if (data.name) {
+                  setValue('name', data.name)
+                }
+                setShowAIDialog(false)
+                setAiPrompt('')
+                setAiStreamContent('')
+              } else if (data.type === 'error') {
+                throw new Error(data.error)
+              }
+            } catch (e) {
+              // Skip invalid JSON lines
+              continue
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.error('AI editing error:', error)
+      alert(error instanceof Error ? error.message : 'Failed to edit with AI')
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 py-8">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -186,15 +279,26 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               <h1 className="text-3xl font-bold text-slate-900">Edit Template</h1>
               <p className="text-muted-foreground">Modify your email template with AI assistance</p>
             </div>
-            <div className="flex items-center space-x-2">
-              <Switch
-                id="active-switch"
-                checked={watchedActive}
-                onCheckedChange={(checked) => setValue('active', checked)}
-              />
-              <Label htmlFor="active-switch" className="text-sm font-medium">
-                Active
-              </Label>
+            <div className="flex items-center space-x-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowAIDialog(true)}
+                className="flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                Edit with AI
+              </Button>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="active-switch"
+                  checked={watchedActive}
+                  onCheckedChange={(checked) => setValue('active', checked)}
+                />
+                <Label htmlFor="active-switch" className="text-sm font-medium">
+                  Active
+                </Label>
+              </div>
             </div>
           </div>
         </div>
@@ -344,6 +448,78 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Editing Dialog */}
+      <Dialog open={showAIDialog} onOpenChange={setShowAIDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5" />
+              Edit Template with AI
+            </DialogTitle>
+            <DialogDescription>
+              Describe the changes you want to make to your email template and AI will apply them.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-prompt">Describe your changes</Label>
+              <Textarea
+                id="ai-prompt"
+                placeholder="e.g., Change the color scheme to blue and white, add a promotional banner at the top, update the call-to-action button text to 'Shop Now'..."
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                className="min-h-[100px]"
+                disabled={aiLoading}
+              />
+            </div>
+
+            {aiLoading && aiStreamContent && (
+              <div className="space-y-2">
+                <Label>AI Edited Content Preview</Label>
+                <div className="border rounded-md p-4 bg-muted max-h-40 overflow-y-auto">
+                  <div 
+                    className="text-sm whitespace-pre-wrap" 
+                    dangerouslySetInnerHTML={{ __html: aiStreamContent.slice(0, 500) + (aiStreamContent.length > 500 ? '...' : '') }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowAIDialog(false)
+                  setAiPrompt('')
+                  setAiStreamContent('')
+                }}
+                disabled={aiLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={editWithAI}
+                disabled={aiLoading || !aiPrompt.trim()}
+                className="flex items-center gap-2"
+              >
+                {aiLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Editing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Apply Changes
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
