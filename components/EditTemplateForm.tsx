@@ -53,7 +53,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: template.metadata.name,
-      subject: template.metadata.subject_line || '', // Fixed: use subject_line instead of subject
+      subject: template.metadata.subject || '', // Fixed: use subject instead of subject_line
       content: template.metadata.content,
       template_type: template.metadata.template_type.value,
       active: template.metadata.active
