@@ -517,7 +517,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <>
                     <Zap className="w-4 h-4" />
                     Apply Changes
-                  </Button>
+                  </>
                 )}
               </Button>
             </div>
