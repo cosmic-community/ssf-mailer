@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -11,10 +11,15 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle } from 'lucide-react'
 
 interface EditTemplateFormProps {
   template: EmailTemplate
+}
+
+interface AIProgress {
+  message: string
+  progress: number
 }
 
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
@@ -24,7 +29,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [aiPrompt, setAiPrompt] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  const [activeTab, setActiveTab] = useState('preview') // Default to preview tab
+  const [activeTab, setActiveTab] = useState('preview')
+  const [aiProgress, setAiProgress] = useState<AIProgress | null>(null)
+  const [showSuccessToast, setShowSuccessToast] = useState(false)
+  const eventSourceRef = useRef<EventSource | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -44,6 +52,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setSuccess('')
   }
 
+  const showToast = () => {
+    setShowSuccessToast(true)
+    setTimeout(() => {
+      setShowSuccessToast(false)
+    }, 3000)
+  }
+
   const handleAIEdit = async () => {
     if (!aiPrompt.trim()) {
       setError('Please provide instructions for AI editing')
@@ -52,42 +67,89 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     setIsAIEditing(true)
     setError('')
+    setSuccess('')
+    setAiProgress({ message: 'Initializing AI editing...', progress: 0 })
     
     try {
+      // Close any existing EventSource
+      if (eventSourceRef.current) {
+        eventSourceRef.current.close()
+      }
+
+      // Create the request body
+      const requestBody = {
+        templateId: template.id,
+        currentContent: formData.content,
+        currentSubject: formData.subject,
+        prompt: aiPrompt
+      }
+
+      // Create EventSource for streaming
       const response = await fetch('/api/templates/edit-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          templateId: template.id,
-          currentContent: formData.content,
-          currentSubject: formData.subject,
-          prompt: aiPrompt
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to edit template with AI')
+        throw new Error('Failed to start AI editing')
       }
 
-      const result = await response.json()
-      
-      if (result.success) {
-        setFormData(prev => ({
-          ...prev,
-          content: result.content,
-          subject: result.subject || prev.subject
-        }))
-        setSuccess('Template updated with AI suggestions!')
-        setAiPrompt('')
-      } else {
-        throw new Error(result.error || 'Failed to edit template')
+      if (!response.body) {
+        throw new Error('No response body')
       }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) break
+          
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.type === 'status') {
+                  setAiProgress({
+                    message: data.message,
+                    progress: data.progress
+                  })
+                } else if (data.type === 'complete') {
+                  setFormData(prev => ({
+                    ...prev,
+                    content: data.data.content,
+                    subject: data.data.subject || prev.subject
+                  }))
+                  setAiProgress(null)
+                  setSuccess('Template updated with AI suggestions!')
+                  setAiPrompt('')
+                  showToast()
+                } else if (data.type === 'error') {
+                  throw new Error(data.error)
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError)
+              }
+            }
+          }
+        }
+      } finally {
+        reader.releaseLock()
+      }
+
     } catch (error) {
       console.error('AI edit error:', error)
       setError(error instanceof Error ? error.message : 'Failed to edit template with AI')
+      setAiProgress(null)
     } finally {
       setIsAIEditing(false)
     }
@@ -135,6 +197,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         }
 
         setSuccess('Template updated successfully!')
+        showToast()
         
         // Redirect to templates list after a short delay
         setTimeout(() => {
@@ -150,7 +213,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   return (
     <div className="space-y-6">
-      {/* AI Content Editor - Moved to top */}
+      {/* Success Toast */}
+      {showSuccessToast && (
+        <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2">
+          <CheckCircle className="h-5 w-5" />
+          <span>AI editing completed successfully!</span>
+        </div>
+      )}
+
+      {/* AI Content Editor */}
       <Card className="border-purple-200 bg-purple-50/50">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2 text-purple-800">
@@ -164,13 +235,30 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Textarea
-              placeholder="Describe how you'd like to modify the template (e.g., 'Make it more professional', 'Add a call-to-action button', 'Change the tone to be more casual')"
+              placeholder="Describe how you'd like to modify the template (e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual')"
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
               className="min-h-[80px] resize-none"
               disabled={isAIEditing}
             />
           </div>
+          
+          {/* AI Progress Indicator */}
+          {aiProgress && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-purple-700">{aiProgress.message}</span>
+                <span className="text-purple-600 font-medium">{aiProgress.progress}%</span>
+              </div>
+              <div className="w-full bg-purple-200 rounded-full h-2">
+                <div 
+                  className="bg-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
+                  style={{ width: `${aiProgress.progress}%` }}
+                />
+              </div>
+            </div>
+          )}
+          
           <Button 
             onClick={handleAIEdit}
             disabled={isAIEditing || !aiPrompt.trim()}
@@ -191,7 +279,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </CardContent>
       </Card>
 
-      {/* Main Edit/Preview Tabs - Swapped order with Preview default */}
+      {/* Main Edit/Preview Tabs */}
       <Card>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2">
