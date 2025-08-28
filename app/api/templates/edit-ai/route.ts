@@ -58,16 +58,27 @@ Return the improved HTML email template.`
               prompt: aiPrompt,
               max_tokens: 3000,
               stream: true
-            }) as TextStreamingResponse
+            })
+
+            // Check if aiStream is a TextStreamingResponse
+            if (!aiStream || typeof aiStream.on !== 'function') {
+              throw new Error('AI stream not available or invalid')
+            }
 
             let improvedContent = ''
             let isComplete = false
 
-            // Process the AI stream
+            // Process the AI stream using event listeners
             aiStream.on('text', (text: string) => {
               improvedContent += text
               controller.enqueue(
                 encoder.encode('data: {"type":"status","message":"Generating improvements...","progress":75}\n\n')
+              )
+            })
+
+            aiStream.on('usage', () => {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":85}\n\n')
               )
             })
 

@@ -27,7 +27,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [success, setSuccess] = useState('')
   const [activeTab, setActiveTab] = useState('preview')
   const [showSuccessToast, setShowSuccessToast] = useState(false)
-  const eventSourceRef = useRef<EventSource | null>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -66,11 +65,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setAiStreamText([])
     
     try {
-      // Close any existing EventSource
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-
       // Create the request body
       const requestBody = {
         templateId: template.id,
@@ -79,7 +73,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         prompt: aiPrompt
       }
 
-      // Create EventSource for streaming
       const response = await fetch('/api/templates/edit-ai', {
         method: 'POST',
         headers: {

@@ -60,21 +60,36 @@ export async function POST(request: NextRequest) {
               - Clean, modern styling with inline CSS for email compatibility`
             }
 
+            controller.enqueue(
+              encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
+            )
+
             // Generate content with Cosmic AI streaming
             const aiStream = await cosmic.ai.generateText({
               prompt: aiPrompt,
               max_tokens: 2000,
               stream: true
-            }) as TextStreamingResponse
+            })
+
+            // Check if aiStream is a TextStreamingResponse
+            if (!aiStream || typeof aiStream.on !== 'function') {
+              throw new Error('AI stream not available or invalid')
+            }
 
             let generatedContent = ''
             let isComplete = false
 
-            // Process the AI stream
+            // Process the AI stream using event listeners
             aiStream.on('text', (text: string) => {
               generatedContent += text
               controller.enqueue(
                 encoder.encode('data: {"type":"status","message":"Generating content...","progress":60}\n\n')
+              )
+            })
+
+            aiStream.on('usage', () => {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Finalizing template...","progress":80}\n\n')
               )
             })
 
@@ -115,10 +130,11 @@ export async function POST(request: NextRequest) {
                 isComplete = true
               } catch (error: unknown) {
                 if (!isComplete) {
+                  const errorMessage = error instanceof Error ? error.message : 'Failed to finalize template generation'
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({
                       type: 'error',
-                      error: 'Failed to finalize template generation'
+                      error: errorMessage
                     })}\n\n`)
                   )
                   controller.close()
