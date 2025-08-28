@@ -370,10 +370,12 @@ export default function CreateTemplateForm() {
             <div className="border rounded-lg p-4 bg-white min-h-[300px]">
               <div className="prose prose-sm max-w-none">
                 {displayContent ? (
-                  <div 
-                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(displayContent) }}
-                    className="email-preview"
-                  />
+                  <div className="email-preview-container">
+                    <div 
+                      dangerouslySetInnerHTML={{ __html: renderPreviewContent(displayContent) }}
+                      className="email-preview-content"
+                    />
+                  </div>
                 ) : (
                   <p className="text-gray-400 italic">
                     No content to preview. Switch to HTML mode to add content or use AI generation.
@@ -434,17 +436,6 @@ export default function CreateTemplateForm() {
           </Button>
         </div>
       </form>
-
-      <style>{`
-        .email-preview img {
-          max-width: 100%;
-          height: auto;
-        }
-        .email-preview table {
-          border-collapse: collapse;
-          width: 100%;
-        }
-      `}</style>
     </div>
   )
 }

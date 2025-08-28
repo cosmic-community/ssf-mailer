@@ -149,10 +149,14 @@ export default function TemplatesList() {
                           </div>
                           <div>
                             <h4 className="text-sm font-medium text-gray-700 mb-2">Content:</h4>
-                            <div 
-                              className="prose prose-sm max-w-none bg-gray-50 p-4 rounded-lg border"
-                              dangerouslySetInnerHTML={{ __html: template.metadata.content }}
-                            />
+                            <div className="bg-gray-50 p-4 rounded-lg border">
+                              <div className="email-preview-container">
+                                <div 
+                                  className="email-preview-content prose prose-sm max-w-none"
+                                  dangerouslySetInnerHTML={{ __html: template.metadata.content }}
+                                />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </DialogContent>

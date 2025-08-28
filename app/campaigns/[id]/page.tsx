@@ -144,10 +144,12 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             
             <div className="text-sm text-gray-500 mb-4">Email Content:</div>
             <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-200">
-              <div 
-                className="prose prose-sm max-w-none"
-                dangerouslySetInnerHTML={{ __html: preview.content }}
-              />
+              <div className="email-preview-container">
+                <div 
+                  className="email-preview-content prose prose-sm max-w-none"
+                  dangerouslySetInnerHTML={{ __html: preview.content }}
+                />
+              </div>
             </div>
             
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">

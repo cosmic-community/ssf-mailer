@@ -95,3 +95,68 @@
 .form-input {
   @apply flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50;
 }
+
+/* Email preview isolation styles */
+.email-preview-container {
+  /* Create a new stacking context to isolate styles */
+  position: relative;
+  z-index: 0;
+  
+  /* Reset any potentially inherited styles */
+  all: initial;
+  font-family: inherit;
+  
+  /* Contain styles within this element */
+  contain: style;
+}
+
+.email-preview-content {
+  /* Reset margins and paddings that might interfere */
+  margin: 0;
+  padding: 0;
+  
+  /* Ensure images are responsive and don't break layout */
+  img {
+    max-width: 100% !important;
+    height: auto !important;
+    display: block;
+  }
+  
+  /* Normalize table styles for email compatibility */
+  table {
+    border-collapse: collapse !important;
+    width: 100%;
+    table-layout: fixed;
+  }
+  
+  /* Prevent text from overflowing */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  
+  /* Reset any potentially conflicting typography */
+  h1, h2, h3, h4, h5, h6 {
+    margin: 0 0 1em 0;
+    line-height: 1.4;
+  }
+  
+  p {
+    margin: 0 0 1em 0;
+    line-height: 1.6;
+  }
+  
+  /* Ensure links don't inherit unwanted styles */
+  a {
+    color: inherit;
+    text-decoration: underline;
+  }
+  
+  /* Prevent any styles from leaking out */
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Override any global styles that might interfere */
+  div, span, p, h1, h2, h3, h4, h5, h6, table, td, th, tr {
+    font-family: inherit !important;
+  }
+}
