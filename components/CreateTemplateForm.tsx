@@ -149,7 +149,7 @@ export default function CreateTemplateForm() {
                   placeholder="Enter your HTML email content here..."
                 />
                 <p className="mt-2 text-sm text-gray-500">
-                  Use {{`{first_name}`}} and {{`{last_name}`}} for personalization
+                  Use {'{first_name}'} and {'{last_name}'} for personalization
                 </p>
               </div>
 
