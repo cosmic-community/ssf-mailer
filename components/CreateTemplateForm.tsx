@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -61,6 +61,7 @@ export default function CreateTemplateForm() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [activeTab, setActiveTab] = useState('edit')
+  const [iframeKey, setIframeKey] = useState(0)
 
   const {
     register,
@@ -114,6 +115,82 @@ export default function CreateTemplateForm() {
       .replace(/\{\{last_name\}\}/g, 'Doe')
       .replace(/\{\{email\}\}/g, 'john.doe@example.com')
       .replace(/\{\{company\}\}/g, 'Acme Corp')
+  }
+
+  // Update iframe when content changes
+  useEffect(() => {
+    setIframeKey(prev => prev + 1)
+  }, [watchedContent])
+
+  // Generate complete HTML document for iframe
+  const generatePreviewHTML = (content: string) => {
+    const processedContent = processContentForPreview(content)
+    
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Preview</title>
+    <style>
+        /* Reset styles to ensure consistent rendering */
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f9f9f9;
+            padding: 20px;
+        }
+        
+        /* Container for email content */
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        /* Image responsiveness */
+        img {
+            max-width: 100% !important;
+            height: auto !important;
+        }
+        
+        /* Table normalization for email compatibility */
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        
+        /* Typography reset */
+        h1, h2, h3, h4, h5, h6 {
+            margin: 0 0 1em 0;
+            line-height: 1.4;
+        }
+        
+        p {
+            margin: 0 0 1em 0;
+        }
+        
+        /* Ensure text doesn't overflow */
+        * {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        ${processedContent}
+    </div>
+</body>
+</html>`
   }
 
   const generateWithAI = async () => {
@@ -259,7 +336,7 @@ export default function CreateTemplateForm() {
                   </TabsContent>
                   
                   <TabsContent value="preview" className="space-y-2">
-                    <div className="border rounded-md">
+                    <div className="border rounded-md bg-white">
                       {/* Email Preview Header */}
                       <div className="bg-muted p-4 border-b">
                         <div className="text-sm text-muted-foreground space-y-1">
@@ -269,12 +346,17 @@ export default function CreateTemplateForm() {
                         </div>
                       </div>
                       
-                      {/* Email Preview Content */}
-                      <div className="email-preview-container">
-                        <div 
-                          className="email-preview-content p-6 min-h-[400px] bg-white"
-                          dangerouslySetInnerHTML={{ 
-                            __html: processContentForPreview(watchedContent || '<p>Enter your email content to see the preview</p>') 
+                      {/* Email Preview Content - Iframe */}
+                      <div className="relative">
+                        <iframe
+                          key={iframeKey}
+                          srcDoc={generatePreviewHTML(watchedContent || '<p style="padding: 20px;">Enter your email content to see the preview</p>')}
+                          className="w-full min-h-[500px] border-0"
+                          sandbox="allow-same-origin"
+                          title="Email Preview"
+                          style={{
+                            background: 'white',
+                            minHeight: '500px'
                           }}
                         />
                       </div>
