@@ -53,7 +53,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     resolver: zodResolver(formSchema),
     defaultValues: {
       name: template.metadata.name,
-      subject: template.metadata.subject || '', // Ensure subject is never undefined
+      subject: template.metadata.subject_line || '', // Fixed: use subject_line instead of subject
       content: template.metadata.content,
       template_type: template.metadata.template_type.value,
       active: template.metadata.active
@@ -346,7 +346,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <Input
                       id="name"
                       {...register('name')}
-                      placeholder="Enter template name"
+                      placeholder="Enter template name (e.g., Welcome Email, Newsletter)"
                       className={errors.name ? 'border-red-500' : ''}
                     />
                     {errors.name && (
@@ -381,7 +381,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <Input
                     id="subject"
                     {...register('subject')}
-                    placeholder="Enter email subject"
+                    placeholder="Enter email subject line (e.g., Welcome to {{company}}!)"
                     className={errors.subject ? 'border-red-500' : ''}
                   />
                   {errors.subject && (

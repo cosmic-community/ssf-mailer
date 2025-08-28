@@ -126,7 +126,7 @@ export default function EditTemplate() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit')
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('preview') // Changed default to preview
   const [aiStreamContent, setAiStreamContent] = useState('')
   
   // Form state
@@ -151,7 +151,7 @@ export default function EditTemplate() {
       setFormData({
         title: data.template.title,
         template_type: data.template.metadata.template_type,
-        subject_line: data.template.metadata.subject_line,
+        subject_line: data.template.metadata.subject_line || '', // Fixed: ensure subject_line is properly loaded
         content: data.template.metadata.content
       })
     } catch (error) {
@@ -349,6 +349,7 @@ export default function EditTemplate() {
               id="title"
               value={formData.title}
               onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+              placeholder="Enter template name (e.g., Welcome Email, Newsletter)"
               className="form-input w-full"
               required
             />
@@ -387,6 +388,7 @@ export default function EditTemplate() {
             id="subject_line"
             value={formData.subject_line}
             onChange={(e) => setFormData({ ...formData, subject_line: e.target.value })}
+            placeholder="Enter email subject line (e.g., Welcome to {{company}}!)"
             className="form-input w-full"
             required
           />
@@ -409,23 +411,6 @@ export default function EditTemplate() {
               type="button"
               onClick={(e) => {
                 e.preventDefault()
-                setActiveTab('edit')
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'edit'
-                  ? 'border-slate-500 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
                 setActiveTab('preview')
               }}
               className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
@@ -439,6 +424,23 @@ export default function EditTemplate() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
               Preview
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault()
+                setActiveTab('edit')
+              }}
+              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'edit'
+                  ? 'border-slate-500 text-slate-900'
+                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+              }`}
+            >
+              <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+              Edit
             </button>
           </nav>
         </div>
