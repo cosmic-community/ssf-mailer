@@ -2,10 +2,19 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { EmailTemplate } from '@/types'
+import { EmailTemplate, TemplateType } from '@/types'
 
 interface EditTemplateFormProps {
   template: EmailTemplate
+}
+
+// Define form data interface with proper types
+interface TemplateFormData {
+  name: string;
+  subject: string;
+  content: string;
+  template_type: TemplateType;
+  active: boolean;
 }
 
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
@@ -14,7 +23,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showPreview, setShowPreview] = useState(false)
   const [error, setError] = useState('')
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TemplateFormData>({
     name: template.metadata?.name || '',
     subject: template.metadata?.subject || '',
     content: template.metadata?.content || '',
@@ -113,7 +122,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 </label>
                 <select
                   value={formData.template_type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, template_type: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, template_type: e.target.value as TemplateType }))}
                   className="input"
                   required
                 >

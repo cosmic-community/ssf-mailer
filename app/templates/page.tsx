@@ -1,10 +1,13 @@
 import TemplatesList from '@/components/TemplatesList'
+import { getEmailTemplates } from '@/lib/cosmic'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default function TemplatesPage() {
+export default async function TemplatesPage() {
+  const templates = await getEmailTemplates()
+
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
       {/* Page Header */}
@@ -21,7 +24,7 @@ export default function TemplatesPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <TemplatesList />
+        <TemplatesList templates={templates} />
       </main>
     </div>
   )

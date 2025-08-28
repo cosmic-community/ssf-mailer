@@ -10,6 +10,9 @@ interface CosmicObject {
   modified_at: string;
 }
 
+// Template type union
+export type TemplateType = 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
+
 // Email Contact interface
 export interface EmailContact extends CosmicObject {
   type: 'email-contacts';
@@ -36,7 +39,7 @@ export interface EmailTemplate extends CosmicObject {
     content: string;
     template_type: {
       key: string;
-      value: 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
+      value: TemplateType;
     };
     preview_image?: {
       url: string;
@@ -98,7 +101,7 @@ export interface CreateTemplateData {
   name: string;
   subject: string;
   content: string;
-  template_type: 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
+  template_type: TemplateType;
   active: boolean;
 }
 

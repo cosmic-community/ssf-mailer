@@ -2,6 +2,16 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { TemplateType } from '@/types'
+
+// Define form data interface with proper types
+interface TemplateFormData {
+  name: string;
+  subject: string;
+  content: string;
+  template_type: TemplateType;
+  active: boolean;
+}
 
 export default function CreateTemplateForm() {
   const router = useRouter()
@@ -9,7 +19,7 @@ export default function CreateTemplateForm() {
   const [showPreview, setShowPreview] = useState(false)
   const [error, setError] = useState('')
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<TemplateFormData>({
     name: '',
     subject: '',
     content: `<div style="max-width: 600px; margin: 0 auto; font-family: Arial, sans-serif; padding: 20px;">
@@ -126,7 +136,7 @@ export default function CreateTemplateForm() {
                 </label>
                 <select
                   value={formData.template_type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, template_type: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, template_type: e.target.value as TemplateType }))}
                   className="input"
                   required
                 >
