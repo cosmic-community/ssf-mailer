@@ -12,6 +12,29 @@ interface CSVRow {
   notes?: string
 }
 
+// Helper function to parse CSV line with proper quote handling
+function parseCSVLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i]
+    
+    if (char === '"') {
+      inQuotes = !inQuotes
+    } else if (char === ',' && !inQuotes) {
+      result.push(current.trim())
+      current = ''
+    } else {
+      current += char
+    }
+  }
+  
+  result.push(current.trim())
+  return result
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData()
@@ -50,7 +73,7 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    const headers = header.split(',').map(h => h.trim().toLowerCase())
+    const headers = parseCSVLine(header).map(h => h.trim().toLowerCase())
     
     // Validate required columns
     if (!headers.includes('first_name') || !headers.includes('email')) {
@@ -71,7 +94,7 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        const values = line.split(',').map(v => v.trim())
+        const values = parseCSVLine(line).map(v => v.trim())
         
         // Create row object with proper validation
         const row: Partial<CSVRow> = {}
@@ -109,6 +132,13 @@ export async function POST(request: NextRequest) {
         // Validate required fields with proper type checking
         if (!row.first_name || !row.email) {
           errors.push(`Row ${i + 1}: Missing required fields (first_name, email)`)
+          continue
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+        if (!emailRegex.test(row.email)) {
+          errors.push(`Row ${i + 1}: Invalid email format: ${row.email}`)
           continue
         }
 
