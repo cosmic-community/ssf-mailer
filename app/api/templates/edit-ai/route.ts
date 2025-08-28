@@ -47,7 +47,7 @@ Instructions:
 - Use inline CSS for email client compatibility
 - Make improvements that enhance readability and visual appeal
 
-Return the improved HTML email template.`
+Return only the improved HTML email template without any explanation or additional text.`
 
             controller.enqueue(
               encoder.encode('data: {"type":"status","message":"Applying AI improvements...","progress":60}\n\n')
@@ -60,92 +60,109 @@ Return the improved HTML email template.`
               stream: true
             })
 
-            // Check if aiResponse is a streaming response by checking for the 'on' method
-            const isStreamingResponse = aiResponse && 
-              typeof aiResponse === 'object' && 
-              'on' in aiResponse && 
-              typeof aiResponse.on === 'function';
+            // Handle both streaming and non-streaming responses
+            if (aiResponse && typeof aiResponse === 'object' && 'on' in aiResponse) {
+              // Streaming response
+              const aiStream = aiResponse as TextStreamingResponse
+              let improvedContent = ''
+              let isComplete = false
 
-            if (!isStreamingResponse) {
-              throw new Error('AI stream not available or invalid')
-            }
-
-            // Now we can safely use the streaming response
-            const aiStream = aiResponse as TextStreamingResponse;
-            
-            let improvedContent = ''
-            let isComplete = false
-
-            // Process the AI stream using event listeners
-            aiStream.on('text', (text: string) => {
-              improvedContent += text
-              controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Generating improvements...","progress":75}\n\n')
-              )
-            })
-
-            aiStream.on('usage', () => {
-              controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":85}\n\n')
-              )
-            })
-
-            aiStream.on('end', () => {
-              try {
+              aiStream.on('text', (text: string) => {
+                improvedContent += text
                 controller.enqueue(
-                  encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":90}\n\n')
+                  encoder.encode('data: {"type":"status","message":"Generating improvements...","progress":75}\n\n')
                 )
+              })
 
-                // Clean up the AI response - ensure we have proper HTML
-                let finalContent = improvedContent.trim()
-                
-                // Send the final result
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({
-                    type: 'complete',
-                    data: {
-                      content: finalContent,
-                      subject: currentSubject
-                    },
-                    message: 'AI editing completed successfully!'
-                  })}\n\n`)
-                )
-                
-                controller.close()
-                isComplete = true
-              } catch (error: unknown) {
-                if (!isComplete) {
+              aiStream.on('end', () => {
+                try {
+                  if (isComplete) return
+                  isComplete = true
+
+                  controller.enqueue(
+                    encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":90}\n\n')
+                  )
+
+                  // Clean up the AI response - ensure we have proper HTML
+                  const finalContent = improvedContent.trim()
+                  
+                  // Send the final result
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({
+                      type: 'complete',
+                      data: {
+                        content: finalContent,
+                        subject: currentSubject
+                      },
+                      message: 'AI editing completed successfully!'
+                    })}\n\n`)
+                  )
+                  
+                  controller.close()
+                } catch (error) {
                   console.error('Error finalizing AI editing:', error)
+                  if (!isComplete) {
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({
+                        type: 'error',
+                        error: 'Failed to finalize editing'
+                      })}\n\n`)
+                    )
+                    controller.close()
+                  }
+                }
+              })
+
+              aiStream.on('error', (error: Error) => {
+                if (!isComplete) {
+                  console.error('Cosmic AI stream error:', error)
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({
                       type: 'error',
-                      error: error instanceof Error ? error.message : 'Unknown error'
+                      error: 'AI editing failed. Please try again.'
                     })}\n\n`)
                   )
                   controller.close()
                 }
-              }
-            })
+              })
 
-            aiStream.on('error', (error: Error) => {
-              if (!isComplete) {
-                console.error('Cosmic AI stream error:', error)
-                controller.enqueue(
-                  encoder.encode(`data: ${JSON.stringify({
-                    type: 'error',
-                    error: error.message
-                  })}\n\n`)
-                )
-                controller.close()
-              }
-            })
+            } else if (aiResponse && typeof aiResponse === 'object' && 'text' in aiResponse) {
+              // Non-streaming response
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Processing response...","progress":80}\n\n')
+              )
+
+              const response = aiResponse as any
+              const finalContent = response.text?.trim() || ''
+
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":90}\n\n')
+              )
+
+              // Send the final result
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({
+                  type: 'complete',
+                  data: {
+                    content: finalContent,
+                    subject: currentSubject
+                  },
+                  message: 'AI editing completed successfully!'
+                })}\n\n`)
+              )
+              
+              controller.close()
+            } else {
+              throw new Error('Invalid AI response format')
+            }
 
           } catch (error) {
             console.error('Error starting AI editing:', error)
+            const errorMessage = error instanceof Error ? error.message : 'Failed to process AI editing'
             controller.enqueue(
               encoder.encode(`data: ${JSON.stringify({
                 type: 'error',
-                error: error instanceof Error ? error.message : 'Failed to process AI editing'
+                error: errorMessage
               })}\n\n`)
             )
             controller.close()
