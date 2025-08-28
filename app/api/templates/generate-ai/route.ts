@@ -90,8 +90,10 @@ export async function POST(request: NextRequest) {
             // Process the AI stream using event listeners
             aiStream.on('text', (text: string) => {
               generatedContent += text
+              
+              // Stream the content in real-time
               controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Generating content...","progress":60}\n\n')
+                encoder.encode(`data: {"type":"content","text":"${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","progress":70}\n\n`)
               )
             })
 
@@ -103,8 +105,11 @@ export async function POST(request: NextRequest) {
 
             aiStream.on('end', () => {
               try {
+                if (isComplete) return
+                isComplete = true
+
                 controller.enqueue(
-                  encoder.encode('data: {"type":"status","message":"Finalizing template...","progress":90}\n\n')
+                  encoder.encode('data: {"type":"status","message":"Template generated successfully!","progress":100}\n\n')
                 )
 
                 // Generate subject line based on type and prompt
@@ -130,7 +135,6 @@ export async function POST(request: NextRequest) {
                 )
                 
                 controller.close()
-                isComplete = true
               } catch (error: unknown) {
                 if (!isComplete) {
                   const errorMessage = error instanceof Error ? error.message : 'Failed to finalize template generation'

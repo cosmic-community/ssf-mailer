@@ -69,8 +69,10 @@ Return only the improved HTML email template without any explanation or addition
 
               aiStream.on('text', (text: string) => {
                 improvedContent += text
+                
+                // Stream the content in real-time
                 controller.enqueue(
-                  encoder.encode('data: {"type":"status","message":"Generating improvements...","progress":75}\n\n')
+                  encoder.encode(`data: {"type":"content","text":"${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","progress":75}\n\n`)
                 )
               })
 
@@ -80,7 +82,7 @@ Return only the improved HTML email template without any explanation or addition
                   isComplete = true
 
                   controller.enqueue(
-                    encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":90}\n\n')
+                    encoder.encode('data: {"type":"status","message":"AI editing completed successfully!","progress":100}\n\n')
                   )
 
                   // Clean up the AI response - ensure we have proper HTML
@@ -136,7 +138,7 @@ Return only the improved HTML email template without any explanation or addition
               const finalContent = response.text?.trim() || ''
 
               controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Finalizing changes...","progress":90}\n\n')
+                encoder.encode('data: {"type":"status","message":"AI editing completed successfully!","progress":100}\n\n')
               )
 
               // Send the final result

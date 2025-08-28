@@ -23,6 +23,9 @@ export default function CreateTemplateForm() {
   const [editPrompt, setEditPrompt] = useState('')
   const [activeTab, setActiveTab] = useState('preview')
   const [showSuccessToast, setShowSuccessToast] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
+  const [aiStatus, setAiStatus] = useState('')
+  const [aiProgress, setAiProgress] = useState(0)
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -124,6 +127,9 @@ export default function CreateTemplateForm() {
     }
 
     setIsAIGenerating(true)
+    setStreamingContent('')
+    setAiStatus('Starting generation...')
+    setAiProgress(0)
     
     try {
       const response = await fetch('/api/templates/generate-ai', {
@@ -147,7 +153,7 @@ export default function CreateTemplateForm() {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let streamedContent = ''
+      let accumulatedContent = ''
 
       try {
         while (true) {
@@ -156,45 +162,47 @@ export default function CreateTemplateForm() {
           if (done) break
           
           const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
           
-          // Check for completion or error signals
-          if (chunk.includes('__COMPLETE__')) {
-            const parts = chunk.split('__COMPLETE__')
-            if (parts[0]) {
-              streamedContent += parts[0]
-            }
-            
-            try {
-              const completionData = JSON.parse(parts[1])
-              setFormData(prev => ({
-                ...prev,
-                subject: completionData.subject,
-                content: streamedContent
-              }))
-              
-              setAIPrompt('')
-              showToast('AI content generated successfully!')
-              
-              // Auto-resize content textarea after update
-              setTimeout(() => {
-                if (contentRef.current) {
-                  autoResize(contentRef.current)
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.type === 'status') {
+                  setAiStatus(data.message)
+                  setAiProgress(data.progress || 0)
+                } else if (data.type === 'content') {
+                  accumulatedContent += data.text
+                  setStreamingContent(accumulatedContent)
+                  setFormData(prev => ({
+                    ...prev,
+                    content: accumulatedContent
+                  }))
+                } else if (data.type === 'complete') {
+                  setFormData(prev => ({
+                    ...prev,
+                    subject: data.data.subject,
+                    content: data.data.content
+                  }))
+                  setAIPrompt('')
+                  setAiStatus('Generation complete!')
+                  setAiProgress(100)
+                  showToast('AI content generated successfully!')
+                  
+                  // Auto-resize content textarea after update
+                  setTimeout(() => {
+                    if (contentRef.current) {
+                      autoResize(contentRef.current)
+                    }
+                  }, 100)
+                } else if (data.type === 'error') {
+                  throw new Error(data.error)
                 }
-              }, 100)
-            } catch (parseError) {
-              console.warn('Failed to parse completion data')
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError)
+              }
             }
-            break
-          } else if (chunk.includes('__ERROR__')) {
-            const parts = chunk.split('__ERROR__')
-            throw new Error(parts[1] || 'AI generation failed')
-          } else {
-            // Regular content chunk - stream directly to preview
-            streamedContent += chunk
-            setFormData(prev => ({
-              ...prev,
-              content: streamedContent
-            }))
           }
         }
       } finally {
@@ -204,8 +212,13 @@ export default function CreateTemplateForm() {
     } catch (error) {
       console.error('AI generation error:', error)
       showToast('Failed to generate AI content. Please try again.', 'error')
+      setAiStatus('Generation failed')
     } finally {
       setIsAIGenerating(false)
+      setTimeout(() => {
+        setAiStatus('')
+        setAiProgress(0)
+      }, 2000)
     }
   }
 
@@ -221,6 +234,9 @@ export default function CreateTemplateForm() {
     }
 
     setIsAIEditing(true)
+    setStreamingContent('')
+    setAiStatus('Starting AI editing...')
+    setAiProgress(0)
     
     try {
       const response = await fetch('/api/templates/edit-ai', {
@@ -232,7 +248,7 @@ export default function CreateTemplateForm() {
           prompt: editPrompt,
           currentContent: formData.content,
           currentSubject: formData.subject,
-          templateId: 'new' // Fixed: Use string literal for new templates
+          templateId: 'new'
         }),
       })
 
@@ -246,7 +262,7 @@ export default function CreateTemplateForm() {
 
       const reader = response.body.getReader()
       const decoder = new TextDecoder()
-      let editedContent = ''
+      let accumulatedContent = ''
 
       try {
         while (true) {
@@ -255,45 +271,47 @@ export default function CreateTemplateForm() {
           if (done) break
           
           const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
           
-          // Check for completion or error signals
-          if (chunk.includes('__COMPLETE__')) {
-            const parts = chunk.split('__COMPLETE__')
-            if (parts[0]) {
-              editedContent += parts[0]
-            }
-            
-            try {
-              const completionData = JSON.parse(parts[1])
-              setFormData(prev => ({
-                ...prev,
-                content: editedContent,
-                subject: completionData.subject || prev.subject
-              }))
-              
-              setEditPrompt('')
-              showToast('AI content editing completed successfully!')
-              
-              // Auto-resize content textarea after update
-              setTimeout(() => {
-                if (contentRef.current) {
-                  autoResize(contentRef.current)
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.type === 'status') {
+                  setAiStatus(data.message)
+                  setAiProgress(data.progress || 0)
+                } else if (data.type === 'content') {
+                  accumulatedContent += data.text
+                  setStreamingContent(accumulatedContent)
+                  setFormData(prev => ({
+                    ...prev,
+                    content: accumulatedContent
+                  }))
+                } else if (data.type === 'complete') {
+                  setFormData(prev => ({
+                    ...prev,
+                    content: data.data.content,
+                    subject: data.data.subject || prev.subject
+                  }))
+                  setEditPrompt('')
+                  setAiStatus('Editing complete!')
+                  setAiProgress(100)
+                  showToast('AI content editing completed successfully!')
+                  
+                  // Auto-resize content textarea after update
+                  setTimeout(() => {
+                    if (contentRef.current) {
+                      autoResize(contentRef.current)
+                    }
+                  }, 100)
+                } else if (data.type === 'error') {
+                  throw new Error(data.error)
                 }
-              }, 100)
-            } catch (parseError) {
-              console.warn('Failed to parse completion data')
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError)
+              }
             }
-            break
-          } else if (chunk.includes('__ERROR__')) {
-            const parts = chunk.split('__ERROR__')
-            throw new Error(parts[1] || 'AI editing failed')
-          } else {
-            // Regular content chunk - stream directly to preview
-            editedContent += chunk
-            setFormData(prev => ({
-              ...prev,
-              content: editedContent
-            }))
           }
         }
       } finally {
@@ -303,8 +321,13 @@ export default function CreateTemplateForm() {
     } catch (error) {
       console.error('AI editing error:', error)
       showToast('Failed to edit content with AI. Please try again.', 'error')
+      setAiStatus('Editing failed')
     } finally {
       setIsAIEditing(false)
+      setTimeout(() => {
+        setAiStatus('')
+        setAiProgress(0)
+      }, 2000)
     }
   }
 
@@ -381,6 +404,22 @@ export default function CreateTemplateForm() {
                 />
               </div>
               
+              {/* AI Status Display */}
+              {(isAIGenerating && aiStatus) && (
+                <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm text-blue-800">{aiStatus}</span>
+                    <span className="text-xs text-blue-600">{aiProgress}%</span>
+                  </div>
+                  <div className="w-full bg-blue-200 rounded-full h-2">
+                    <div 
+                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                      style={{ width: `${aiProgress}%` }}
+                    ></div>
+                  </div>
+                </div>
+              )}
+              
               <Button 
                 onClick={handleAIGenerate}
                 disabled={isAIGenerating || !aiPrompt.trim()}
@@ -428,6 +467,22 @@ export default function CreateTemplateForm() {
                     disabled={isAIEditing}
                   />
                 </div>
+                
+                {/* AI Edit Status Display */}
+                {(isAIEditing && aiStatus) && (
+                  <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-purple-800">{aiStatus}</span>
+                      <span className="text-xs text-purple-600">{aiProgress}%</span>
+                    </div>
+                    <div className="w-full bg-purple-200 rounded-full h-2">
+                      <div 
+                        className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${aiProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                )}
                 
                 <Button 
                   onClick={handleAIEdit}
