@@ -143,13 +143,71 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             </div>
             
             <div className="text-sm text-gray-500 mb-4">Email Content:</div>
-            <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-200">
-              <div className="email-preview-container">
-                <div 
-                  className="email-preview-content prose prose-sm max-w-none"
-                  dangerouslySetInnerHTML={{ __html: preview.content }}
-                />
-              </div>
+            <div className="border rounded-lg overflow-hidden bg-white">
+              <iframe
+                srcDoc={`
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1">
+                      <style>
+                        body {
+                          margin: 0;
+                          padding: 20px;
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                          line-height: 1.6;
+                          color: #333;
+                          background: #ffffff;
+                        }
+                        
+                        /* Reset styles to prevent interference */
+                        * {
+                          box-sizing: border-box;
+                        }
+                        
+                        /* Common email styles */
+                        table {
+                          border-collapse: collapse;
+                          width: 100%;
+                        }
+                        
+                        img {
+                          max-width: 100%;
+                          height: auto;
+                        }
+                        
+                        a {
+                          color: #007cba;
+                          text-decoration: none;
+                        }
+                        
+                        a:hover {
+                          text-decoration: underline;
+                        }
+                        
+                        .container {
+                          max-width: 600px;
+                          margin: 0 auto;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="container">
+                        ${preview.content}
+                      </div>
+                    </body>
+                  </html>
+                `}
+                style={{
+                  width: '100%',
+                  height: '500px',
+                  border: 'none',
+                  borderRadius: '4px'
+                }}
+                title="Email Preview"
+                sandbox="allow-same-origin"
+              />
             </div>
             
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
