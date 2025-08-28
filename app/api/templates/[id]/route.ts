@@ -1,3 +1,4 @@
+// app/api/templates/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
 
@@ -9,12 +10,18 @@ export async function PUT(
     const { id } = await params
     const body = await request.json()
     
-    // Validate required fields - these are the actual field names expected
+    // Validate required fields
     if (!body.name || !body.subject || !body.content || !body.template_type) {
       return NextResponse.json(
         { error: 'Name, subject, content, and template type are required' },
         { status: 400 }
       )
+    }
+
+    // Handle template_type - it could be a string or an object
+    let templateType = body.template_type
+    if (typeof templateType === 'object' && templateType.value) {
+      templateType = templateType.value
     }
 
     // Update the template with correct metadata structure
@@ -24,10 +31,7 @@ export async function PUT(
         name: body.name,
         subject: body.subject,
         content: body.content,
-        template_type: {
-          key: body.template_type.toLowerCase().replace(/\s+/g, '_'),
-          value: body.template_type
-        },
+        template_type: templateType,
         active: body.active ?? true
       }
     })
