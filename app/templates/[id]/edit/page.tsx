@@ -18,11 +18,19 @@ function AIEditForm({ onEdit, currentContent, isGenerating, streamContent }: AIE
 
   const handleEdit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent event bubbling to parent form
+    
     if (!editPrompt.trim()) return
     
     await onEdit(editPrompt)
     setEditPrompt('')
     setShowEditForm(false)
+  }
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation() // Prevent parent form submission
+    setShowEditForm(!showEditForm)
   }
 
   return (
@@ -31,9 +39,7 @@ function AIEditForm({ onEdit, currentContent, isGenerating, streamContent }: AIE
       <div className="flex items-center space-x-3">
         <button
           type="button"
-          onClick={() => {
-            setShowEditForm(!showEditForm)
-          }}
+          onClick={handleButtonClick}
           disabled={isGenerating || !currentContent.trim()}
           className="btn-outline text-sm"
         >
@@ -75,7 +81,11 @@ function AIEditForm({ onEdit, currentContent, isGenerating, streamContent }: AIE
             <div className="flex justify-end space-x-2">
               <button
                 type="button"
-                onClick={() => setShowEditForm(false)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowEditForm(false)
+                }}
                 className="btn-outline text-sm"
                 disabled={isGenerating}
               >
@@ -153,6 +163,12 @@ export default function EditTemplate() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Don't proceed if AI is currently generating
+    if (isGenerating) {
+      return
+    }
+    
     setSaving(true)
     
     try {
@@ -290,6 +306,7 @@ export default function EditTemplate() {
           <h1 className="text-2xl font-bold text-slate-900 mb-4">Template Not Found</h1>
           <p className="text-slate-600 mb-6">The template you're looking for doesn't exist.</p>
           <button
+            type="button"
             onClick={() => router.push('/templates')}
             className="btn-primary"
           >
@@ -311,6 +328,7 @@ export default function EditTemplate() {
             <p className="text-slate-600 mt-1">Update your email template</p>
           </div>
           <button
+            type="button"
             onClick={() => router.push('/templates')}
             className="btn-outline"
           >
@@ -376,20 +394,25 @@ export default function EditTemplate() {
             />
           </div>
 
-          {/* AI Edit Section */}
-          <AIEditForm
-            onEdit={handleAIEdit}
-            currentContent={formData.content}
-            isGenerating={isGenerating}
-            streamContent={aiStreamContent}
-          />
+          {/* AI Edit Section - Moved outside the form context */}
+          <div className="border-t border-slate-200 pt-4">
+            <AIEditForm
+              onEdit={handleAIEdit}
+              currentContent={formData.content}
+              isGenerating={isGenerating}
+              streamContent={aiStreamContent}
+            />
+          </div>
 
           {/* Tab Navigation */}
           <div className="border-b border-slate-200">
             <nav className="-mb-px flex space-x-8">
               <button
                 type="button"
-                onClick={() => setActiveTab('edit')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setActiveTab('edit')
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'edit'
                     ? 'border-slate-500 text-slate-900'
@@ -403,7 +426,10 @@ export default function EditTemplate() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('preview')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setActiveTab('preview')
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'preview'
                     ? 'border-slate-500 text-slate-900'
@@ -553,7 +579,7 @@ export default function EditTemplate() {
               <>
                 <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                 </svg>
                 Saving...
               </>

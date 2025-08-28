@@ -15,11 +15,19 @@ function AIGenerateForm({ onGenerate, isGenerating, streamContent }: AIGenerateF
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    e.stopPropagation() // Prevent event bubbling to parent form
+    
     if (!prompt.trim()) return
     
     await onGenerate(prompt)
     setPrompt('')
     setShowForm(false)
+  }
+
+  const handleButtonClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation() // Prevent parent form submission
+    setShowForm(!showForm)
   }
 
   return (
@@ -28,7 +36,7 @@ function AIGenerateForm({ onGenerate, isGenerating, streamContent }: AIGenerateF
       <div className="flex items-center space-x-3">
         <button
           type="button"
-          onClick={() => setShowForm(!showForm)}
+          onClick={handleButtonClick}
           disabled={isGenerating}
           className="btn-outline text-sm"
         >
@@ -70,7 +78,11 @@ function AIGenerateForm({ onGenerate, isGenerating, streamContent }: AIGenerateF
             <div className="flex justify-end space-x-2">
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setShowForm(false)
+                }}
                 className="btn-outline text-sm"
                 disabled={isGenerating}
               >
@@ -119,6 +131,12 @@ export default function CreateTemplateForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    
+    // Don't proceed if AI is currently generating
+    if (isGenerating) {
+      return
+    }
+    
     setSaving(true)
     
     try {
@@ -229,6 +247,7 @@ export default function CreateTemplateForm() {
             <p className="text-slate-600 mt-1">Design a new email template for your campaigns</p>
           </div>
           <button
+            type="button"
             onClick={() => router.push('/templates')}
             className="btn-outline"
           >
@@ -294,19 +313,24 @@ export default function CreateTemplateForm() {
             />
           </div>
 
-          {/* AI Generation Section */}
-          <AIGenerateForm
-            onGenerate={handleAIGenerate}
-            isGenerating={isGenerating}
-            streamContent={aiStreamContent}
-          />
+          {/* AI Generation Section - Moved outside the form context */}
+          <div className="border-t border-slate-200 pt-4">
+            <AIGenerateForm
+              onGenerate={handleAIGenerate}
+              isGenerating={isGenerating}
+              streamContent={aiStreamContent}
+            />
+          </div>
 
           {/* Tab Navigation */}
           <div className="border-b border-slate-200">
             <nav className="-mb-px flex space-x-8">
               <button
                 type="button"
-                onClick={() => setActiveTab('edit')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setActiveTab('edit')
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'edit'
                     ? 'border-slate-500 text-slate-900'
@@ -320,7 +344,10 @@ export default function CreateTemplateForm() {
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab('preview')}
+                onClick={(e) => {
+                  e.preventDefault()
+                  setActiveTab('preview')
+                }}
                 className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   activeTab === 'preview'
                     ? 'border-slate-500 text-slate-900'
