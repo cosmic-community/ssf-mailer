@@ -1,174 +1,103 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-
-interface AIGenerateFormProps {
-  onGenerate: (content: string) => void
-  isGenerating: boolean
-  streamContent?: string
-}
-
-function AIGenerateForm({ onGenerate, isGenerating, streamContent }: AIGenerateFormProps) {
-  const [showForm, setShowForm] = useState(false)
-  const [prompt, setPrompt] = useState('')
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    e.stopPropagation() // Prevent event bubbling to parent form
-    
-    if (!prompt.trim()) return
-    
-    await onGenerate(prompt)
-    setPrompt('')
-    setShowForm(false)
-  }
-
-  const handleButtonClick = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation() // Prevent parent form submission
-    setShowForm(!showForm)
-  }
-
-  return (
-    <div className="space-y-4">
-      {/* AI Generate Button */}
-      <div className="flex items-center space-x-3">
-        <button
-          type="button"
-          onClick={handleButtonClick}
-          disabled={isGenerating}
-          className="btn-outline text-sm"
-        >
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-          </svg>
-          Generate Template with AI
-        </button>
-
-        {isGenerating && (
-          <div className="flex items-center text-sm text-slate-600">
-            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
-            Generating...
-          </div>
-        )}
-      </div>
-
-      {/* Generate Form */}
-      {showForm && (
-        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
-          <form onSubmit={handleSubmit} className="space-y-3">
-            <div>
-              <label htmlFor="ai-prompt" className="block text-sm font-medium text-slate-700 mb-2">
-                Describe the email template you want to generate:
-              </label>
-              <textarea
-                id="ai-prompt"
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g., Welcome email for new subscribers with a warm greeting and introduction to our services"
-                rows={3}
-                className="form-input w-full resize-none"
-                disabled={isGenerating}
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  setShowForm(false)
-                }}
-                className="btn-outline text-sm"
-                disabled={isGenerating}
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isGenerating || !prompt.trim()}
-                className="btn-primary text-sm"
-              >
-                Generate Template
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* AI Streaming Content Preview */}
-      {isGenerating && streamContent && (
-        <div className="border border-slate-200 rounded-lg p-4 bg-blue-50">
-          <div className="text-sm font-medium text-slate-700 mb-2">AI is generating your template...</div>
-          <div className="max-h-40 overflow-y-auto text-sm text-slate-600">
-            <div dangerouslySetInnerHTML={{ 
-              __html: streamContent.slice(0, 300) + (streamContent.length > 300 ? '...' : '') 
-            }} />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 export default function CreateTemplateForm() {
   const router = useRouter()
-  const [saving, setSaving] = useState(false)
-  const [isGenerating, setIsGenerating] = useState(false)
-  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit')
-  const [aiStreamContent, setAiStreamContent] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  const [isAIGenerating, setIsAIGenerating] = useState(false)
+  const [isAIEditing, setIsAIEditing] = useState(false)
+  const [aiPrompt, setAIPrompt] = useState('')
+  const [editPrompt, setEditPrompt] = useState('')
+  
+  // Refs for autofocus and auto-resize
+  const aiPromptRef = useRef<HTMLTextAreaElement>(null)
+  const editPromptRef = useRef<HTMLTextAreaElement>(null)
+  const contentRef = useRef<HTMLTextAreaElement>(null)
   
   const [formData, setFormData] = useState({
-    title: '',
-    template_type: '',
-    subject_line: '',
-    content: ''
+    name: '',
+    subject: '',
+    content: '',
+    template_type: 'Newsletter',
+    active: true
   })
+
+  // Auto-resize textarea function
+  const autoResize = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto'
+    textarea.style.height = textarea.scrollHeight + 'px'
+  }
+
+  // Set up auto-resize for textareas
+  useEffect(() => {
+    const textareas = [aiPromptRef.current, editPromptRef.current, contentRef.current].filter(Boolean) as HTMLTextAreaElement[]
+    
+    textareas.forEach(textarea => {
+      const handleInput = () => autoResize(textarea)
+      textarea.addEventListener('input', handleInput)
+      
+      // Initial resize
+      autoResize(textarea)
+      
+      return () => textarea.removeEventListener('input', handleInput)
+    })
+  }, [])
+
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    if (type === 'success') {
+      setSuccess(message)
+      setError('')
+      setTimeout(() => setSuccess(''), 3000)
+    } else {
+      setError(message)
+      setSuccess('')
+      setTimeout(() => setError(''), 5000)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // Don't proceed if AI is currently generating
-    if (isGenerating) {
-      return
-    }
-    
-    setSaving(true)
-    
+    setError('')
+    setSuccess('')
+    setIsLoading(true)
+
     try {
       const response = await fetch('/api/templates', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          name: formData.title,
-          subject: formData.subject_line,
-          content: formData.content,
-          template_type: formData.template_type,
-          active: true
-        }),
+        body: JSON.stringify(formData),
       })
-      
-      if (!response.ok) throw new Error('Failed to create template')
-      
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to create template')
+      }
+
+      showToast('Template created successfully!')
       router.push('/templates')
-    } catch (error) {
-      console.error('Error creating template:', error)
-      alert('Failed to create template')
+    } catch (err: any) {
+      showToast(err.message || 'Failed to create template. Please try again.', 'error')
+      console.error('Template creation error:', err)
     } finally {
-      setSaving(false)
+      setIsLoading(false)
     }
   }
 
-  const handleAIGenerate = async (prompt: string) => {
-    setIsGenerating(true)
-    setAiStreamContent('')
-    
+  const handleAIGenerate = async () => {
+    if (!aiPrompt.trim()) {
+      showToast('Please enter a prompt for AI generation', 'error')
+      return
+    }
+
+    setIsAIGenerating(true)
     try {
       const response = await fetch('/api/templates/generate-ai', {
         method: 'POST',
@@ -176,266 +105,329 @@ export default function CreateTemplateForm() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt,
-          template_type: formData.template_type,
-          stream: true
+          prompt: aiPrompt,
+          type: formData.template_type
         }),
       })
-      
-      if (!response.ok) throw new Error('Failed to generate template')
-      
-      if (!response.body) {
-        throw new Error('No response body')
+
+      if (!response.ok) {
+        throw new Error('Failed to generate AI content')
       }
 
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-
-      while (true) {
-        const { done, value } = await reader.read()
-        
-        if (done) break
-
-        const chunk = decoder.decode(value)
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6))
-              
-              if (data.type === 'text') {
-                setAiStreamContent(data.fullContent || '')
-              } else if (data.type === 'complete') {
-                // Update form data with generated content
-                if (data.content) {
-                  setFormData(prev => ({
-                    ...prev,
-                    content: data.content,
-                    subject_line: data.subject || prev.subject_line,
-                    title: data.name || prev.title
-                  }))
-                }
-                
-                // Switch to preview tab to show the generated content
-                setActiveTab('preview')
-                setAiStreamContent('')
-              } else if (data.type === 'error') {
-                throw new Error(data.error)
-              }
-            } catch (e) {
-              // Skip invalid JSON lines
-              continue
-            }
-          }
+      const result = await response.json()
+      
+      setFormData(prev => ({
+        ...prev,
+        subject: result.data.subject,
+        content: result.data.content
+      }))
+      
+      setAIPrompt('')
+      showToast('AI content generated successfully!')
+      
+      // Auto-resize content textarea after update
+      setTimeout(() => {
+        if (contentRef.current) {
+          autoResize(contentRef.current)
         }
-      }
+      }, 100)
+      
     } catch (error) {
-      console.error('Error generating template:', error)
-      alert(error instanceof Error ? error.message : 'Failed to generate template content')
+      showToast('Failed to generate AI content. Please try again.', 'error')
+      console.error('AI generation error:', error)
     } finally {
-      setIsGenerating(false)
+      setIsAIGenerating(false)
     }
   }
 
-  return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="mb-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-slate-900">Create New Template</h1>
-            <p className="text-slate-600 mt-1">Design a new email template for your campaigns</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => router.push('/templates')}
-            className="btn-outline"
-          >
-            Back to Templates
-          </button>
-        </div>
-      </div>
+  const handleAIEdit = async () => {
+    if (!editPrompt.trim()) {
+      showToast('Please enter instructions for AI editing', 'error')
+      return
+    }
 
-      <div className="space-y-6">
-        {/* Template Details */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    if (!formData.content.trim()) {
+      showToast('Please generate or add content first before editing', 'error')
+      return
+    }
+
+    setIsAIEditing(true)
+    try {
+      const response = await fetch('/api/templates/edit-ai', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: editPrompt,
+          currentContent: formData.content,
+          type: formData.template_type
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to edit content with AI')
+      }
+
+      const result = await response.json()
+      
+      setFormData(prev => ({
+        ...prev,
+        content: result.data.content
+      }))
+      
+      setEditPrompt('')
+      showToast('AI content editing completed successfully!')
+      
+      // Auto-resize content textarea after update
+      setTimeout(() => {
+        if (contentRef.current) {
+          autoResize(contentRef.current)
+        }
+      }, 100)
+      
+    } catch (error) {
+      showToast('Failed to edit content with AI. Please try again.', 'error')
+      console.error('AI editing error:', error)
+    } finally {
+      setIsAIEditing(false)
+    }
+  }
+
+  // Auto-focus AI prompt when AI section is shown
+  const handleAISectionFocus = (ref: React.RefObject<HTMLTextAreaElement>) => {
+    setTimeout(() => {
+      if (ref.current) {
+        ref.current.focus()
+      }
+    }, 100)
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* Toast Messages */}
+      {success && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      <div className="card">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Template</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Template Name */}
           <div>
-            <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-2">
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
               Template Name
             </label>
             <input
               type="text"
-              id="title"
-              value={formData.title}
-              onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-              className="form-input w-full"
+              id="name"
               required
+              className="form-input"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter template name"
             />
           </div>
 
+          {/* Template Type */}
           <div>
-            <label htmlFor="template_type" className="block text-sm font-medium text-slate-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
               Template Type
             </label>
-            <select
-              id="template_type"
+            <Select
               value={formData.template_type}
-              onChange={(e) => setFormData({ ...formData, template_type: e.target.value })}
-              className="form-input w-full"
-              required
+              onValueChange={(value) => setFormData(prev => ({ ...prev, template_type: value }))}
             >
-              <option value="">Select a type</option>
-              <option value="Welcome Email">Welcome Email</option>
-              <option value="Newsletter">Newsletter</option>
-              <option value="Promotional">Promotional</option>
-              <option value="Transactional">Transactional</option>
-              <option value="Follow-up">Follow-up</option>
-              <option value="Event Invitation">Event Invitation</option>
-              <option value="Product Update">Product Update</option>
-              <option value="Survey">Survey</option>
-            </select>
+              <SelectTrigger className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Newsletter">Newsletter</SelectItem>
+                <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                <SelectItem value="Promotional">Promotional</SelectItem>
+                <SelectItem value="Transactional">Transactional</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-        </div>
 
-        <div>
-          <label htmlFor="subject_line" className="block text-sm font-medium text-slate-700 mb-2">
-            Subject Line
-          </label>
-          <input
-            type="text"
-            id="subject_line"
-            value={formData.subject_line}
-            onChange={(e) => setFormData({ ...formData, subject_line: e.target.value })}
-            className="form-input w-full"
-            required
-          />
-        </div>
-
-        {/* AI Generation Section - Outside form context */}
-        <div className="border-t border-slate-200 pt-4">
-          <AIGenerateForm
-            onGenerate={handleAIGenerate}
-            isGenerating={isGenerating}
-            streamContent={aiStreamContent}
-          />
-        </div>
-
-        {/* Tab Navigation */}
-        <div className="border-b border-slate-200">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                setActiveTab('edit')
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'edit'
-                  ? 'border-slate-500 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+          {/* AI Content Generation */}
+          <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              Edit
-            </button>
-            <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault()
-                setActiveTab('preview')
-              }}
-              className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
-                activeTab === 'preview'
-                  ? 'border-slate-500 text-slate-900'
-                  : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
-              }`}
-            >
-              <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-              Preview
-            </button>
-          </nav>
-        </div>
-
-        {/* Content Area */}
-        <div className="min-h-[400px]">
-          {activeTab === 'edit' ? (
-            <div>
-              <label htmlFor="content" className="block text-sm font-medium text-slate-700 mb-2">
-                Email Content (HTML)
-              </label>
-              <textarea
-                id="content"
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                rows={16}
-                className="form-input w-full font-mono text-sm"
-                placeholder="Enter your HTML email content here..."
-                required
-              />
-            </div>
-          ) : (
-            <div>
-              <div className="text-sm font-medium text-slate-700 mb-2">Preview</div>
-              <div className="border border-slate-200 rounded-lg bg-white min-h-[400px]">
-                {formData.content ? (
-                  <div className="p-4">
-                    <div className="bg-slate-100 p-3 rounded-lg mb-4 text-sm">
-                      <div className="font-medium text-slate-700">Subject: {formData.subject_line || 'No subject'}</div>
-                      <div className="text-slate-500 mt-1">From: your-email@yourdomain.com</div>
-                      <div className="text-slate-500">To: john.doe@example.com</div>
-                    </div>
-                    <div
-                      dangerouslySetInnerHTML={{ __html: formData.content }}
-                      className="prose prose-sm max-w-none"
-                    />
-                  </div>
+              AI Content Generation
+            </h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Describe what you want to create:
+                </label>
+                <textarea
+                  ref={aiPromptRef}
+                  className="form-input min-h-[60px] resize-none overflow-hidden"
+                  value={aiPrompt}
+                  onChange={(e) => {
+                    setAIPrompt(e.target.value)
+                    autoResize(e.target)
+                  }}
+                  onFocus={() => handleAISectionFocus(aiPromptRef)}
+                  placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
+                  rows={2}
+                />
+              </div>
+              
+              <button
+                type="button"
+                onClick={handleAIGenerate}
+                disabled={isAIGenerating || !aiPrompt.trim()}
+                className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAIGenerating ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Generating...
+                  </>
                 ) : (
-                  <div className="flex items-center justify-center h-full text-slate-500">
-                    <div className="text-center">
-                      <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                      </svg>
-                      <p>No content to preview</p>
-                      <p className="text-sm">Add content in the Edit tab or use AI generation</p>
-                    </div>
-                  </div>
+                  'Generate with AI'
                 )}
+              </button>
+            </div>
+          </div>
+
+          {/* Subject Line */}
+          <div>
+            <label htmlFor="subject" className="block text-sm font-medium text-gray-700 mb-2">
+              Subject Line
+            </label>
+            <input
+              type="text"
+              id="subject"
+              required
+              className="form-input"
+              value={formData.subject}
+              onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
+              placeholder="Enter email subject"
+            />
+          </div>
+
+          {/* AI Content Editing */}
+          {formData.content && (
+            <div className="border border-gray-200 rounded-lg p-6 bg-gradient-to-br from-purple-50 to-pink-50">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                AI Content Editor
+              </h3>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    How should we improve the current content?
+                  </label>
+                  <textarea
+                    ref={editPromptRef}
+                    className="form-input min-h-[60px] resize-none overflow-hidden"
+                    value={editPrompt}
+                    onChange={(e) => {
+                      setEditPrompt(e.target.value)
+                      autoResize(e.target)
+                    }}
+                    onFocus={() => handleAISectionFocus(editPromptRef)}
+                    placeholder="e.g., 'Make it more professional and add a call-to-action button'"
+                    rows={2}
+                  />
+                </div>
+                
+                <button
+                  type="button"
+                  onClick={handleAIEdit}
+                  disabled={isAIEditing || !editPrompt.trim()}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isAIEditing ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Editing...
+                    </>
+                  ) : (
+                    'Edit with AI'
+                  )}
+                </button>
               </div>
             </div>
           )}
-        </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className="flex justify-end space-x-3 pt-6 border-t border-slate-200">
+          {/* Email Content */}
+          <div>
+            <label htmlFor="content" className="block text-sm font-medium text-gray-700 mb-2">
+              Email Content (HTML)
+            </label>
+            <textarea
+              ref={contentRef}
+              id="content"
+              required
+              className="form-input min-h-[300px] font-mono text-sm resize-none overflow-hidden"
+              value={formData.content}
+              onChange={(e) => {
+                setFormData(prev => ({ ...prev, content: e.target.value }))
+                autoResize(e.target)
+              }}
+              placeholder="Enter HTML email content or use AI to generate"
+              rows={15}
+            />
+            <p className="text-sm text-gray-500 mt-2">
+              Use template variables like {`{{first_name}}`} and {`{{last_name}}`} for personalization.
+            </p>
+          </div>
+
+          {/* Active Status */}
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="active"
+              checked={formData.active}
+              onChange={(e) => setFormData(prev => ({ ...prev, active: e.target.checked }))}
+              className="form-checkbox"
+            />
+            <label htmlFor="active" className="ml-2 text-sm text-gray-700">
+              Template is active
+            </label>
+          </div>
+
+          {/* Actions */}
+          <div className="flex space-x-4 pt-6 border-t border-gray-200">
             <button
               type="button"
-              onClick={() => router.push('/templates')}
-              className="btn-outline"
+              onClick={() => router.back()}
+              className="btn-secondary"
+              disabled={isLoading}
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={saving || isGenerating}
               className="btn-primary"
+              disabled={isLoading}
             >
-              {saving ? (
-                <>
-                  <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Saving...
-                </>
-              ) : (
-                'Create Template'
-              )}
+              {isLoading ? 'Creating...' : 'Create Template'}
             </button>
           </div>
         </form>
