@@ -34,27 +34,32 @@ IMPORTANT: Return ONLY the subject line text, no quotes, no explanation, no addi
       })
 
       // Handle the response with proper type checking
-      let generatedSubject: string = ''
+      let generatedSubject = ''
       
       if (aiResponse) {
         if (typeof aiResponse === 'string') {
-          generatedSubject = aiResponse.trim()
-        } else if (typeof aiResponse === 'object' && 'text' in aiResponse) {
+          generatedSubject = aiResponse
+        } else if (typeof aiResponse === 'object' && aiResponse !== null && 'text' in aiResponse) {
           const responseData = aiResponse as { text: unknown }
           if (typeof responseData.text === 'string') {
-            generatedSubject = responseData.text.trim()
+            generatedSubject = responseData.text
           }
         }
+      }
+
+      // Only call trim() if we have a valid string
+      if (generatedSubject && typeof generatedSubject === 'string') {
+        generatedSubject = generatedSubject.trim()
+        
+        // Clean up the subject - remove quotes and extra formatting
+        generatedSubject = generatedSubject.replace(/^["']|["']$/g, '')
+        generatedSubject = generatedSubject.replace(/`/g, '')
+        generatedSubject = generatedSubject.trim()
       }
 
       if (!generatedSubject) {
         throw new Error('No subject generated')
       }
-
-      // Clean up the subject - remove quotes and extra formatting
-      generatedSubject = generatedSubject.replace(/^["']|["']$/g, '')
-      generatedSubject = generatedSubject.replace(/`/g, '')
-      generatedSubject = generatedSubject.trim()
 
       return NextResponse.json({ 
         success: true, 
