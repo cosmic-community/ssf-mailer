@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Eye, Code, Wand2, Loader2, Square } from 'lucide-react'
+import { Eye, Code, Wand2, Loader2, Square, Save } from 'lucide-react'
+import type { EmailTemplate } from '@/types'
 
 interface TemplateFormData {
   name: string
@@ -18,7 +19,11 @@ interface TemplateFormData {
   active: boolean
 }
 
-export default function CreateTemplateForm() {
+interface EditTemplateFormProps {
+  template: EmailTemplate
+}
+
+export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGeneratingAI, setIsGeneratingAI] = useState(false)
@@ -30,11 +35,11 @@ export default function CreateTemplateForm() {
   const abortControllerRef = useRef<AbortController | null>(null)
   
   const [formData, setFormData] = useState<TemplateFormData>({
-    name: '',
-    subject: '',
-    content: '',
-    template_type: '',
-    active: true
+    name: template.metadata.name,
+    subject: template.metadata.subject,
+    content: template.metadata.content,
+    template_type: template.metadata.template_type.value,
+    active: template.metadata.active
   })
 
   const handleInputChange = (field: keyof TemplateFormData, value: string | boolean) => {
@@ -53,9 +58,9 @@ export default function CreateTemplateForm() {
     }
   }
 
-  const generateWithAI = async () => {
+  const editWithAI = async () => {
     if (!aiPrompt.trim()) {
-      setError('Please enter a prompt for AI generation')
+      setError('Please enter instructions for AI editing')
       return
     }
 
@@ -68,14 +73,17 @@ export default function CreateTemplateForm() {
     abortControllerRef.current = new AbortController()
 
     try {
-      const response = await fetch('/api/templates/generate-ai', {
+      const response = await fetch('/api/templates/edit-ai', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          prompt: aiPrompt,
-          template_type: formData.template_type || 'Newsletter',
+          current_content: formData.content,
+          current_subject: formData.subject,
+          current_name: formData.name,
+          edit_instructions: aiPrompt,
+          template_type: formData.template_type,
           stream: true
         }),
         signal: abortControllerRef.current.signal
@@ -83,7 +91,7 @@ export default function CreateTemplateForm() {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to generate content with AI')
+        throw new Error(errorData.error || 'Failed to edit content with AI')
       }
 
       if (!response.body) {
@@ -121,7 +129,7 @@ export default function CreateTemplateForm() {
                     break
                     
                   case 'complete':
-                    // Update form with final AI-generated content
+                    // Update form with final AI-edited content
                     setFormData(prev => ({
                       ...prev,
                       content: data.content || fullContent,
@@ -148,10 +156,10 @@ export default function CreateTemplateForm() {
       setAiPrompt('')
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
-        console.log('AI generation was stopped by user')
+        console.log('AI editing was stopped by user')
       } else {
-        console.error('AI generation error:', err)
-        setError(err instanceof Error ? err.message : 'Failed to generate content with AI')
+        console.error('AI editing error:', err)
+        setError(err instanceof Error ? err.message : 'Failed to edit content with AI')
       }
     } finally {
       setIsGeneratingAI(false)
@@ -170,8 +178,8 @@ export default function CreateTemplateForm() {
         throw new Error('Please fill in all required fields')
       }
 
-      const response = await fetch('/api/templates', {
-        method: 'POST',
+      const response = await fetch(`/api/templates/${template.id}`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json'
         },
@@ -181,13 +189,13 @@ export default function CreateTemplateForm() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to create template')
+        throw new Error(result.error || 'Failed to update template')
       }
 
       router.push('/templates')
     } catch (err) {
       console.error('Submit error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create template')
+      setError(err instanceof Error ? err.message : 'Failed to update template')
     } finally {
       setIsSubmitting(false)
     }
@@ -212,7 +220,15 @@ export default function CreateTemplateForm() {
 
   return (
     <div className="card max-w-4xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Email Template</h2>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Edit Email Template</h2>
+          <p className="text-gray-600">Currently editing: {template.metadata.name}</p>
+        </div>
+        <div className="text-sm text-gray-500">
+          Created: {new Date(template.created_at).toLocaleDateString()}
+        </div>
+      </div>
       
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Basic Information */}
@@ -259,12 +275,12 @@ export default function CreateTemplateForm() {
           />
         </div>
 
-        {/* AI Content Generation */}
+        {/* AI Content Editing */}
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <Wand2 className="h-5 w-5 text-blue-600" />
-              <Label className="text-blue-800 font-medium">Generate Content with AI</Label>
+              <Label className="text-blue-800 font-medium">Edit Content with AI</Label>
             </div>
             
             {isGeneratingAI && (
@@ -276,7 +292,7 @@ export default function CreateTemplateForm() {
                 className="text-red-600 border-red-300 hover:bg-red-50"
               >
                 <Square className="mr-2 h-4 w-4" />
-                Stop Generation
+                Stop Editing
               </Button>
             )}
           </div>
@@ -285,7 +301,7 @@ export default function CreateTemplateForm() {
             <Textarea
               value={aiPrompt}
               onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Describe the email you want to create (e.g., 'Create a welcome email for new subscribers to a fitness newsletter with tips and motivation')"
+              placeholder="Describe what you want to change about this template (e.g., 'Make it more professional', 'Add a call-to-action button', 'Change the tone to be more casual')"
               rows={3}
               disabled={isGeneratingAI}
             />
@@ -293,28 +309,28 @@ export default function CreateTemplateForm() {
             <Button
               type="button"
               variant="outline"
-              onClick={generateWithAI}
+              onClick={editWithAI}
               disabled={isGeneratingAI || !aiPrompt.trim()}
               className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400"
             >
               {isGeneratingAI ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
+                  Editing...
                 </>
               ) : (
                 <>
                   <Wand2 className="mr-2 h-4 w-4" />
-                  Generate with AI
+                  Edit with AI
                 </>
               )}
             </Button>
             
             {isGeneratingAI && (
               <div className="text-sm text-blue-700">
-                <p className="mb-2">✨ AI is generating your content in real-time...</p>
+                <p className="mb-2">✨ AI is editing your content in real-time...</p>
                 <div className="bg-white/50 rounded p-2 text-xs font-mono max-h-32 overflow-y-auto">
-                  {streamingContent || 'Starting generation...'}
+                  {streamingContent || 'Starting editing...'}
                 </div>
               </div>
             )}
@@ -363,7 +379,7 @@ export default function CreateTemplateForm() {
               />
               <p className="text-sm text-gray-500">
                 Use HTML tags for formatting. Variables like {`{{first_name}}`} will be replaced when sending.
-                {isGeneratingAI && ' Content is being generated above...'}
+                {isGeneratingAI && ' Content is being edited above...'}
               </p>
             </div>
           ) : (
@@ -376,7 +392,7 @@ export default function CreateTemplateForm() {
                   />
                 ) : (
                   <p className="text-gray-400 italic">
-                    No content to preview. Switch to HTML mode to add content or use AI generation.
+                    No content to preview. Switch to HTML mode to add content or use AI editing.
                   </p>
                 )}
               </div>
@@ -385,7 +401,7 @@ export default function CreateTemplateForm() {
                 <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
                   <div className="flex items-center space-x-2">
                     <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <span className="text-sm text-blue-700">Generating preview in real-time...</span>
+                    <span className="text-sm text-blue-700">Editing preview in real-time...</span>
                   </div>
                 </div>
               )}
@@ -426,10 +442,13 @@ export default function CreateTemplateForm() {
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
+                Saving...
               </>
             ) : (
-              'Create Template'
+              <>
+                <Save className="mr-2 h-4 w-4" />
+                Save Changes
+              </>
             )}
           </Button>
         </div>
