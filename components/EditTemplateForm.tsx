@@ -207,10 +207,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       onValueChange={(value) => 
                         setFormData(prev => ({ 
                           ...prev, 
-                          template_type: typeof prev.template_type === 'object' ? {
-                            ...prev.template_type,
+                          template_type: {
+                            key: value.toLowerCase().replace(/\s+/g, '_'),
                             value: value as TemplateType
-                          } : value as TemplateType
+                          }
                         }))
                       }
                     >
