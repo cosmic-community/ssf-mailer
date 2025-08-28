@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getMarketingCampaign, getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
 import EditCampaignForm from '@/components/EditCampaignForm'
+import SendCampaignButton from '@/components/SendCampaignButton'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -24,6 +25,26 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   if (!campaign) {
     notFound()
   }
+
+  // Generate preview content
+  const generatePreviewContent = () => {
+    if (!campaign.metadata?.template?.metadata) {
+      return { subject: 'No template selected', content: 'No template content available' }
+    }
+
+    let emailContent = campaign.metadata.template.metadata.content || ''
+    let emailSubject = campaign.metadata.template.metadata.subject || ''
+
+    // Replace template variables with sample data
+    emailContent = emailContent.replace(/\{\{first_name\}\}/g, 'John')
+    emailContent = emailContent.replace(/\{\{last_name\}\}/g, 'Doe')
+    emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, 'John')
+    emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, 'Doe')
+
+    return { subject: emailSubject, content: emailContent }
+  }
+
+  const preview = generatePreviewContent()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,6 +75,9 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
               }`}>
                 {campaign.metadata?.status?.value}
               </span>
+              {campaign.metadata?.status?.value === 'Draft' && (
+                <SendCampaignButton campaignId={campaign.id} />
+              )}
             </div>
           </div>
         </div>
@@ -99,6 +123,31 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* Email Preview */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Email Preview</h2>
+          <div className="card">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="text-sm text-gray-500 mb-2">Subject Line:</div>
+              <div className="text-lg font-semibold text-gray-900">{preview.subject}</div>
+            </div>
+            
+            <div className="text-sm text-gray-500 mb-4">Email Content:</div>
+            <div className="bg-gray-50 rounded-lg p-6 border-2 border-dashed border-gray-200">
+              <div 
+                className="prose prose-sm max-w-none"
+                dangerouslySetInnerHTML={{ __html: preview.content }}
+              />
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Template variables like {{`{{first_name}}`}} and {{`{{last_name}}`}} will be replaced with actual contact data when sent.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Edit Form */}
         <EditCampaignForm 

@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Plus, Mail, Eye, Edit, Trash2, Loader2 } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import type { EmailTemplate } from '@/types'
 
 export default function TemplatesList() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
 
   useEffect(() => {
     fetchTemplates()
@@ -112,13 +114,35 @@ export default function TemplatesList() {
                   </span>
                 </div>
                 <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {/* Preview functionality */}}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setPreviewTemplate(template)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                      <DialogHeader>
+                        <DialogTitle>Template Preview: {template.metadata.name}</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Subject:</h4>
+                          <p className="text-lg font-semibold">{template.metadata.subject}</p>
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-2">Content:</h4>
+                          <div 
+                            className="prose prose-sm max-w-none bg-gray-50 p-4 rounded-lg border"
+                            dangerouslySetInnerHTML={{ __html: template.metadata.content }}
+                          />
+                        </div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                   <Link href={`/templates/${template.id}/edit`}>
                     <Button variant="ghost" size="sm">
                       <Edit className="h-4 w-4" />
