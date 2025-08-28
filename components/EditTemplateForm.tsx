@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useRouter } from 'next/navigation'
-import { toast } from 'react-hot-toast'
 
 interface EditTemplateFormProps {
   template: EmailTemplate
@@ -19,6 +18,8 @@ interface EditTemplateFormProps {
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [formData, setFormData] = useState({
     name: template.metadata.name,
     subject: template.metadata.subject,
@@ -27,9 +28,24 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     active: template.metadata.active
   })
 
+  // Show toast notification
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    if (type === 'success') {
+      setSuccess(message)
+      setError('')
+      setTimeout(() => setSuccess(''), 3000)
+    } else {
+      setError(message)
+      setSuccess('')
+      setTimeout(() => setError(''), 5000)
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setError('')
+    setSuccess('')
 
     try {
       const response = await fetch(`/api/templates/${template.id}`, {
@@ -44,11 +60,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         throw new Error('Failed to update template')
       }
 
-      toast.success('Template updated successfully!')
+      showToast('Template updated successfully!')
       router.push('/templates')
     } catch (error) {
       console.error('Error updating template:', error)
-      toast.error('Failed to update template')
+      showToast('Failed to update template', 'error')
     } finally {
       setLoading(false)
     }
@@ -58,6 +74,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Toast Messages */}
+      {success && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+      
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
       <Card>
         <CardHeader>
           <CardTitle>Edit Template</CardTitle>
