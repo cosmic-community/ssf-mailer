@@ -64,7 +64,7 @@ Return the improved HTML email template.`
             let isComplete = false
 
             // Process the AI stream
-            aiStream.on('text', (text) => {
+            aiStream.on('text', (text: string) => {
               improvedContent += text
               controller.enqueue(
                 encoder.encode('data: {"type":"status","message":"Generating improvements...","progress":75}\n\n')
@@ -104,7 +104,7 @@ Return the improved HTML email template.`
                 
                 controller.close()
                 isComplete = true
-              } catch (error) {
+              } catch (error: unknown) {
                 if (!isComplete) {
                   console.error('Error finalizing AI editing:', error)
                   // Fallback to manual improvements
@@ -126,7 +126,7 @@ Return the improved HTML email template.`
               }
             })
 
-            aiStream.on('error', (error) => {
+            aiStream.on('error', (error: Error) => {
               if (!isComplete) {
                 console.error('Cosmic AI stream error:', error)
                 

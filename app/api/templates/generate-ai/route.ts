@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
             let isComplete = false
 
             // Process the AI stream
-            aiStream.on('text', (text) => {
+            aiStream.on('text', (text: string) => {
               generatedContent += text
               controller.enqueue(
                 encoder.encode('data: {"type":"status","message":"Generating content...","progress":60}\n\n')
@@ -113,7 +113,7 @@ export async function POST(request: NextRequest) {
                 
                 controller.close()
                 isComplete = true
-              } catch (error) {
+              } catch (error: unknown) {
                 if (!isComplete) {
                   controller.enqueue(
                     encoder.encode(`data: ${JSON.stringify({
@@ -126,7 +126,7 @@ export async function POST(request: NextRequest) {
               }
             })
 
-            aiStream.on('error', (error) => {
+            aiStream.on('error', (error: Error) => {
               if (!isComplete) {
                 console.error('Cosmic AI stream error:', error)
                 controller.enqueue(
