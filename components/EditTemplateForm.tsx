@@ -454,7 +454,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </div>
       </form>
 
-      <style jsx>{`
+      <style>{`
         .email-preview img {
           max-width: 100%;
           height: auto;

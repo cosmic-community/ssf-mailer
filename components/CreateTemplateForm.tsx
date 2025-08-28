@@ -435,7 +435,7 @@ export default function CreateTemplateForm() {
         </div>
       </form>
 
-      <style jsx>{`
+      <style>{`
         .email-preview img {
           max-width: 100%;
           height: auto;
