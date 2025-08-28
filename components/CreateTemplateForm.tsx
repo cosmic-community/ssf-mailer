@@ -13,6 +13,7 @@ export default function CreateTemplateForm() {
   const [isAIEditing, setIsAIEditing] = useState(false)
   const [aiPrompt, setAIPrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
+  const [aiStreamText, setAiStreamText] = useState<string[]>([])
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -98,6 +99,8 @@ export default function CreateTemplateForm() {
     }
 
     setIsAIGenerating(true)
+    setAiStreamText([])
+    
     try {
       const response = await fetch('/api/templates/generate-ai', {
         method: 'POST',
@@ -114,27 +117,62 @@ export default function CreateTemplateForm() {
         throw new Error('Failed to generate AI content')
       }
 
-      const result = await response.json()
-      
-      setFormData(prev => ({
-        ...prev,
-        subject: result.data.subject,
-        content: result.data.content
-      }))
-      
-      setAIPrompt('')
-      showToast('AI content generated successfully!')
-      
-      // Auto-resize content textarea after update
-      setTimeout(() => {
-        if (contentRef.current) {
-          autoResize(contentRef.current)
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) break
+          
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.type === 'status') {
+                  setAiStreamText(prev => [...prev, data.message])
+                } else if (data.type === 'complete') {
+                  setFormData(prev => ({
+                    ...prev,
+                    subject: data.data.subject,
+                    content: data.data.content
+                  }))
+                  setAiStreamText(prev => [...prev, '✅ Template generated successfully!'])
+                  setAIPrompt('')
+                  showToast('AI content generated successfully!')
+                  
+                  // Auto-resize content textarea after update
+                  setTimeout(() => {
+                    if (contentRef.current) {
+                      autoResize(contentRef.current)
+                    }
+                  }, 100)
+                } else if (data.type === 'error') {
+                  throw new Error(data.error)
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError)
+              }
+            }
+          }
         }
-      }, 100)
-      
+      } finally {
+        reader.releaseLock()
+      }
+
     } catch (error) {
-      showToast('Failed to generate AI content. Please try again.', 'error')
       console.error('AI generation error:', error)
+      setAiStreamText(prev => [...prev, '❌ Error: ' + (error instanceof Error ? error.message : 'Failed to generate AI content')])
+      showToast('Failed to generate AI content. Please try again.', 'error')
     } finally {
       setIsAIGenerating(false)
     }
@@ -152,6 +190,8 @@ export default function CreateTemplateForm() {
     }
 
     setIsAIEditing(true)
+    setAiStreamText([])
+    
     try {
       const response = await fetch('/api/templates/edit-ai', {
         method: 'POST',
@@ -161,7 +201,8 @@ export default function CreateTemplateForm() {
         body: JSON.stringify({
           prompt: editPrompt,
           currentContent: formData.content,
-          type: formData.template_type
+          currentSubject: formData.subject,
+          templateId: 'new'
         }),
       })
 
@@ -169,26 +210,62 @@ export default function CreateTemplateForm() {
         throw new Error('Failed to edit content with AI')
       }
 
-      const result = await response.json()
-      
-      setFormData(prev => ({
-        ...prev,
-        content: result.data.content
-      }))
-      
-      setEditPrompt('')
-      showToast('AI content editing completed successfully!')
-      
-      // Auto-resize content textarea after update
-      setTimeout(() => {
-        if (contentRef.current) {
-          autoResize(contentRef.current)
+      if (!response.body) {
+        throw new Error('No response body')
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read()
+          
+          if (done) break
+          
+          const chunk = decoder.decode(value, { stream: true })
+          const lines = chunk.split('\n')
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6))
+                
+                if (data.type === 'status') {
+                  setAiStreamText(prev => [...prev, data.message])
+                } else if (data.type === 'complete') {
+                  setFormData(prev => ({
+                    ...prev,
+                    content: data.data.content,
+                    subject: data.data.subject || prev.subject
+                  }))
+                  setAiStreamText(prev => [...prev, '✅ Template updated successfully!'])
+                  setEditPrompt('')
+                  showToast('AI content editing completed successfully!')
+                  
+                  // Auto-resize content textarea after update
+                  setTimeout(() => {
+                    if (contentRef.current) {
+                      autoResize(contentRef.current)
+                    }
+                  }, 100)
+                } else if (data.type === 'error') {
+                  throw new Error(data.error)
+                }
+              } catch (parseError) {
+                console.warn('Failed to parse SSE data:', parseError)
+              }
+            }
+          }
         }
-      }, 100)
-      
+      } finally {
+        reader.releaseLock()
+      }
+
     } catch (error) {
-      showToast('Failed to edit content with AI. Please try again.', 'error')
       console.error('AI editing error:', error)
+      setAiStreamText(prev => [...prev, '❌ Error: ' + (error instanceof Error ? error.message : 'Failed to edit content with AI')])
+      showToast('Failed to edit content with AI. Please try again.', 'error')
     } finally {
       setIsAIEditing(false)
     }
@@ -265,7 +342,7 @@ export default function CreateTemplateForm() {
               <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
-              AI Content Generation
+              AI Content Generation with Cosmic AI
             </h3>
             
             <div className="space-y-4">
@@ -287,6 +364,26 @@ export default function CreateTemplateForm() {
                 />
               </div>
               
+              {/* AI Stream Text Display */}
+              {aiStreamText.length > 0 && (
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-blue-700">AI Processing:</label>
+                  <div className="bg-white border border-blue-200 rounded-lg p-4 max-h-32 overflow-y-auto">
+                    {aiStreamText.map((message, index) => (
+                      <div key={index} className="text-sm text-blue-800 mb-1">
+                        {message}
+                      </div>
+                    ))}
+                    {isAIGenerating && (
+                      <div className="flex items-center space-x-2 text-sm text-blue-600">
+                        <div className="animate-pulse">●</div>
+                        <span>Processing with Cosmic AI...</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
               <button
                 type="button"
                 onClick={handleAIGenerate}
@@ -299,10 +396,10 @@ export default function CreateTemplateForm() {
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                       <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                     </svg>
-                    Generating...
+                    Generating with Cosmic AI...
                   </>
                 ) : (
-                  'Generate with AI'
+                  'Generate with Cosmic AI'
                 )}
               </button>
             </div>
@@ -331,7 +428,7 @@ export default function CreateTemplateForm() {
                 <svg className="w-5 h-5 mr-2 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                AI Content Editor
+                AI Content Editor with Cosmic AI
               </h3>
               
               <div className="space-y-4">
@@ -348,10 +445,30 @@ export default function CreateTemplateForm() {
                       autoResize(e.target)
                     }}
                     onFocus={() => handleAISectionFocus(editPromptRef)}
-                    placeholder="e.g., 'Make it more professional and add a call-to-action button'"
+                    placeholder="e.g., 'Make it more professional and add a call-to-action button', 'Apply cosmic blue theme like cosmic cms website'"
                     rows={2}
                   />
                 </div>
+                
+                {/* AI Stream Text Display for Editing */}
+                {aiStreamText.length > 0 && isAIEditing && (
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-purple-700">AI Processing:</label>
+                    <div className="bg-white border border-purple-200 rounded-lg p-4 max-h-32 overflow-y-auto">
+                      {aiStreamText.map((message, index) => (
+                        <div key={index} className="text-sm text-purple-800 mb-1">
+                          {message}
+                        </div>
+                      ))}
+                      {isAIEditing && (
+                        <div className="flex items-center space-x-2 text-sm text-purple-600">
+                          <div className="animate-pulse">●</div>
+                          <span>Editing with Cosmic AI...</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 
                 <button
                   type="button"
@@ -365,10 +482,10 @@ export default function CreateTemplateForm() {
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                         <path className="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                       </svg>
-                      Editing...
+                      Editing with Cosmic AI...
                     </>
                   ) : (
-                    'Edit with AI'
+                    'Edit with Cosmic AI'
                   )}
                 </button>
               </div>
