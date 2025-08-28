@@ -143,7 +143,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-sm text-blue-700">
-                <strong>Note:</strong> Template variables like {{`{{first_name}}`}} and {{`{{last_name}}`}} will be replaced with actual contact data when sent.
+                <strong>Note:</strong> Template variables like {'{'}{'{'first_name{'}'}{'}'}  and {'{'}{'{'last_name{'}'}{''} will be replaced with actual contact data when sent.
               </p>
             </div>
           </div>
