@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Users, Edit, Trash2 } from 'lucide-react'
+import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface ContactsListProps {
   contacts: EmailContact[]
@@ -20,16 +21,22 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [editingContact, setEditingContact] = useState<EmailContact | null>(null)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [contactToDelete, setContactToDelete] = useState<{ id: string; name: string } | null>(null)
 
-  const handleDelete = async (contactId: string) => {
-    if (!confirm('Are you sure you want to delete this contact? This action cannot be undone.')) {
-      return
-    }
+  const handleDeleteClick = (contactId: string, contactName: string) => {
+    setContactToDelete({ id: contactId, name: contactName })
+    setShowDeleteModal(true)
+  }
 
-    setDeletingId(contactId)
+  const handleDeleteConfirm = async () => {
+    if (!contactToDelete) return
+
+    setDeletingId(contactToDelete.id)
+    setShowDeleteModal(false)
     
     try {
-      const response = await fetch(`/api/contacts/${contactId}`, {
+      const response = await fetch(`/api/contacts/${contactToDelete.id}`, {
         method: 'DELETE',
       })
 
@@ -45,6 +52,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
       alert(error instanceof Error ? error.message : 'Failed to delete contact')
     } finally {
       setDeletingId(null)
+      setContactToDelete(null)
     }
   }
 
@@ -125,75 +133,79 @@ export default function ContactsList({ contacts }: ContactsListProps) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {contacts.map((contact) => (
-                <tr key={contact.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {contact.metadata?.first_name} {contact.metadata?.last_name}
+              {contacts.map((contact) => {
+                const contactName = `${contact.metadata?.first_name || ''} ${contact.metadata?.last_name || ''}`.trim() || contact.metadata?.email || 'Unknown Contact'
+                
+                return (
+                  <tr key={contact.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {contact.metadata?.first_name} {contact.metadata?.last_name}
+                        </div>
+                        {contact.metadata?.notes && (
+                          <div className="text-sm text-gray-500">{contact.metadata.notes}</div>
+                        )}
                       </div>
-                      {contact.metadata?.notes && (
-                        <div className="text-sm text-gray-500">{contact.metadata.notes}</div>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{contact.metadata?.email}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                      contact.metadata?.status?.value === 'Active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : contact.metadata?.status?.value === 'Unsubscribed'
-                        ? 'bg-red-100 text-red-800'
-                        : 'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {contact.metadata?.status?.value}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="flex flex-wrap gap-1">
-                      {contact.metadata?.tags && contact.metadata.tags.length > 0 ? (
-                        contact.metadata.tags.map((tag, index) => (
-                          <span 
-                            key={index}
-                            className="inline-flex px-2 py-1 text-xs font-medium bg-primary-100 text-primary-800 rounded-full"
-                          >
-                            {tag}
-                          </span>
-                        ))
-                      ) : (
-                        <span className="text-sm text-gray-500">No tags</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {contact.metadata?.subscribe_date ? 
-                      new Date(contact.metadata.subscribe_date).toLocaleDateString() : 
-                      'N/A'
-                    }
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEdit(contact)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDelete(contact.id)}
-                        disabled={deletingId === contact.id}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{contact.metadata?.email}</div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
+                        contact.metadata?.status?.value === 'Active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : contact.metadata?.status?.value === 'Unsubscribed'
+                          ? 'bg-red-100 text-red-800'
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {contact.metadata?.status?.value}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-wrap gap-1">
+                        {contact.metadata?.tags && contact.metadata.tags.length > 0 ? (
+                          contact.metadata.tags.map((tag, index) => (
+                            <span 
+                              key={index}
+                              className="inline-flex px-2 py-1 text-xs font-medium bg-primary-100 text-primary-800 rounded-full"
+                            >
+                              {tag}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-sm text-gray-500">No tags</span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      {contact.metadata?.subscribe_date ? 
+                        new Date(contact.metadata.subscribe_date).toLocaleDateString() : 
+                        'N/A'
+                      }
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleEdit(contact)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteClick(contact.id, contactName)}
+                          disabled={deletingId === contact.id}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -212,6 +224,19 @@ export default function ContactsList({ contacts }: ContactsListProps) {
           }}
         />
       )}
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        title="Delete Contact"
+        message={`Are you sure you want to delete "${contactToDelete?.name}"? This action cannot be undone.`}
+        confirmText="Delete Contact"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        isLoading={deletingId === contactToDelete?.id}
+      />
     </>
   )
 }

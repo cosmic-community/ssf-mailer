@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { getMarketingCampaign, getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
 import EditCampaignForm from '@/components/EditCampaignForm'
 import SendCampaignButton from '@/components/SendCampaignButton'
+import DeleteCampaignButton from '@/components/DeleteCampaignButton'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -45,6 +46,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   }
 
   const preview = generatePreviewContent()
+  const isDraft = campaign.metadata?.status?.value === 'Draft'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -75,8 +77,15 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
               }`}>
                 {campaign.metadata?.status?.value}
               </span>
-              {campaign.metadata?.status?.value === 'Draft' && (
-                <SendCampaignButton campaignId={campaign.id} />
+              {isDraft && (
+                <>
+                  <DeleteCampaignButton 
+                    campaignId={campaign.id}
+                    campaignName={campaign.metadata?.name || 'Campaign'}
+                    isDraft={isDraft}
+                  />
+                  <SendCampaignButton campaignId={campaign.id} />
+                </>
               )}
             </div>
           </div>
