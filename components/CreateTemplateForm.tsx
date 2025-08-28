@@ -1,450 +1,361 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Eye, Code, Wand2, Loader2, Square } from 'lucide-react'
 
-interface TemplateFormData {
-  name: string
-  subject: string
-  content: string
-  template_type: string
-  active: boolean
+interface AIGenerateFormProps {
+  onGenerate: (content: string) => void
+  isGenerating: boolean
+}
+
+function AIGenerateForm({ onGenerate, isGenerating }: AIGenerateFormProps) {
+  const [showForm, setShowForm] = useState(false)
+  const [prompt, setPrompt] = useState('')
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!prompt.trim()) return
+    
+    await onGenerate(prompt)
+    setPrompt('')
+    setShowForm(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* AI Generate Button */}
+      <div className="flex items-center space-x-3">
+        <button
+          type="button"
+          onClick={() => setShowForm(!showForm)}
+          disabled={isGenerating}
+          className="btn-outline text-sm"
+        >
+          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+          </svg>
+          Generate Template with AI
+        </button>
+
+        {isGenerating && (
+          <div className="flex items-center text-sm text-slate-600">
+            <svg className="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Generating...
+          </div>
+        )}
+      </div>
+
+      {/* Generate Form */}
+      {showForm && (
+        <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label htmlFor="ai-prompt" className="block text-sm font-medium text-slate-700 mb-2">
+                Describe the email template you want to generate:
+              </label>
+              <textarea
+                id="ai-prompt"
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                placeholder="e.g., Welcome email for new subscribers with a warm greeting and introduction to our services"
+                rows={3}
+                className="form-input w-full resize-none"
+                disabled={isGenerating}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="btn-outline text-sm"
+                disabled={isGenerating}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={isGenerating || !prompt.trim()}
+                className="btn-primary text-sm"
+              >
+                Generate Template
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function CreateTemplateForm() {
   const router = useRouter()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isGeneratingAI, setIsGeneratingAI] = useState(false)
-  const [viewMode, setViewMode] = useState<'code' | 'preview'>('code')
-  const [error, setError] = useState('')
-  const [aiPrompt, setAiPrompt] = useState('')
-  const [streamingContent, setStreamingContent] = useState('')
-  const [streamingComplete, setStreamingComplete] = useState(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [activeTab, setActiveTab] = useState<'edit' | 'preview'>('edit')
   
-  const [formData, setFormData] = useState<TemplateFormData>({
-    name: '',
-    subject: '',
-    content: '',
+  const [formData, setFormData] = useState({
+    title: '',
     template_type: '',
-    active: true
+    subject_line: '',
+    content: ''
   })
 
-  const handleInputChange = (field: keyof TemplateFormData, value: string | boolean) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }))
-  }
-
-  const stopAIGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort()
-      abortControllerRef.current = null
-      setIsGeneratingAI(false)
-      setStreamingComplete(true)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    
+    try {
+      const response = await fetch('/api/templates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      })
+      
+      if (!response.ok) throw new Error('Failed to create template')
+      
+      router.push('/templates')
+    } catch (error) {
+      console.error('Error creating template:', error)
+      alert('Failed to create template')
+    } finally {
+      setSaving(false)
     }
   }
 
-  const generateWithAI = async () => {
-    if (!aiPrompt.trim()) {
-      setError('Please enter a prompt for AI generation')
-      return
-    }
-
-    setIsGeneratingAI(true)
-    setStreamingComplete(false)
-    setStreamingContent('')
-    setError('')
-
-    // Create abort controller for streaming
-    abortControllerRef.current = new AbortController()
-
+  const handleAIGenerate = async (prompt: string) => {
+    setIsGenerating(true)
     try {
       const response = await fetch('/api/templates/generate-ai', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: aiPrompt,
-          template_type: formData.template_type || 'Newsletter',
-          stream: true
+          prompt,
+          templateType: formData.template_type,
+          subjectLine: formData.subject_line
         }),
-        signal: abortControllerRef.current.signal
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to generate content with AI')
-      }
-
-      if (!response.body) {
-        throw new Error('No response body for streaming')
-      }
-
-      // Handle streaming response
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-
-      let fullContent = ''
-
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          
-          if (done) break
-
-          const chunk = decoder.decode(value)
-          const lines = chunk.split('\n')
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6))
-                
-                switch (data.type) {
-                  case 'text':
-                    setStreamingContent(data.fullContent || '')
-                    fullContent = data.fullContent || ''
-                    break
-                    
-                  case 'usage':
-                    console.log('Token usage:', data.usage)
-                    break
-                    
-                  case 'complete':
-                    // Update form with final AI-generated content
-                    setFormData(prev => ({
-                      ...prev,
-                      content: data.content || fullContent,
-                      subject: data.subject || prev.subject,
-                      name: data.name || prev.name
-                    }))
-                    setStreamingContent(data.content || fullContent)
-                    setStreamingComplete(true)
-                    break
-                    
-                  case 'error':
-                    throw new Error(data.error)
-                }
-              } catch (parseError) {
-                console.warn('Failed to parse streaming data:', parseError)
-              }
-            }
-          }
-        }
-      } finally {
-        reader.releaseLock()
-      }
-
-      setAiPrompt('')
-    } catch (err) {
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('AI generation was stopped by user')
-      } else {
-        console.error('AI generation error:', err)
-        setError(err instanceof Error ? err.message : 'Failed to generate content with AI')
-      }
+      
+      if (!response.ok) throw new Error('Failed to generate template')
+      
+      const data = await response.json()
+      
+      // Update form data with generated content
+      setFormData(prev => ({
+        ...prev,
+        content: data.content,
+        subject_line: data.subject_line || prev.subject_line
+      }))
+      
+      // Switch to preview tab to show the generated content
+      setActiveTab('preview')
+    } catch (error) {
+      console.error('Error generating template:', error)
+      alert('Failed to generate template content')
     } finally {
-      setIsGeneratingAI(false)
-      abortControllerRef.current = null
+      setIsGenerating(false)
     }
   }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsSubmitting(true)
-    setError('')
-
-    try {
-      // Validate required fields
-      if (!formData.name || !formData.subject || !formData.content || !formData.template_type) {
-        throw new Error('Please fill in all required fields')
-      }
-
-      const response = await fetch('/api/templates', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create template')
-      }
-
-      router.push('/templates')
-    } catch (err) {
-      console.error('Submit error:', err)
-      setError(err instanceof Error ? err.message : 'Failed to create template')
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  // Function to render preview content with sample data
-  const renderPreviewContent = (htmlContent: string) => {
-    // Replace common template variables with sample data for preview
-    const previewContent = htmlContent
-      .replace(/\{\{first_name\}\}/g, 'John')
-      .replace(/\{\{last_name\}\}/g, 'Doe')
-      .replace(/\{\{email\}\}/g, 'john.doe@example.com')
-      .replace(/\{\{company_name\}\}/g, 'Your Company')
-      .replace(/\{\{unsubscribe_url\}\}/g, '#')
-      .replace(/\{\{website_url\}\}/g, 'https://yourwebsite.com')
-
-    return previewContent
-  }
-
-  // Get the content to display (either final form content or streaming content)
-  const displayContent = isGeneratingAI ? streamingContent : formData.content
 
   return (
-    <div className="card max-w-4xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Email Template</h2>
-      
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="mb-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Create New Template</h1>
+            <p className="text-slate-600 mt-1">Design a new email template for your campaigns</p>
+          </div>
+          <button
+            onClick={() => router.push('/templates')}
+            className="btn-outline"
+          >
+            Back to Templates
+          </button>
+        </div>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Basic Information */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label htmlFor="name">Template Name *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              placeholder="Enter template name"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="template_type">Template Type *</Label>
-            <Select 
-              value={formData.template_type} 
-              onValueChange={(value) => handleInputChange('template_type', value)}
-              required
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select template type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                <SelectItem value="Newsletter">Newsletter</SelectItem>
-                <SelectItem value="Promotional">Promotional</SelectItem>
-                <SelectItem value="Transactional">Transactional</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="subject">Email Subject *</Label>
-          <Input
-            id="subject"
-            value={formData.subject}
-            onChange={(e) => handleInputChange('subject', e.target.value)}
-            placeholder="Enter email subject line"
-            required
-          />
-        </div>
-
-        {/* AI Content Generation */}
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Wand2 className="h-5 w-5 text-blue-600" />
-              <Label className="text-blue-800 font-medium">Generate Content with AI</Label>
-            </div>
-            
-            {isGeneratingAI && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={stopAIGeneration}
-                className="text-red-600 border-red-300 hover:bg-red-50"
-              >
-                <Square className="mr-2 h-4 w-4" />
-                Stop Generation
-              </Button>
-            )}
-          </div>
-          
-          <div className="space-y-3">
-            <Textarea
-              value={aiPrompt}
-              onChange={(e) => setAiPrompt(e.target.value)}
-              placeholder="Describe the email you want to create (e.g., 'Create a welcome email for new subscribers to a fitness newsletter with tips and motivation')"
-              rows={3}
-              disabled={isGeneratingAI}
-            />
-            
-            <Button
-              type="button"
-              variant="outline"
-              onClick={generateWithAI}
-              disabled={isGeneratingAI || !aiPrompt.trim()}
-              className="bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-400"
-            >
-              {isGeneratingAI ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Wand2 className="mr-2 h-4 w-4" />
-                  Generate with AI
-                </>
-              )}
-            </Button>
-            
-            {isGeneratingAI && (
-              <div className="text-sm text-blue-700">
-                <p className="mb-2">✨ AI is generating your content in real-time...</p>
-                <div className="bg-white/50 rounded p-2 text-xs font-mono max-h-32 overflow-y-auto">
-                  {streamingContent || 'Starting generation...'}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Content Editor with Preview Toggle */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-lg font-medium">Email Content *</Label>
-            
-            <div className="flex items-center space-x-2 bg-gray-100 rounded-lg p-1">
-              <Button
-                type="button"
-                variant={viewMode === 'code' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('code')}
-                className="h-8"
-              >
-                <Code className="mr-1 h-4 w-4" />
-                HTML
-              </Button>
-              <Button
-                type="button"
-                variant={viewMode === 'preview' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('preview')}
-                className="h-8"
-              >
-                <Eye className="mr-1 h-4 w-4" />
-                Preview
-              </Button>
-            </div>
-          </div>
-
-          {viewMode === 'code' ? (
-            <div className="space-y-2">
-              <Textarea
-                value={displayContent}
-                onChange={(e) => handleInputChange('content', e.target.value)}
-                placeholder="Enter HTML email content..."
-                rows={12}
-                className="font-mono text-sm"
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="title" className="block text-sm font-medium text-slate-700 mb-2">
+                Template Name
+              </label>
+              <input
+                type="text"
+                id="title"
+                value={formData.title}
+                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                className="form-input w-full"
                 required
-                disabled={isGeneratingAI}
               />
-              <p className="text-sm text-gray-500">
-                Use HTML tags for formatting. Variables like {`{{first_name}}`} will be replaced when sending.
-                {isGeneratingAI && ' Content is being generated above...'}
-              </p>
             </div>
-          ) : (
-            <div className="border rounded-lg p-4 bg-white min-h-[300px]">
-              <div className="prose prose-sm max-w-none">
-                {displayContent ? (
-                  <div 
-                    dangerouslySetInnerHTML={{ __html: renderPreviewContent(displayContent) }}
-                    className="email-preview"
+
+            <div>
+              <label htmlFor="template_type" className="block text-sm font-medium text-slate-700 mb-2">
+                Template Type
+              </label>
+              <select
+                id="template_type"
+                value={formData.template_type}
+                onChange={(e) => setFormData({ ...formData, template_type: e.target.value })}
+                className="form-input w-full"
+                required
+              >
+                <option value="">Select a type</option>
+                <option value="Welcome Email">Welcome Email</option>
+                <option value="Newsletter">Newsletter</option>
+                <option value="Promotional">Promotional</option>
+                <option value="Transactional">Transactional</option>
+                <option value="Follow-up">Follow-up</option>
+                <option value="Event Invitation">Event Invitation</option>
+                <option value="Product Update">Product Update</option>
+                <option value="Survey">Survey</option>
+              </select>
+            </div>
+
+            <div>
+              <label htmlFor="subject_line" className="block text-sm font-medium text-slate-700 mb-2">
+                Subject Line
+              </label>
+              <input
+                type="text"
+                id="subject_line"
+                value={formData.subject_line}
+                onChange={(e) => setFormData({ ...formData, subject_line: e.target.value })}
+                className="form-input w-full"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {/* AI Generation Section */}
+            <AIGenerateForm
+              onGenerate={handleAIGenerate}
+              isGenerating={isGenerating}
+            />
+
+            {/* Tab Navigation */}
+            <div className="border-b border-slate-200">
+              <nav className="-mb-px flex space-x-8">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('edit')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'edit'
+                      ? 'border-slate-500 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('preview')}
+                  className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    activeTab === 'preview'
+                      ? 'border-slate-500 text-slate-900'
+                      : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'
+                  }`}
+                >
+                  <svg className="w-4 h-4 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                  Preview
+                </button>
+              </nav>
+            </div>
+
+            {/* Content Area */}
+            <div className="min-h-[400px]">
+              {activeTab === 'edit' ? (
+                <div>
+                  <label htmlFor="content" className="block text-sm font-medium text-slate-700 mb-2">
+                    Email Content (HTML)
+                  </label>
+                  <textarea
+                    id="content"
+                    value={formData.content}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                    rows={16}
+                    className="form-input w-full font-mono text-sm"
+                    placeholder="Enter your HTML email content here..."
+                    required
                   />
-                ) : (
-                  <p className="text-gray-400 italic">
-                    No content to preview. Switch to HTML mode to add content or use AI generation.
-                  </p>
-                )}
-              </div>
-              
-              {isGeneratingAI && (
-                <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-                  <div className="flex items-center space-x-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-                    <span className="text-sm text-blue-700">Generating preview in real-time...</span>
+                </div>
+              ) : (
+                <div>
+                  <div className="text-sm font-medium text-slate-700 mb-2">Preview</div>
+                  <div className="border border-slate-200 rounded-lg bg-white min-h-[400px]">
+                    {formData.content ? (
+                      <div className="p-4">
+                        <div className="bg-slate-100 p-3 rounded-lg mb-4 text-sm">
+                          <div className="font-medium text-slate-700">Subject: {formData.subject_line || 'No subject'}</div>
+                          <div className="text-slate-500 mt-1">From: your-email@yourdomain.com</div>
+                          <div className="text-slate-500">To: john.doe@example.com</div>
+                        </div>
+                        <div
+                          dangerouslySetInnerHTML={{ __html: formData.content }}
+                          className="prose prose-sm max-w-none"
+                        />
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-full text-slate-500">
+                        <div className="text-center">
+                          <svg className="w-12 h-12 mx-auto mb-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                          </svg>
+                          <p>No content to preview</p>
+                          <p className="text-sm">Add content in the Edit tab or use AI generation</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-
-        {/* Template Settings */}
-        <div className="flex items-center space-x-2">
-          <Checkbox
-            id="active"
-            checked={formData.active}
-            onCheckedChange={(checked) => handleInputChange('active', checked as boolean)}
-          />
-          <Label htmlFor="active">Active template (available for campaigns)</Label>
-        </div>
-
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-600">{error}</p>
           </div>
-        )}
+        </div>
 
-        {/* Form Actions */}
-        <div className="flex space-x-4 pt-6 border-t">
-          <Button
+        <div className="flex justify-end space-x-3 pt-6 border-t border-slate-200">
+          <button
             type="button"
-            variant="outline"
-            onClick={() => router.back()}
-            disabled={isSubmitting || isGeneratingAI}
+            onClick={() => router.push('/templates')}
+            className="btn-outline"
           >
             Cancel
-          </Button>
-          <Button
+          </button>
+          <button
             type="submit"
-            disabled={isSubmitting || isGeneratingAI}
+            disabled={saving || isGenerating}
+            className="btn-primary"
           >
-            {isSubmitting ? (
+            {saving ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Creating...
+                <svg className="animate-spin -ml-1 mr-3 h-4 w-4" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Saving...
               </>
             ) : (
               'Create Template'
             )}
-          </Button>
+          </button>
         </div>
       </form>
-
-      <style>{`
-        .email-preview img {
-          max-width: 100%;
-          height: auto;
-        }
-        .email-preview table {
-          border-collapse: collapse;
-          width: 100%;
-        }
-      `}</style>
     </div>
   )
 }

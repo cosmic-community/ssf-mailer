@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { getMarketingCampaign, getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
 import EditCampaignForm from '@/components/EditCampaignForm'
+import SendCampaignButton from '@/components/SendCampaignButton'
+import DeleteCampaignButton from '@/components/DeleteCampaignButton'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -24,6 +26,27 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   if (!campaign) {
     notFound()
   }
+
+  // Generate preview content
+  const generatePreviewContent = () => {
+    if (!campaign.metadata?.template?.metadata) {
+      return { subject: 'No template selected', content: 'No template content available' }
+    }
+
+    let emailContent = campaign.metadata.template.metadata.content || ''
+    let emailSubject = campaign.metadata.template.metadata.subject || ''
+
+    // Replace template variables with sample data
+    emailContent = emailContent.replace(/\{\{first_name\}\}/g, 'John')
+    emailContent = emailContent.replace(/\{\{last_name\}\}/g, 'Doe')
+    emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, 'John')
+    emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, 'Doe')
+
+    return { subject: emailSubject, content: emailContent }
+  }
+
+  const preview = generatePreviewContent()
+  const isDraft = campaign.metadata?.status?.value === 'Draft'
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,6 +77,16 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
               }`}>
                 {campaign.metadata?.status?.value}
               </span>
+              {isDraft && (
+                <>
+                  <DeleteCampaignButton 
+                    campaignId={campaign.id}
+                    campaignName={campaign.metadata?.name || 'Campaign'}
+                    isDraft={isDraft}
+                  />
+                  <SendCampaignButton campaignId={campaign.id} />
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -99,6 +132,91 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* Email Preview */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Email Preview</h2>
+          <div className="card">
+            <div className="border-b border-gray-200 pb-4 mb-6">
+              <div className="text-sm text-gray-500 mb-2">Subject Line:</div>
+              <div className="text-lg font-semibold text-gray-900">{preview.subject}</div>
+            </div>
+            
+            <div className="text-sm text-gray-500 mb-4">Email Content:</div>
+            <div className="border rounded-lg overflow-hidden bg-white">
+              <iframe
+                srcDoc={`
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <meta name="viewport" content="width=device-width, initial-scale=1">
+                      <style>
+                        body {
+                          margin: 0;
+                          padding: 20px;
+                          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                          line-height: 1.6;
+                          color: #333;
+                          background: #ffffff;
+                        }
+                        
+                        /* Reset styles to prevent interference */
+                        * {
+                          box-sizing: border-box;
+                        }
+                        
+                        /* Common email styles */
+                        table {
+                          border-collapse: collapse;
+                          width: 100%;
+                        }
+                        
+                        img {
+                          max-width: 100%;
+                          height: auto;
+                        }
+                        
+                        a {
+                          color: #007cba;
+                          text-decoration: none;
+                        }
+                        
+                        a:hover {
+                          text-decoration: underline;
+                        }
+                        
+                        .container {
+                          max-width: 600px;
+                          margin: 0 auto;
+                        }
+                      </style>
+                    </head>
+                    <body>
+                      <div class="container">
+                        ${preview.content}
+                      </div>
+                    </body>
+                  </html>
+                `}
+                style={{
+                  width: '100%',
+                  height: '500px',
+                  border: 'none',
+                  borderRadius: '4px'
+                }}
+                title="Email Preview"
+                sandbox="allow-same-origin"
+              />
+            </div>
+            
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Template variables like {`{{first_name}}`} and {`{{last_name}}`} will be replaced with actual contact data when sent.
+              </p>
+            </div>
+          </div>
+        </div>
 
         {/* Edit Form */}
         <EditCampaignForm 

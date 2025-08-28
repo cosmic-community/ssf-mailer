@@ -153,26 +153,28 @@ export default async function HomePage() {
             <div className="p-6">
               <div className="space-y-4">
                 {contacts.slice(0, 3).map((contact: EmailContact) => (
-                  <div key={contact.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-semibold">
-                        {contact.metadata?.first_name?.charAt(0) || '?'}
+                  <Link key={contact.id} href={`/contacts/${contact.id}`} className="block">
+                    <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-semibold">
+                          {contact.metadata?.first_name?.charAt(0) || '?'}
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {contact.metadata?.first_name} {contact.metadata?.last_name}
+                          </p>
+                          <p className="text-sm text-gray-500">{contact.metadata?.email}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900">
-                          {contact.metadata?.first_name} {contact.metadata?.last_name}
-                        </p>
-                        <p className="text-sm text-gray-500">{contact.metadata?.email}</p>
-                      </div>
+                      <span className={`px-3 py-1 text-xs rounded-full font-medium ${
+                        contact.metadata?.status?.value === 'Active' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {contact.metadata?.status?.value}
+                      </span>
                     </div>
-                    <span className={`px-3 py-1 text-xs rounded-full font-medium ${
-                      contact.metadata?.status?.value === 'Active' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {contact.metadata?.status?.value}
-                    </span>
-                  </div>
+                  </Link>
                 ))}
                 {contacts.length === 0 && (
                   <div className="text-center py-8">
@@ -218,28 +220,30 @@ export default async function HomePage() {
             <div className="p-6">
               <div className="space-y-4">
                 {templates.slice(0, 3).map((template: EmailTemplate) => (
-                  <div key={template.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-slate-600 rounded-lg flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                          </svg>
+                  <Link key={template.id} href={`/templates/${template.id}/edit`} className="block">
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-slate-600 rounded-lg flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{template.metadata?.name}</p>
+                            <p className="text-xs text-gray-500">{template.metadata?.template_type?.value}</p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{template.metadata?.name}</p>
-                          <p className="text-xs text-gray-500">{template.metadata?.template_type?.value}</p>
-                        </div>
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                          template.metadata?.active 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {template.metadata?.active ? 'Active' : 'Inactive'}
+                        </span>
                       </div>
-                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                        template.metadata?.active 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {template.metadata?.active ? 'Active' : 'Inactive'}
-                      </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {templates.length === 0 && (
                   <div className="text-center py-8">
@@ -285,30 +289,32 @@ export default async function HomePage() {
             <div className="p-6">
               <div className="space-y-4">
                 {campaigns.slice(0, 3).map((campaign: MarketingCampaign) => (
-                  <div key={campaign.id} className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 bg-slate-500 rounded-lg flex items-center justify-center">
-                          <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
+                  <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
+                    <div className="p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 bg-slate-500 rounded-lg flex items-center justify-center">
+                            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{campaign.metadata?.name}</p>
+                            <p className="text-xs text-gray-500">{campaign.metadata?.template?.title}</p>
+                          </div>
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900">{campaign.metadata?.name}</p>
-                          <p className="text-xs text-gray-500">{campaign.metadata?.template?.title}</p>
-                        </div>
+                        <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                          campaign.metadata?.status?.value === 'Sent' 
+                            ? 'bg-green-100 text-green-800' 
+                            : campaign.metadata?.status?.value === 'Draft'
+                            ? 'bg-gray-100 text-gray-800'
+                            : 'bg-blue-100 text-blue-800'
+                        }`}>
+                          {campaign.metadata?.status?.value}
+                        </span>
                       </div>
-                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                        campaign.metadata?.status?.value === 'Sent' 
-                          ? 'bg-green-100 text-green-800' 
-                          : campaign.metadata?.status?.value === 'Draft'
-                          ? 'bg-gray-100 text-gray-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}>
-                        {campaign.metadata?.status?.value}
-                      </span>
                     </div>
-                  </div>
+                  </Link>
                 ))}
                 {campaigns.length === 0 && (
                   <div className="text-center py-8">
