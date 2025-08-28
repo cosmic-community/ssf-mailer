@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createEmailTemplate } from '@/lib/cosmic'
+import { createEmailTemplate, getEmailTemplates } from '@/lib/cosmic'
+
+export async function GET() {
+  try {
+    const templates = await getEmailTemplates()
+    return NextResponse.json({ templates })
+  } catch (error) {
+    console.error('Error fetching templates:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch templates' },
+      { status: 500 }
+    )
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
