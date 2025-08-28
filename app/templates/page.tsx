@@ -1,5 +1,6 @@
 import TemplatesList from '@/components/TemplatesList'
 import { getEmailTemplates } from '@/lib/cosmic'
+import Link from 'next/link'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -18,6 +19,9 @@ export default async function TemplatesPage() {
               <h1 className="text-3xl font-bold text-gray-900">Email Templates</h1>
               <p className="text-gray-600 mt-1">Create and manage your email templates</p>
             </div>
+            <Link href="/templates/new" className="btn-primary">
+              Create New Template
+            </Link>
           </div>
         </div>
       </div>
