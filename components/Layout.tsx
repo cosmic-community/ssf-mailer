@@ -31,7 +31,7 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
     { name: 'Contacts', href: '/contacts', icon: Users },
     { name: 'Templates', href: '/templates', icon: Mail },
     { name: 'Campaigns', href: '/campaigns', icon: Send },
-    { name: 'Analytics', href: '/analytics', icon: BarChart3 },
+    // { name: 'Analytics', href: '/analytics', icon: BarChart3 },
     { name: 'Settings', href: '/settings', icon: Settings },
   ]
 
