@@ -47,7 +47,7 @@ Instructions:
 - Use inline CSS for email client compatibility
 - Make improvements that enhance readability and visual appeal
 
-IMPORTANT: Return ONLY the improved HTML email template without any backticks, code block markers, or additional text. Start directly with the HTML content.`
+IMPORTANT: DO NOT include or modify any unsubscribe links - these are added automatically to all emails. Return ONLY the improved HTML email template without any backticks, code block markers, or additional text. Start directly with the HTML content.`
 
             controller.enqueue(
               encoder.encode('data: {"type":"status","message":"Applying AI improvements...","progress":60}\n\n')
