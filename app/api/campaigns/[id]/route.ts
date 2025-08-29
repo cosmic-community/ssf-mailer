@@ -24,7 +24,7 @@ export async function PUT(
       title: body.name,
       metadata: {
         name: body.name,
-        template_id: body.template_id,
+        template: body.template_id,
         target_contacts: body.contact_ids || [],
         target_tags: body.target_tags || [],
         send_date: body.send_date || ''
