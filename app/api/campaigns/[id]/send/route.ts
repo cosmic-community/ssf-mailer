@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getMarketingCampaign, getEmailContacts, updateCampaignStatus, getSettings } from '@/lib/cosmic'
 import { sendEmail } from '@/lib/resend'
+import { addTrackingToEmail } from '@/lib/email-tracking'
 import { EmailContact, CampaignStats } from '@/types'
 
 interface ResendSuccessResponse {
@@ -103,6 +104,9 @@ export async function POST(
       )
     }
 
+    // Get base URL for tracking
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
     // Update campaign status to 'Sending'
     await updateCampaignStatus(id, 'Sent', {
       sent: 0,
@@ -128,13 +132,14 @@ export async function POST(
           ) as EmailContact | undefined
 
           const firstName = contact?.metadata?.first_name || 'there'
+          const contactId = contact?.id || 'unknown'
 
           // Personalize content
           let personalizedContent = template.metadata.content
           personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, firstName)
 
           // Add unsubscribe link
-          const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
+          const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
           const unsubscribeFooter = `
             <div style="margin-top: 40px; padding: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
               <p style="margin: 0 0 10px 0;">
@@ -149,17 +154,26 @@ export async function POST(
 
           personalizedContent += unsubscribeFooter
 
+          // Add tracking to email content
+          const trackedContent = addTrackingToEmail(
+            personalizedContent,
+            id, // campaignId
+            contactId, // contactId
+            baseUrl // baseUrl for tracking endpoints
+          )
+
           // Fix: Create proper SendEmailOptions with required text field
           const emailOptions = {
             from: `${fromName} <${fromEmail}>`,
             to: [email],
             subject: template.metadata.subject,
-            html: personalizedContent,
-            text: personalizedContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
+            html: trackedContent, // Use tracked content with open/click tracking
+            text: trackedContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
             reply_to: replyToEmail,
             headers: {
               'X-Campaign-ID': id,
-              'X-Contact-Email': email
+              'X-Contact-Email': email,
+              'X-Contact-ID': contactId
             }
           }
 
