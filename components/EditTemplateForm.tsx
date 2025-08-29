@@ -268,77 +268,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </div>
       )}
 
-      {/* Top Input Fields */}
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          {/* Template Name */}
-          <div className="space-y-2">
-            <Label htmlFor="name">Template Name *</Label>
-            <Input
-              id="name"
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleInputChange('name', e.target.value)}
-              placeholder="Enter template name"
-              disabled={isPending}
-              required
-            />
-          </div>
-
-          {/* Subject Line */}
-          <div className="space-y-2">
-            <Label htmlFor="subject">Email Subject *</Label>
-            <Input
-              id="subject"
-              type="text"
-              value={formData.subject}
-              onChange={(e) => handleInputChange('subject', e.target.value)}
-              placeholder="Enter email subject line"
-              disabled={isPending}
-              required
-            />
-          </div>
-
-          {/* Active Toggle */}
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-            <div className="space-y-1">
-              <Label htmlFor="active" className="text-base font-medium">
-                Active Template
-              </Label>
-              <p className="text-sm text-gray-600">
-                Active templates are available for creating campaigns
-              </p>
-            </div>
-            <Switch
-              id="active"
-              checked={formData.active}
-              onCheckedChange={(checked) => handleInputChange('active', checked)}
-              disabled={isPending}
-            />
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex space-x-4 pt-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => router.back()}
-              disabled={isPending}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="bg-slate-800 hover:bg-slate-900 text-white"
-            >
-              {isPending ? 'Updating...' : 'Update Template'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Error Messages */}
       {error && (
         <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -358,8 +287,101 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: AI Content Editor */}
+        {/* Left Column: Template Info Section */}
         <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              {/* Template Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Template Name *</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="Enter template name"
+                  disabled={isPending}
+                  required
+                />
+              </div>
+
+              {/* Template Type - Moved here */}
+              <div className="space-y-2">
+                <Label htmlFor="template_type">Template Type</Label>
+                <Select 
+                  value={formData.template_type} 
+                  onValueChange={(value) => handleInputChange('template_type', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                    <SelectItem value="Newsletter">Newsletter</SelectItem>
+                    <SelectItem value="Promotional">Promotional</SelectItem>
+                    <SelectItem value="Transactional">Transactional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Subject Line */}
+              <div className="space-y-2">
+                <Label htmlFor="subject">Email Subject *</Label>
+                <Input
+                  id="subject"
+                  type="text"
+                  value={formData.subject}
+                  onChange={(e) => handleInputChange('subject', e.target.value)}
+                  placeholder="Enter email subject line"
+                  disabled={isPending}
+                  required
+                />
+              </div>
+
+              {/* Active Toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="active" className="text-base font-medium">
+                    Active Template
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    Active templates are available for creating campaigns
+                  </p>
+                </div>
+                <Switch
+                  id="active"
+                  checked={formData.active}
+                  onCheckedChange={(checked) => handleInputChange('active', checked)}
+                  disabled={isPending}
+                />
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex space-x-4 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isPending}
+                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  {isPending ? 'Updating...' : 'Update Template'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: AI Editor and Preview/Edit */}
+        <div className="space-y-6">
+          {/* AI Content Editor */}
           <Card className="border-purple-200 bg-purple-50/50">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-purple-800">
@@ -416,10 +438,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </Button>
             </CardContent>
           </Card>
-        </div>
 
-        {/* Right Column: Preview / Edit */}
-        <div className="space-y-6">
+          {/* Preview / Edit Tabs */}
           <Card>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
@@ -467,25 +487,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
               <TabsContent value="edit" className="mt-6 p-6">
                 <div className="space-y-6">
-                  {/* Template Type */}
-                  <div className="space-y-2">
-                    <Label htmlFor="template_type">Template Type</Label>
-                    <Select 
-                      value={formData.template_type} 
-                      onValueChange={(value) => handleInputChange('template_type', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select template type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                        <SelectItem value="Newsletter">Newsletter</SelectItem>
-                        <SelectItem value="Promotional">Promotional</SelectItem>
-                        <SelectItem value="Transactional">Transactional</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
                   {/* Email Content */}
                   <div className="space-y-2">
                     <Label htmlFor="content">Email Content *</Label>
