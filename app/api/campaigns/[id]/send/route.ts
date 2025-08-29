@@ -1,50 +1,18 @@
 // app/api/campaigns/[id]/send/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getMarketingCampaign, updateCampaignStatus, getSettings } from '@/lib/cosmic'
+import { getMarketingCampaign, getEmailContacts, updateCampaignStatus, getSettings, getEmailTemplate } from '@/lib/cosmic'
 import { resend } from '@/lib/resend'
-
-// Helper function to generate unsubscribe token
-function generateUnsubscribeToken(email: string): string {
-  return Buffer.from(email + process.env.COSMIC_BUCKET_SLUG).toString('base64')
-}
-
-// Helper function to add unsubscribe link to email content
-function addUnsubscribeLink(content: string, email: string): string {
-  const token = generateUnsubscribeToken(email)
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
-  
-  // Create unsubscribe footer
-  const unsubscribeFooter = `
-    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
-      <p>
-        You received this email because you subscribed to our mailing list.
-        <br>
-        <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a>
-        from future emails.
-      </p>
-    </div>
-  `
-
-  // If content already contains closing body tag, insert before it
-  if (content.includes('</body>')) {
-    return content.replace('</body>', `${unsubscribeFooter}</body>`)
-  } else {
-    // Otherwise, append at the end
-    return content + unsubscribeFooter
-  }
-}
+import { addTrackingToEmail, extractTextFromHtml, createUnsubscribeUrl } from '@/lib/email-tracking'
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
-    const { id } = await params
+    const { id } = params
     
-    // Get campaign data
+    // Get campaign details
     const campaign = await getMarketingCampaign(id)
-    
     if (!campaign) {
       return NextResponse.json(
         { error: 'Campaign not found' },
@@ -52,123 +20,155 @@ export async function POST(
       )
     }
 
-    if (campaign.metadata.status.value !== 'Draft') {
+    // Check if campaign is already sent
+    if (campaign.metadata?.status?.value === 'Sent') {
       return NextResponse.json(
-        { error: 'Campaign has already been sent or is not in draft status' },
+        { error: 'Campaign has already been sent' },
         { status: 400 }
       )
     }
 
-    // Get settings for from name and email
-    const settings = await getSettings()
-    const fromName = settings?.metadata.from_name || 'Your Company'
-    const fromEmail = settings?.metadata.from_email || 'noreply@cosmicjs.com'
-    const replyToEmail = settings?.metadata.reply_to_email || fromEmail
+    // Get the email template
+    let template = null
+    if (campaign.metadata?.template_id) {
+      template = await getEmailTemplate(campaign.metadata.template_id)
+    } else if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+      template = campaign.metadata.template
+    }
 
-    const template = campaign.metadata.template
-    const targetContacts = campaign.metadata.target_contacts || []
+    if (!template) {
+      return NextResponse.json(
+        { error: 'Email template not found' },
+        { status: 404 }
+      )
+    }
+
+    // Get settings for sender information
+    const settings = await getSettings()
+    if (!settings?.metadata?.from_email) {
+      return NextResponse.json(
+        { error: 'Sender email not configured in settings' },
+        { status: 400 }
+      )
+    }
+
+    // Get target contacts
+    let targetContacts = []
+    
+    if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
+      // Handle both contact objects and contact IDs
+      for (const contact of campaign.metadata.target_contacts) {
+        if (typeof contact === 'string') {
+          // It's a contact ID, fetch the contact
+          const allContacts = await getEmailContacts()
+          const foundContact = allContacts.find(c => c.id === contact)
+          if (foundContact && foundContact.metadata?.status?.value === 'Active') {
+            targetContacts.push(foundContact)
+          }
+        } else if (contact && contact.metadata?.email) {
+          // It's a contact object
+          if (contact.metadata?.status?.value === 'Active') {
+            targetContacts.push(contact)
+          }
+        }
+      }
+    }
 
     if (targetContacts.length === 0) {
       return NextResponse.json(
-        { error: 'No target contacts specified for this campaign' },
+        { error: 'No active contacts found for this campaign' },
         { status: 400 }
       )
     }
 
-    if (!template || !template.metadata) {
-      return NextResponse.json(
-        { error: 'Campaign template not found or invalid' },
-        { status: 400 }
-      )
-    }
+    // Prepare email details
+    const fromEmail = settings.metadata.from_email
+    const fromName = settings.metadata.from_name || 'Email Marketing'
+    const replyToEmail = settings.metadata.reply_to_email || fromEmail
+    const subject = template.metadata?.subject || 'Newsletter'
+    const baseUrl = process.env.VERCEL_URL ? 
+      `https://${process.env.VERCEL_URL}` : 
+      'http://localhost:3000'
 
-    let sent = 0
-    let failed = 0
-    const errors: string[] = []
+    let emailsSent = 0
+    let emailsDelivered = 0
+    let emailsBounced = 0
 
-    // Send emails to each contact
+    // Send emails to all target contacts
     for (const contact of targetContacts) {
-      if (!contact.metadata?.email) {
-        failed++
-        errors.push(`Contact ${contact.title} has no email address`)
-        continue
-      }
-
-      // Skip unsubscribed contacts
-      if (contact.metadata.status?.value === 'Unsubscribed') {
-        continue
-      }
-
       try {
-        // Replace template variables in content
-        let emailContent = template.metadata.content || ''
-        let emailSubject = template.metadata.subject || ''
-
-        if (contact.metadata.first_name) {
-          emailContent = emailContent.replace(/\{\{first_name\}\}/g, contact.metadata.first_name)
-          emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name)
+        if (!contact.metadata?.email) {
+          console.warn(`Contact ${contact.id} has no email address`)
+          continue
         }
 
-        if (contact.metadata.last_name) {
-          emailContent = emailContent.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
-          emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
-        }
+        // Personalize the email content
+        let personalizedContent = template.metadata?.content || ''
+        
+        // Replace common placeholders
+        personalizedContent = personalizedContent
+          .replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'Friend')
+          .replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
+          .replace(/\{\{email\}\}/g, contact.metadata.email || '')
 
-        // Add company name if available in settings
-        if (settings?.metadata.company_name) {
-          emailContent = emailContent.replace(/\{\{company_name\}\}/g, settings.metadata.company_name)
-          emailSubject = emailSubject.replace(/\{\{company_name\}\}/g, settings.metadata.company_name)
-        }
+        // Add tracking to the email
+        const trackedContent = addTrackingToEmail(
+          personalizedContent,
+          campaign.id,
+          contact.id,
+          baseUrl
+        )
 
-        // Add unsubscribe link to email content
-        emailContent = addUnsubscribeLink(emailContent, contact.metadata.email)
+        // Add unsubscribe link
+        const unsubscribeUrl = createUnsubscribeUrl(contact.metadata.email, baseUrl)
+        const contentWithUnsubscribe = trackedContent + `
+          <div style="text-align: center; padding: 20px; font-size: 12px; color: #666;">
+            <p>If you no longer wish to receive these emails, you can <a href="${unsubscribeUrl}" style="color: #666; text-decoration: underline;">unsubscribe here</a>.</p>
+          </div>
+        `
 
-        // Send email with proper error handling for Resend API
+        // Send the email
         const result = await resend.emails.send({
           from: `${fromName} <${fromEmail}>`,
           to: contact.metadata.email,
-          subject: emailSubject,
-          html: emailContent,
+          subject: subject,
+          html: contentWithUnsubscribe,
+          text: extractTextFromHtml(contentWithUnsubscribe),
           reply_to: replyToEmail,
         })
 
-        // If we get here, the email was sent successfully
-        if (result && typeof result === 'object' && 'id' in result) {
-          sent++
-        } else {
-          failed++
-          errors.push(`Failed to send to ${contact.metadata.email}: Unexpected response format`)
-        }
+        emailsSent++
+        emailsDelivered++ // Assume delivered if no immediate error
 
-      } catch (error) {
-        failed++
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        errors.push(`Failed to send to ${contact.metadata.email}: ${errorMessage}`)
-        console.error(`Email send error for ${contact.metadata.email}:`, error)
+        console.log(`Email sent successfully to ${contact.metadata.email}:`, result.id)
+      } catch (error: any) {
+        console.error(`Failed to send email to ${contact.metadata?.email}:`, error)
+        emailsBounced++
+        emailsSent++ // Still count as sent attempt
       }
     }
 
-    // Update campaign status and stats
+    // Update campaign stats and status
     const stats = {
-      sent,
-      delivered: sent, // Assume all sent emails are delivered for now
+      sent: emailsSent,
+      delivered: emailsDelivered,
       opened: 0,
       clicked: 0,
-      bounced: failed,
+      bounced: emailsBounced,
       unsubscribed: 0,
       open_rate: '0%',
       click_rate: '0%'
     }
 
-    await updateCampaignStatus(id, 'Sent', stats)
+    await updateCampaignStatus(campaign.id, 'Sent', stats)
 
     return NextResponse.json({
       success: true,
-      message: `Campaign sent successfully. ${sent} emails sent, ${failed} failed.`,
+      message: `Campaign sent successfully to ${emailsDelivered} recipients`,
       stats: {
-        sent,
-        failed,
-        errors: errors.slice(0, 10) // Limit error messages to first 10
+        sent: emailsSent,
+        delivered: emailsDelivered,
+        bounced: emailsBounced
       }
     })
 
