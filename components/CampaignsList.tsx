@@ -57,9 +57,9 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                                    (campaign.metadata?.target_tags?.length || 0)
 
               return (
-                <tr key={campaign.id} className="hover:bg-gray-50 cursor-pointer">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                <Link key={campaign.id} href={`/campaigns/${campaign.id}`}>
+                  <tr className="hover:bg-gray-50 cursor-pointer">
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
                           {campaign.metadata?.name}
@@ -68,25 +68,19 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                           Created {new Date(campaign.created_at).toLocaleDateString()}
                         </div>
                       </div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
                         {campaign.metadata?.template?.title || 'No template'}
                       </div>
                       <div className="text-sm text-gray-500">
                         {campaign.metadata?.template?.metadata?.template_type?.value}
                       </div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {recipientCount} contacts
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
                         campaign.metadata?.status?.value === 'Sent' 
                           ? 'bg-green-100 text-green-800' 
@@ -100,18 +94,14 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                       }`}>
                         {campaign.metadata?.status?.value}
                       </span>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {campaign.metadata?.send_date ? 
                         new Date(campaign.metadata.send_date).toLocaleDateString() : 
                         'Not scheduled'
                       }
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       {campaign.metadata?.stats && Object.keys(campaign.metadata.stats).length > 0 ? (
                         <div className="text-sm">
                           <div className="text-gray-900">
@@ -124,9 +114,9 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                       ) : (
                         <span className="text-sm text-gray-500">No stats</span>
                       )}
-                    </Link>
-                  </td>
-                </tr>
+                    </td>
+                  </tr>
+                </Link>
               )
             })}
           </tbody>
