@@ -27,6 +27,7 @@ export default function CreateTemplateForm() {
   const [streamingContent, setStreamingContent] = useState('')
   const [aiStatus, setAiStatus] = useState('')
   const [aiProgress, setAiProgress] = useState(0)
+  const [hasGeneratedContent, setHasGeneratedContent] = useState(false)
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -188,6 +189,7 @@ export default function CreateTemplateForm() {
                   setAIPrompt('')
                   setAiStatus('Generation complete!')
                   setAiProgress(100)
+                  setHasGeneratedContent(true)
                   showToast('AI content generated successfully!')
                   
                   // Auto-resize content textarea after update
@@ -395,87 +397,90 @@ export default function CreateTemplateForm() {
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: AI Content Generator */}
+        {/* Left Column: AI Content Generator and Editor */}
         <div className="space-y-6">
-          <Card className="border-blue-200 bg-blue-50/50">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2 text-blue-800">
-                <Sparkles className="h-5 w-5" />
-                <span>AI Content Generator</span>
-              </CardTitle>
-              <p className="text-blue-700 text-sm">
-                Describe what you want to create with Cosmic AI
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Template Type</Label>
-                <Select
-                  value={formData.template_type}
-                  onValueChange={(value) => handleInputChange('template_type', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Newsletter">Newsletter</SelectItem>
-                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                    <SelectItem value="Promotional">Promotional</SelectItem>
-                    <SelectItem value="Transactional">Transactional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              
-              <div className="space-y-2">
-                <Textarea
-                  ref={aiPromptRef}
-                  placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
-                  value={aiPrompt}
-                  onChange={(e) => {
-                    setAIPrompt(e.target.value)
-                    autoResize(e.target)
-                  }}
-                  onFocus={() => handleAISectionFocus(aiPromptRef)}
-                  className="min-h-[80px] resize-none"
-                  disabled={isAIGenerating}
-                />
-              </div>
-              
-              {/* AI Status Display */}
-              {(isAIGenerating && aiStatus) && (
-                <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-blue-800">{aiStatus}</span>
-                    <span className="text-xs text-blue-600">{aiProgress}%</span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${aiProgress}%` }}
-                    ></div>
-                  </div>
+          {/* AI Content Generator - Only show when no content has been generated */}
+          {!hasGeneratedContent && (
+            <Card className="border-blue-200 bg-blue-50/50">
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2 text-blue-800">
+                  <Sparkles className="h-5 w-5" />
+                  <span>AI Content Generator</span>
+                </CardTitle>
+                <p className="text-blue-700 text-sm">
+                  Describe what you want to create with Cosmic AI
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Template Type</Label>
+                  <Select
+                    value={formData.template_type}
+                    onValueChange={(value) => handleInputChange('template_type', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Newsletter">Newsletter</SelectItem>
+                      <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                      <SelectItem value="Promotional">Promotional</SelectItem>
+                      <SelectItem value="Transactional">Transactional</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              )}
-              
-              <Button 
-                onClick={handleAIGenerate}
-                disabled={isAIGenerating || !aiPrompt.trim()}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-              >
-                {isAIGenerating ? (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                    Generating with Cosmic AI...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generate with Cosmic AI
-                  </>
+                
+                <div className="space-y-2">
+                  <Textarea
+                    ref={aiPromptRef}
+                    placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
+                    value={aiPrompt}
+                    onChange={(e) => {
+                      setAIPrompt(e.target.value)
+                      autoResize(e.target)
+                    }}
+                    onFocus={() => handleAISectionFocus(aiPromptRef)}
+                    className="min-h-[80px] resize-none"
+                    disabled={isAIGenerating}
+                  />
+                </div>
+                
+                {/* AI Status Display */}
+                {(isAIGenerating && aiStatus) && (
+                  <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-blue-800">{aiStatus}</span>
+                      <span className="text-xs text-blue-600">{aiProgress}%</span>
+                    </div>
+                    <div className="w-full bg-blue-200 rounded-full h-2">
+                      <div 
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                        style={{ width: `${aiProgress}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 )}
-              </Button>
-            </CardContent>
-          </Card>
+                
+                <Button 
+                  onClick={handleAIGenerate}
+                  disabled={isAIGenerating || !aiPrompt.trim()}
+                  className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  {isAIGenerating ? (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                      Generating with Cosmic AI...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate with Cosmic AI
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
 
           {/* AI Content Editor - Only show when content exists */}
           {formData.content && (
