@@ -21,12 +21,14 @@ export function addTrackingToEmail(
   trackedContent = trackedContent.replace(
     /href="([^"]+)"/g,
     (match, url) => {
-      // Skip tracking pixels, mailto links, and tel links
+      // Skip tracking pixels, mailto links, tel links, anchors, and unsubscribe links
       if (
         url.includes('/api/track/open') ||
         url.startsWith('mailto:') ||
         url.startsWith('tel:') ||
-        url.startsWith('#')
+        url.startsWith('#') ||
+        url.includes('/unsubscribe') ||
+        url.includes('/api/unsubscribe')
       ) {
         return match
       }
