@@ -25,10 +25,15 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
     schedule_type: 'now' // 'now' or 'scheduled'
   })
 
-  // Get unique tags from contacts
+  // Filter out unsubscribed contacts
+  const activeContacts = contacts.filter(contact => 
+    contact.metadata?.status?.value !== 'Unsubscribed'
+  )
+
+  // Get unique tags from active contacts only
   const uniqueTags = Array.from(
     new Set(
-      contacts
+      activeContacts
         .flatMap(contact => contact.metadata?.tags || [])
         .filter(Boolean)
     )
@@ -176,13 +181,24 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Contacts ({formData.contact_ids.length} selected)
             </label>
+            {contacts.length > activeContacts.length && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> {contacts.length - activeContacts.length} unsubscribed contact{contacts.length - activeContacts.length !== 1 ? 's are' : ' is'} hidden from selection.
+                </p>
+              </div>
+            )}
             <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
-              {contacts.length === 0 ? (
+              {activeContacts.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  No contacts available. <a href="/contacts/new" className="text-primary-600 hover:text-primary-700">Add contacts first</a>.
+                  {contacts.length === 0 ? (
+                    <>No contacts available. <a href="/contacts/new" className="text-primary-600 hover:text-primary-700">Add contacts first</a>.</>
+                  ) : (
+                    <>No active contacts available. All contacts are unsubscribed.</>
+                  )}
                 </p>
               ) : (
-                contacts.map((contact) => (
+                activeContacts.map((contact) => (
                   <label key={contact.id} className="flex items-center">
                     <input
                       type="checkbox"
@@ -193,6 +209,16 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                     <span className="ml-2 text-sm text-gray-700">
                       {contact.metadata?.first_name} {contact.metadata?.last_name} 
                       <span className="text-gray-500">({contact.metadata?.email})</span>
+                      {contact.metadata?.status?.value === 'Active' && (
+                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                          Active
+                        </span>
+                      )}
+                      {contact.metadata?.status?.value === 'Bounced' && (
+                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                          Bounced
+                        </span>
+                      )}
                     </span>
                   </label>
                 ))
@@ -207,10 +233,17 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Tags ({formData.target_tags.length} selected)
             </label>
+            {contacts.length > activeContacts.length && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> Tags are based on active contacts only. Unsubscribed contacts will not receive emails even if they have matching tags.
+                </p>
+              </div>
+            )}
             <div className="space-y-2">
               {uniqueTags.length === 0 ? (
                 <p className="text-sm text-gray-500">
-                  No tags available. Add tags to your contacts first.
+                  No tags available. Add tags to your active contacts first.
                 </p>
               ) : (
                 uniqueTags.map((tag) => (
