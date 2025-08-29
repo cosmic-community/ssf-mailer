@@ -258,9 +258,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         setSuccess('Template updated successfully!')
         showToast()
         
-        // Redirect to templates list after a short delay
+        // Redirect to templates list after a short delay and refresh data
         setTimeout(() => {
           router.push('/templates')
+          router.refresh() // Ensure fresh data is fetched
         }, 1500)
 
       } catch (error) {
@@ -289,8 +290,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         throw new Error(errorData.error || 'Failed to delete template')
       }
 
-      // Redirect to templates list
+      // Redirect to templates list and refresh data
       router.push('/templates')
+      router.refresh() // Ensure fresh data is fetched
     } catch (error) {
       console.error('Delete error:', error)
       setError(error instanceof Error ? error.message : 'Failed to delete template')

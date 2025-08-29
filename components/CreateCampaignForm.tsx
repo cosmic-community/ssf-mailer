@@ -105,13 +105,10 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
       addToast('Campaign created successfully!', 'success')
       scrollToTop()
       
-      // Navigate to campaigns page after a short delay
+      // Navigate to campaigns page after a short delay and refresh data
       setTimeout(() => {
         router.push('/campaigns')
-        // Force refresh to show the new campaign immediately
-        setTimeout(() => {
-          router.refresh()
-        }, 500)
+        router.refresh() // Ensure fresh data is fetched
       }, 1500)
     } catch (err: any) {
       console.error('Campaign creation error:', err)

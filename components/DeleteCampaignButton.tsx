@@ -31,17 +31,9 @@ export default function DeleteCampaignButton({ campaignId, campaignName, isDraft
         throw new Error(error.error || 'Failed to delete campaign')
       }
 
-      // Force refresh to get the latest data
-      router.refresh()
-      
-      // Redirect to campaigns list
+      // Redirect to campaigns list and refresh data
       router.push('/campaigns')
-      
-      // Additional refresh after navigation to ensure fresh data
-      setTimeout(() => {
-        router.refresh()
-      }, 1000)
-      
+      router.refresh() // Ensure fresh data is fetched
     } catch (error) {
       console.error('Delete error:', error)
       alert(error instanceof Error ? error.message : 'Failed to delete campaign')

@@ -113,13 +113,10 @@ export default function CreateTemplateForm() {
       addToast('Template created successfully!', 'success')
       scrollToTop()
       
-      // Navigate to templates page after a short delay
+      // Navigate to templates page after a short delay and refresh data
       setTimeout(() => {
         router.push('/templates')
-        // Force refresh to show the new template immediately
-        setTimeout(() => {
-          router.refresh()
-        }, 500)
+        router.refresh() // Ensure fresh data is fetched
       }, 1500)
     } catch (err: any) {
       addToast(err.message || 'Failed to create template. Please try again.', 'error')

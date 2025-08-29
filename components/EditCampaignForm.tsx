@@ -105,7 +105,9 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
         throw new Error('Failed to update campaign')
       }
 
+      // Navigate back and refresh data
       router.push('/campaigns')
+      router.refresh() // Ensure fresh data is fetched
     } catch (err) {
       setError('Failed to update campaign. Please try again.')
       console.error('Campaign update error:', err)
