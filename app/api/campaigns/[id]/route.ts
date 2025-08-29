@@ -19,12 +19,12 @@ export async function PUT(
       )
     }
 
-    // Update the campaign - only include changed fields
+    // Update the campaign - only include changed fields, use template_id instead of template object
     const result = await cosmic.objects.updateOne(id, {
       title: body.name,
       metadata: {
         name: body.name,
-        template: body.template_id,
+        template_id: body.template_id,
         target_contacts: body.contact_ids || [],
         target_tags: body.target_tags || [],
         send_date: body.send_date || ''

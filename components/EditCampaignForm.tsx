@@ -18,7 +18,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   
   const [formData, setFormData] = useState({
     name: campaign.metadata?.name || '',
-    template_id: campaign.metadata?.template?.id || '',
+    template_id: campaign.metadata?.template_id || '',
     target_type: campaign.metadata?.target_contacts?.length ? 'contacts' : 'tags',
     contact_ids: campaign.metadata?.target_contacts?.map(c => c.id) || [],
     target_tags: campaign.metadata?.target_tags || [],

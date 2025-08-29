@@ -49,12 +49,12 @@ export interface EmailTemplate extends CosmicObject {
   };
 }
 
-// Marketing Campaign interface
+// Marketing Campaign interface - Updated to use template_id instead of template object
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
-    template: EmailTemplate;
+    template_id: string; // Changed from template: EmailTemplate to template_id: string
     target_contacts?: EmailContact[];
     target_tags?: string[];
     status: {

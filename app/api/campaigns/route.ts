@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get the template to include in campaign metadata
+    // Get the template to validate it exists
     console.log('Fetching template with ID:', body.template_id)
     const template = await getEmailTemplate(body.template_id)
     if (!template) {
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     }
     console.log('Template found:', template.metadata?.name)
 
-    // Create the campaign
+    // Create the campaign using template ID, not the full object
     console.log('Creating campaign with data:', {
       name: body.name,
       template_id: body.template_id,
