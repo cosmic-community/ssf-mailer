@@ -237,18 +237,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </div>
       )}
 
-      {/* Unsubscribe Notice */}
-      <div className="flex items-start space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-blue-800 font-medium">Automatic Unsubscribe Links</p>
-          <p className="text-blue-700 text-sm">
-            All emails sent through campaigns will automatically include an unsubscribe link in the footer. 
-            Recipients can easily opt out of future communications with one click.
-          </p>
-        </div>
-      </div>
-
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
