@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
 
     // Get existing contacts to check for duplicates
     const existingContacts = await getEmailContacts()
-    const existingEmails = new Set(existingContacts.map(c => c.metadata?.email?.toLowerCase()))
+    const existingEmails = new Set(existingContacts.map(c => c.metadata?.email?.toLowerCase()).filter(Boolean))
 
     const contacts: any[] = []
     const errors: string[] = []
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
             contact.last_name = value || ''
             break
           case 'email':
-            contact.email = value?.toLowerCase()
+            contact.email = value ? value.toLowerCase() : ''
             break
           case 'status':
             // Validate status value
@@ -136,8 +136,8 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Check for duplicates
-      if (existingEmails.has(contact.email)) {
+      // Check for duplicates - ensure contact.email exists before checking
+      if (contact.email && existingEmails.has(contact.email)) {
         duplicates.push(contact.email)
         continue
       }
@@ -152,7 +152,9 @@ export async function POST(request: NextRequest) {
       }
 
       contacts.push(contact)
-      existingEmails.add(contact.email) // Prevent duplicates within the same file
+      if (contact.email) {
+        existingEmails.add(contact.email) // Prevent duplicates within the same file
+      }
     }
 
     // If there are too many errors, abort
