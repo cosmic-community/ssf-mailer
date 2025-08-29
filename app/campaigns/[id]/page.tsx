@@ -27,14 +27,27 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
     notFound()
   }
 
-  // Generate preview content
+  console.log('Campaign data in page:', JSON.stringify(campaign.metadata, null, 2))
+
+  // Generate preview content - handle both template object and template_id
   const generatePreviewContent = () => {
-    if (!campaign.metadata?.template?.metadata) {
+    let templateData = null
+    
+    // Try to get template from campaign metadata
+    if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+      templateData = campaign.metadata.template
+    } else if (campaign.metadata?.template_id || typeof campaign.metadata?.template === 'string') {
+      // Find template by ID from the templates array
+      const templateId = campaign.metadata.template_id || campaign.metadata.template
+      templateData = templates.find(t => t.id === templateId)
+    }
+
+    if (!templateData?.metadata) {
       return { subject: 'No template selected', content: 'No template content available' }
     }
 
-    let emailContent = campaign.metadata.template.metadata.content || ''
-    let emailSubject = campaign.metadata.template.metadata.subject || ''
+    let emailContent = templateData.metadata.content || ''
+    let emailSubject = templateData.metadata.subject || ''
 
     // Replace template variables with sample data
     emailContent = emailContent.replace(/\{\{first_name\}\}/g, 'John')

@@ -16,15 +16,56 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   
+  // Get template ID from campaign metadata - handle both template_id and template object
+  const getTemplateId = () => {
+    if (campaign.metadata?.template_id) {
+      return campaign.metadata.template_id
+    }
+    if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+      return campaign.metadata.template.id
+    }
+    if (typeof campaign.metadata?.template === 'string') {
+      return campaign.metadata.template
+    }
+    return ''
+  }
+
+  // Get target contact IDs from campaign metadata - fix the contact ID extraction
+  const getTargetContactIds = () => {
+    if (!campaign.metadata?.target_contacts) return []
+    
+    // Handle array of contact objects or IDs
+    if (Array.isArray(campaign.metadata.target_contacts)) {
+      return campaign.metadata.target_contacts.map(contact => {
+        // If it's a string, it's already an ID
+        if (typeof contact === 'string') {
+          return contact
+        }
+        // If it's an object with an id property, extract the ID
+        if (contact && typeof contact === 'object' && 'id' in contact) {
+          return contact.id
+        }
+        // Fallback - return the contact as-is if it's neither
+        return contact
+      }).filter(id => typeof id === 'string') as string[]
+    }
+    
+    return []
+  }
+  
   const [formData, setFormData] = useState({
     name: campaign.metadata?.name || '',
-    template_id: campaign.metadata?.template?.id || '',
-    target_type: campaign.metadata?.target_contacts?.length ? 'contacts' : 'tags',
-    contact_ids: campaign.metadata?.target_contacts?.map(c => c.id) || [],
+    template_id: getTemplateId(),
+    target_type: (campaign.metadata?.target_contacts?.length || 0) > 0 ? 'contacts' as const : 'tags' as const,
+    contact_ids: getTargetContactIds(),
     target_tags: campaign.metadata?.target_tags || [],
     send_date: campaign.metadata?.send_date || '',
-    schedule_type: campaign.metadata?.send_date ? 'scheduled' : 'now'
+    schedule_type: campaign.metadata?.send_date ? 'scheduled' as const : 'now' as const
   })
+
+  console.log('Campaign metadata:', campaign.metadata)
+  console.log('Target contacts from metadata:', campaign.metadata?.target_contacts)
+  console.log('Form data initialized:', formData)
 
   // Filter out unsubscribed contacts
   const activeContacts = contacts.filter(contact => 
@@ -142,13 +183,26 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
               <SelectValue placeholder="Select a template" />
             </SelectTrigger>
             <SelectContent>
-              {templates.map((template) => (
-                <SelectItem key={template.id} value={template.id}>
-                  {template.metadata?.name} ({template.metadata?.template_type?.value})
+              {templates.length === 0 ? (
+                <SelectItem value="" disabled>
+                  No templates available - create a template first
                 </SelectItem>
-              ))}
+              ) : (
+                templates.map((template) => (
+                  <SelectItem key={template.id} value={template.id}>
+                    {template.metadata?.name} ({template.metadata?.template_type?.value})
+                  </SelectItem>
+                ))
+              )}
             </SelectContent>
           </Select>
+          {templates.length === 0 && (
+            <p className="mt-1 text-sm text-gray-500">
+              <a href="/templates/new" className="text-primary-600 hover:text-primary-700">
+                Create your first email template
+              </a> to get started.
+            </p>
+          )}
         </div>
 
         {/* Target Type Selection */}
@@ -163,7 +217,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 name="target_type"
                 value="contacts"
                 checked={formData.target_type === 'contacts'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -175,7 +229,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 name="target_type"
                 value="tags"
                 checked={formData.target_type === 'tags'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -285,7 +339,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 name="schedule_type"
                 value="now"
                 checked={formData.schedule_type === 'now'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -297,7 +351,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 name="schedule_type"
                 value="scheduled"
                 checked={formData.schedule_type === 'scheduled'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />

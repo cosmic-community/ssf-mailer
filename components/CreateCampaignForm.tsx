@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { EmailTemplate, EmailContact } from '@/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from '@/hooks/useToast'
+import ToastContainer from '@/components/ToastContainer'
 
 interface CreateCampaignFormProps {
   templates: EmailTemplate[]
@@ -12,17 +14,18 @@ interface CreateCampaignFormProps {
 
 export default function CreateCampaignForm({ templates, contacts }: CreateCampaignFormProps) {
   const router = useRouter()
+  const { toasts, addToast, removeToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
   
   const [formData, setFormData] = useState({
     name: '',
     template_id: '',
-    target_type: 'contacts', // 'contacts' or 'tags'
+    target_type: 'contacts' as 'contacts' | 'tags',
     contact_ids: [] as string[],
     target_tags: [] as string[],
     send_date: '',
-    schedule_type: 'now' // 'now' or 'scheduled'
+    schedule_type: 'now' as 'now' | 'scheduled'
   })
 
   // Filter out unsubscribed contacts
@@ -39,10 +42,16 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
     )
   )
 
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setIsLoading(true)
+
+    console.log('Submitting campaign creation form with data:', formData)
 
     try {
       const response = await fetch('/api/campaigns', {
@@ -59,16 +68,53 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
         }),
       })
 
-      if (!response.ok) {
-        throw new Error('Failed to create campaign')
+      console.log('Response status:', response.status)
+      const responseText = await response.text()
+      console.log('Response body:', responseText)
+
+      let responseData
+      try {
+        responseData = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error('Failed to parse response as JSON:', parseError)
+        throw new Error(`Server returned non-JSON response: ${responseText}`)
       }
 
-      // Force refresh the campaigns page by adding a timestamp to avoid cache
-      router.push('/campaigns?refresh=' + Date.now())
-      router.refresh() // Force a refresh of the current route
-    } catch (err) {
-      setError('Failed to create campaign. Please try again.')
+      if (!response.ok) {
+        console.error('Campaign creation failed:', responseData)
+        
+        // Display detailed error information
+        let errorMessage = responseData.error || 'Failed to create campaign'
+        if (responseData.details) {
+          errorMessage += `: ${responseData.details}`
+        }
+        if (responseData.cosmicError) {
+          errorMessage += ` (Cosmic API Error: ${responseData.cosmicError.status} ${responseData.cosmicError.statusText})`
+        }
+        if (responseData.networkError) {
+          errorMessage += ` (Network Error: ${responseData.networkError})`
+        }
+        
+        setError(errorMessage)
+        addToast(errorMessage, 'error')
+        scrollToTop()
+        return
+      }
+
+      console.log('Campaign created successfully:', responseData)
+      addToast('Campaign created successfully!', 'success')
+      scrollToTop()
+      
+      // Navigate to campaigns page after a short delay
+      setTimeout(() => {
+        router.push('/campaigns')
+      }, 1500)
+    } catch (err: any) {
       console.error('Campaign creation error:', err)
+      const errorMessage = `Failed to create campaign: ${err.message || 'Unknown error occurred'}`
+      setError(errorMessage)
+      addToast(errorMessage, 'error')
+      scrollToTop()
     } finally {
       setIsLoading(false)
     }
@@ -93,239 +139,263 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
   }
 
   return (
-    <div className="card max-w-4xl">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6">Campaign Details</h2>
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
       
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600">{error}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Campaign Name */}
-        <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-            Campaign Name
-          </label>
-          <input
-            type="text"
-            id="name"
-            required
-            className="form-input"
-            value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-            placeholder="Enter campaign name"
-          />
-        </div>
-
-        {/* Template Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email Template
-          </label>
-          <Select
-            value={formData.template_id}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, template_id: value }))}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a template" />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.map((template) => (
-                <SelectItem key={template.id} value={template.id}>
-                  {template.metadata?.name} ({template.metadata?.template_type?.value})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          {templates.length === 0 && (
-            <p className="text-sm text-gray-500 mt-2">
-              No templates available. <a href="/templates/new" className="text-primary-600 hover:text-primary-700">Create one first</a>.
-            </p>
-          )}
-        </div>
-
-        {/* Target Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Target Audience
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="target_type"
-                value="contacts"
-                checked={formData.target_type === 'contacts'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value }))}
-                className="form-radio"
-              />
-              <span className="ml-2 text-sm text-gray-700">Select specific contacts</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="target_type"
-                value="tags"
-                checked={formData.target_type === 'tags'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value }))}
-                className="form-radio"
-              />
-              <span className="ml-2 text-sm text-gray-700">Select by tags</span>
-            </label>
-          </div>
-        </div>
-
-        {/* Contact Selection */}
-        {formData.target_type === 'contacts' && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Contacts ({formData.contact_ids.length} selected)
-            </label>
-            {contacts.length > activeContacts.length && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> {contacts.length - activeContacts.length} unsubscribed contact{contacts.length - activeContacts.length !== 1 ? 's are' : ' is'} hidden from selection.
-                </p>
+      <div className="card max-w-4xl">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Create New Campaign</h2>
+        
+        {error && (
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
               </div>
-            )}
-            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
-              {activeContacts.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  {contacts.length === 0 ? (
-                    <>No contacts available. <a href="/contacts/new" className="text-primary-600 hover:text-primary-700">Add contacts first</a>.</>
-                  ) : (
-                    <>No active contacts available. All contacts are unsubscribed.</>
-                  )}
-                </p>
-              ) : (
-                activeContacts.map((contact) => (
-                  <label key={contact.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.contact_ids.includes(contact.id)}
-                      onChange={() => handleContactToggle(contact.id)}
-                      className="form-checkbox"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">
-                      {contact.metadata?.first_name} {contact.metadata?.last_name} 
-                      <span className="text-gray-500">({contact.metadata?.email})</span>
-                      {contact.metadata?.status?.value === 'Active' && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Active
-                        </span>
-                      )}
-                      {contact.metadata?.status?.value === 'Bounced' && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          Bounced
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))
-              )}
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">Campaign Creation Error</h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error}</p>
+                </div>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Tag Selection */}
-        {formData.target_type === 'tags' && (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Campaign Name */}
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+              Campaign Name
+            </label>
+            <input
+              type="text"
+              id="name"
+              required
+              className="form-input"
+              value={formData.name}
+              onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+              placeholder="Enter campaign name"
+            />
+          </div>
+
+          {/* Template Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Email Template
+            </label>
+            <Select
+              value={formData.template_id}
+              onValueChange={(value) => setFormData(prev => ({ ...prev, template_id: value }))}
+            >
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Select a template" />
+              </SelectTrigger>
+              <SelectContent>
+                {templates.length === 0 ? (
+                  <SelectItem value="" disabled>
+                    No templates available - create a template first
+                  </SelectItem>
+                ) : (
+                  templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.metadata?.name} ({template.metadata?.template_type?.value})
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+            {templates.length === 0 && (
+              <p className="mt-1 text-sm text-gray-500">
+                <a href="/templates/new" className="text-primary-600 hover:text-primary-700">
+                  Create your first email template
+                </a> to get started.
+              </p>
+            )}
+          </div>
+
+          {/* Target Type Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Tags ({formData.target_tags.length} selected)
+              Target Audience
             </label>
-            {contacts.length > activeContacts.length && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> Tags are based on active contacts only. Unsubscribed contacts will not receive emails even if they have matching tags.
-                </p>
-              </div>
-            )}
             <div className="space-y-2">
-              {uniqueTags.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No tags available. Add tags to your active contacts first.
-                </p>
-              ) : (
-                uniqueTags.map((tag) => (
-                  <label key={tag} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.target_tags.includes(tag)}
-                      onChange={() => handleTagToggle(tag)}
-                      className="form-checkbox"
-                    />
-                    <span className="ml-2 text-sm text-gray-700">{tag}</span>
-                  </label>
-                ))
-              )}
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="target_type"
+                  value="contacts"
+                  checked={formData.target_type === 'contacts'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                  className="form-radio"
+                />
+                <span className="ml-2 text-sm text-gray-700">Select specific contacts</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="target_type"
+                  value="tags"
+                  checked={formData.target_type === 'tags'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                  className="form-radio"
+                />
+                <span className="ml-2 text-sm text-gray-700">Select by tags</span>
+              </label>
             </div>
           </div>
-        )}
 
-        {/* Scheduling */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            When to Send
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="schedule_type"
-                value="now"
-                checked={formData.schedule_type === 'now'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value }))}
-                className="form-radio"
-              />
-              <span className="ml-2 text-sm text-gray-700">Send immediately (Draft mode)</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="schedule_type"
-                value="scheduled"
-                checked={formData.schedule_type === 'scheduled'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value }))}
-                className="form-radio"
-              />
-              <span className="ml-2 text-sm text-gray-700">Schedule for later</span>
-            </label>
-          </div>
-          
-          {formData.schedule_type === 'scheduled' && (
-            <div className="mt-3">
-              <input
-                type="datetime-local"
-                className="form-input"
-                value={formData.send_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, send_date: e.target.value }))}
-                min={new Date().toISOString().slice(0, 16)}
-              />
+          {/* Contact Selection */}
+          {formData.target_type === 'contacts' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Contacts ({formData.contact_ids.length} selected)
+              </label>
+              {contacts.length > activeContacts.length && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note:</strong> {contacts.length - activeContacts.length} unsubscribed contact{contacts.length - activeContacts.length !== 1 ? 's are' : ' is'} hidden from selection.
+                  </p>
+                </div>
+              )}
+              <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
+                {activeContacts.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    {contacts.length === 0 ? (
+                      <>No contacts available. <a href="/contacts/new" className="text-primary-600 hover:text-primary-700">Add contacts first</a>.</>
+                    ) : (
+                      <>No active contacts available. All contacts are unsubscribed.</>
+                    )}
+                  </p>
+                ) : (
+                  activeContacts.map((contact) => (
+                    <label key={contact.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.contact_ids.includes(contact.id)}
+                        onChange={() => handleContactToggle(contact.id)}
+                        className="form-checkbox"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        {contact.metadata?.first_name} {contact.metadata?.last_name} 
+                        <span className="text-gray-500">({contact.metadata?.email})</span>
+                        {contact.metadata?.status?.value === 'Active' && (
+                          <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                            Active
+                          </span>
+                        )}
+                        {contact.metadata?.status?.value === 'Bounced' && (
+                          <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                            Bounced
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
             </div>
           )}
-        </div>
 
-        {/* Actions */}
-        <div className="flex space-x-4 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn-secondary"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="btn-primary"
-            disabled={isLoading || !formData.name || !formData.template_id}
-          >
-            {isLoading ? 'Creating...' : 'Create Campaign'}
-          </button>
-        </div>
-      </form>
-    </div>
+          {/* Tag Selection */}
+          {formData.target_type === 'tags' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Select Tags ({formData.target_tags.length} selected)
+              </label>
+              {contacts.length > activeContacts.length && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note:</strong> Tags are based on active contacts only. Unsubscribed contacts will not receive emails even if they have matching tags.
+                  </p>
+                </div>
+              )}
+              <div className="space-y-2">
+                {uniqueTags.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    No tags available. Add tags to your active contacts first.
+                  </p>
+                ) : (
+                  uniqueTags.map((tag) => (
+                    <label key={tag} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.target_tags.includes(tag)}
+                        onChange={() => handleTagToggle(tag)}
+                        className="form-checkbox"
+                      />
+                      <span className="ml-2 text-sm text-gray-700">{tag}</span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Scheduling */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              When to Send
+            </label>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="schedule_type"
+                  value="now"
+                  checked={formData.schedule_type === 'now'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
+                  className="form-radio"
+                />
+                <span className="ml-2 text-sm text-gray-700">Save as draft (review before sending)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="schedule_type"
+                  value="scheduled"
+                  checked={formData.schedule_type === 'scheduled'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
+                  className="form-radio"
+                />
+                <span className="ml-2 text-sm text-gray-700">Schedule for later</span>
+              </label>
+            </div>
+            
+            {formData.schedule_type === 'scheduled' && (
+              <div className="mt-3">
+                <input
+                  type="datetime-local"
+                  className="form-input"
+                  value={formData.send_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, send_date: e.target.value }))}
+                  min={new Date().toISOString().slice(0, 16)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Actions */}
+          <div className="flex space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={() => router.back()}
+              className="btn-secondary"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isLoading || !formData.name || !formData.template_id}
+            >
+              {isLoading ? 'Creating...' : 'Create Campaign'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
   )
 }

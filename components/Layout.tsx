@@ -177,9 +177,7 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
 
       {/* Main content area */}
       <main className="flex-1">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {children}
-        </div>
+        {children}
       </main>
 
       <CosmicBadge bucketSlug={process.env.NEXT_PUBLIC_COSMIC_BUCKET_SLUG || ''} />
