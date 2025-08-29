@@ -268,11 +268,120 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </div>
       )}
 
+      {/* Error Messages */}
+      {error && (
+        <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Success Messages */}
+      {success && (
+        <div className="flex items-center space-x-2 p-4 bg-green-50 border border-green-200 rounded-md">
+          <CheckCircle className="h-5 w-5 text-green-600" />
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: AI Content Editor */}
+        {/* Left Column: Template Info Section */}
         <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              {/* Template Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Template Name *</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="Enter template name"
+                  disabled={isPending}
+                  required
+                />
+              </div>
+
+              {/* Template Type - Moved here */}
+              <div className="space-y-2">
+                <Label htmlFor="template_type">Template Type</Label>
+                <Select 
+                  value={formData.template_type} 
+                  onValueChange={(value) => handleInputChange('template_type', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select template type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                    <SelectItem value="Newsletter">Newsletter</SelectItem>
+                    <SelectItem value="Promotional">Promotional</SelectItem>
+                    <SelectItem value="Transactional">Transactional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Subject Line */}
+              <div className="space-y-2">
+                <Label htmlFor="subject">Email Subject *</Label>
+                <Input
+                  id="subject"
+                  type="text"
+                  value={formData.subject}
+                  onChange={(e) => handleInputChange('subject', e.target.value)}
+                  placeholder="Enter email subject line"
+                  disabled={isPending}
+                  required
+                />
+              </div>
+
+              {/* Active Toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="active" className="text-base font-medium">
+                    Active Template
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    Active templates are available for creating campaigns
+                  </p>
+                </div>
+                <Switch
+                  id="active"
+                  checked={formData.active}
+                  onCheckedChange={(checked) => handleInputChange('active', checked)}
+                  disabled={isPending}
+                />
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex space-x-4 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={isPending}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isPending}
+                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  {isPending ? 'Updating...' : 'Update Template'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: AI Editor and Preview/Edit */}
+        <div className="space-y-6">
+          {/* AI Content Editor */}
           <Card className="border-purple-200 bg-purple-50/50">
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-purple-800">
@@ -330,17 +439,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </CardContent>
           </Card>
 
-          {/* Error/Success Messages for AI */}
-          {error && (
-            <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <p className="text-red-600">{error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Preview / Edit */}
-        <div className="space-y-6">
+          {/* Preview / Edit Tabs */}
           <Card>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
@@ -350,13 +449,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               
               <TabsContent value="preview" className="mt-6 p-6">
                 <div className="space-y-6">
-                  <div className="border-b pb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Email Preview</h3>
-                    <p className="text-sm text-gray-600">
-                      This is how your email will appear to recipients (unsubscribe link will be added automatically)
-                    </p>
-                  </div>
-                  
                   <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
                     <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
                       <div className="flex items-center justify-between">
@@ -394,54 +486,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </TabsContent>
 
               <TabsContent value="edit" className="mt-6 p-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Template Name */}
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Template Name *</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
-                      placeholder="Enter template name"
-                      disabled={isPending}
-                      required
-                    />
-                  </div>
-
-                  {/* Template Type */}
-                  <div className="space-y-2">
-                    <Label htmlFor="template_type">Template Type</Label>
-                    <Select 
-                      value={formData.template_type} 
-                      onValueChange={(value) => handleInputChange('template_type', value)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select template type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                        <SelectItem value="Newsletter">Newsletter</SelectItem>
-                        <SelectItem value="Promotional">Promotional</SelectItem>
-                        <SelectItem value="Transactional">Transactional</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Subject Line */}
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Email Subject *</Label>
-                    <Input
-                      id="subject"
-                      type="text"
-                      value={formData.subject}
-                      onChange={(e) => handleInputChange('subject', e.target.value)}
-                      placeholder="Enter email subject line"
-                      disabled={isPending}
-                      required
-                    />
-                  </div>
-
+                <div className="space-y-6">
                   {/* Email Content */}
                   <div className="space-y-2">
                     <Label htmlFor="content">Email Content *</Label>
@@ -459,56 +504,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       An unsubscribe link will be automatically added to all campaign emails.
                     </p>
                   </div>
-
-                  {/* Active Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="space-y-1">
-                      <Label htmlFor="active" className="text-base font-medium">
-                        Active Template
-                      </Label>
-                      <p className="text-sm text-gray-600">
-                        Active templates are available for creating campaigns
-                      </p>
-                    </div>
-                    <Switch
-                      id="active"
-                      checked={formData.active}
-                      onCheckedChange={(checked) => handleInputChange('active', checked)}
-                      disabled={isPending}
-                    />
-                  </div>
-
-                  {/* Success Messages */}
-                  {success && (
-                    <div className="flex items-center space-x-2 p-4 bg-green-50 border border-green-200 rounded-md">
-                      <div className="h-5 w-5 rounded-full bg-green-600 flex items-center justify-center">
-                        <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
-                      </div>
-                      <p className="text-green-600">{success}</p>
-                    </div>
-                  )}
-
-                  {/* Form Actions */}
-                  <div className="flex space-x-4 pt-6">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.back()}
-                      disabled={isPending}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isPending}
-                      className="bg-slate-800 hover:bg-slate-900 text-white"
-                    >
-                      {isPending ? 'Updating...' : 'Update Template'}
-                    </Button>
-                  </div>
-                </form>
+                </div>
               </TabsContent>
             </Tabs>
           </Card>
