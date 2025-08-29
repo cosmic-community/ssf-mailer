@@ -48,6 +48,18 @@ export default function CreateTemplateForm() {
     textarea.style.height = textarea.scrollHeight + 'px'
   }
 
+  // Handle keyboard shortcuts for AI prompt textareas
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>, action: 'generate' | 'edit') => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      if (action === 'generate') {
+        handleAIGenerate()
+      } else if (action === 'edit') {
+        handleAIEdit()
+      }
+    }
+  }
+
   // Set up auto-resize for textareas
   useEffect(() => {
     const textareas = [aiPromptRef.current, editPromptRef.current, contentRef.current].filter(Boolean) as HTMLTextAreaElement[]
@@ -551,10 +563,14 @@ export default function CreateTemplateForm() {
                       setAIPrompt(e.target.value)
                       autoResize(e.target)
                     }}
+                    onKeyDown={(e) => handleKeyDown(e, 'generate')}
                     onFocus={() => handleAISectionFocus(aiPromptRef)}
                     className="min-h-[80px] resize-none"
                     disabled={isAIGenerating}
                   />
+                  <p className="text-xs text-blue-600">
+                    💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-200 rounded">Cmd+Enter</kbd> to generate
+                  </p>
                 </div>
                 
                 {/* AI Status Display */}
@@ -616,10 +632,14 @@ export default function CreateTemplateForm() {
                       setEditPrompt(e.target.value)
                       autoResize(e.target)
                     }}
+                    onKeyDown={(e) => handleKeyDown(e, 'edit')}
                     onFocus={() => handleAISectionFocus(editPromptRef)}
                     className="min-h-[80px] resize-none"
                     disabled={isAIEditing}
                   />
+                  <p className="text-xs text-purple-600">
+                    💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                  </p>
                 </div>
                 
                 {/* AI Edit Status Display */}
