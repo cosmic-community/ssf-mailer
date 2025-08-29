@@ -63,7 +63,10 @@ export async function createEmailContact(data: {
       first_name: data.first_name,
       last_name: data.last_name || '',
       email: data.email,
-      status: data.status,
+      status: {
+        key: data.status.toLowerCase(),
+        value: data.status
+      },
       tags: data.tags || [],
       subscribe_date: data.subscribe_date || new Date().toISOString().split('T')[0],
       notes: data.notes || '',
@@ -92,7 +95,10 @@ export async function updateEmailContact(id: string, data: Partial<{
   if (data.first_name !== undefined) metadata.first_name = data.first_name
   if (data.last_name !== undefined) metadata.last_name = data.last_name
   if (data.email !== undefined) metadata.email = data.email
-  if (data.status !== undefined) metadata.status = data.status
+  if (data.status !== undefined) metadata.status = {
+    key: data.status.toLowerCase(),
+    value: data.status
+  }
   if (data.tags !== undefined) metadata.tags = data.tags
   if (data.notes !== undefined) metadata.notes = data.notes
   
@@ -155,7 +161,10 @@ export async function createEmailTemplate(data: {
       name: data.name,
       subject: data.subject,
       content: data.content,
-      template_type: data.template_type,
+      template_type: {
+        key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+        value: data.template_type
+      },
       active: data.active,
     }
   })
@@ -176,7 +185,10 @@ export async function updateEmailTemplate(id: string, data: {
       name: data.name,
       subject: data.subject,
       content: data.content,
-      template_type: data.template_type,
+      template_type: {
+        key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+        value: data.template_type
+      },
       active: data.active,
     }
   })
@@ -256,7 +268,10 @@ export async function createMarketingCampaign(data: {
       template: template,
       target_contacts: targetContacts,
       target_tags: data.target_tags || [],
-      status: 'Draft',
+      status: {
+        key: 'draft',
+        value: 'Draft'
+      },
       send_date: data.send_date || '',
       stats: {
         sent: 0,
@@ -323,7 +338,12 @@ export async function updateMarketingCampaign(id: string, data: {
 }
 
 export async function updateCampaignStatus(id: string, status: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled', stats?: CampaignStats): Promise<MarketingCampaign> {
-  const metadata: any = { status }
+  const metadata: any = { 
+    status: {
+      key: status.toLowerCase(),
+      value: status
+    }
+  }
   if (stats) {
     metadata.stats = stats
   }
@@ -388,7 +408,10 @@ export async function createOrUpdateSettings(data: {
       brand_guidelines: data.brand_guidelines || '',
       primary_brand_color: data.primary_brand_color || '#3b82f6',
       secondary_brand_color: data.secondary_brand_color || '#1e40af',
-      ai_tone: data.ai_tone || 'Professional',
+      ai_tone: {
+        key: (data.ai_tone || 'Professional').toLowerCase(),
+        value: data.ai_tone || 'Professional'
+      },
       privacy_policy_url: data.privacy_policy_url || '',
       terms_of_service_url: data.terms_of_service_url || '',
       google_analytics_id: data.google_analytics_id || '',
@@ -409,7 +432,10 @@ export async function createOrUpdateSettings(data: {
     if (data.brand_guidelines !== undefined) metadata.brand_guidelines = data.brand_guidelines || ''
     if (data.primary_brand_color !== undefined) metadata.primary_brand_color = data.primary_brand_color || '#3b82f6'
     if (data.secondary_brand_color !== undefined) metadata.secondary_brand_color = data.secondary_brand_color || '#1e40af'
-    if (data.ai_tone !== undefined) metadata.ai_tone = data.ai_tone || 'Professional'
+    if (data.ai_tone !== undefined) metadata.ai_tone = {
+      key: (data.ai_tone || 'Professional').toLowerCase(),
+      value: data.ai_tone || 'Professional'
+    }
     if (data.privacy_policy_url !== undefined) metadata.privacy_policy_url = data.privacy_policy_url || ''
     if (data.terms_of_service_url !== undefined) metadata.terms_of_service_url = data.terms_of_service_url || ''
     if (data.google_analytics_id !== undefined) metadata.google_analytics_id = data.google_analytics_id || ''
