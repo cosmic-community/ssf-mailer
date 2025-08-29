@@ -2,136 +2,154 @@
 
 import Link from 'next/link'
 import { MarketingCampaign } from '@/types'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Eye, Edit, Calendar, Users, Mail, TrendingUp } from 'lucide-react'
 
 interface CampaignsListProps {
   campaigns: MarketingCampaign[]
 }
 
 export default function CampaignsList({ campaigns }: CampaignsListProps) {
-  if (!campaigns || campaigns.length === 0) {
+  if (campaigns.length === 0) {
     return (
-      <div className="card text-center py-12">
-        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <svg className="w-12 h-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-          </svg>
+      <div className="text-center py-12">
+        <Mail className="mx-auto h-12 w-12 text-gray-400" />
+        <h3 className="mt-2 text-sm font-semibold text-gray-900">No campaigns</h3>
+        <p className="mt-1 text-sm text-gray-500">Get started by creating a new email campaign.</p>
+        <div className="mt-6">
+          <Link href="/campaigns/new">
+            <Button>Create Campaign</Button>
+          </Link>
         </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No campaigns yet</h3>
-        <p className="text-gray-500 mb-6">Create your first email marketing campaign.</p>
-        <Link href="/campaigns/new" className="btn-primary">
-          Create First Campaign
-        </Link>
       </div>
     )
   }
 
-  return (
-    <div className="card">
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Campaign
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Template
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Recipients
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Send Date
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Stats
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
-            {campaigns.map((campaign) => {
-              const recipientCount = (campaign.metadata?.target_contacts?.length || 0) + 
-                                   (campaign.metadata?.target_tags?.length || 0)
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'Draft':
+        return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'Scheduled':
+        return 'bg-blue-100 text-blue-800 border-blue-200'
+      case 'Sent':
+        return 'bg-green-100 text-green-800 border-green-200'
+      case 'Cancelled':
+        return 'bg-red-100 text-red-800 border-red-200'
+      default:
+        return 'bg-gray-100 text-gray-800 border-gray-200'
+    }
+  }
 
-              return (
-                <tr key={campaign.id} className="hover:bg-gray-50 cursor-pointer">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {campaign.metadata?.name}
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'Not scheduled'
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      })
+    } catch {
+      return 'Invalid date'
+    }
+  }
+
+  const getRecipientCount = (campaign: MarketingCampaign) => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    
+    if (contactCount > 0 && tagCount > 0) {
+      return `${contactCount} contacts + ${tagCount} tag${tagCount === 1 ? '' : 's'}`
+    } else if (contactCount > 0) {
+      return `${contactCount} contact${contactCount === 1 ? '' : 's'}`
+    } else if (tagCount > 0) {
+      return `${tagCount} tag${tagCount === 1 ? '' : 's'}`
+    } else {
+      return '0 contacts'
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      {campaigns.map((campaign) => (
+        <Link key={campaign.id} href={`/campaigns/${campaign.id}`} className="block">
+          <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-slate-500">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                {/* Campaign Info - Left Side */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-3 mb-2">
+                    <h3 className="text-lg font-semibold text-gray-900 truncate">
+                      {campaign.metadata.name}
+                    </h3>
+                    <Badge 
+                      variant="outline" 
+                      className={`${getStatusColor(campaign.metadata.status.value)} text-xs font-medium px-2 py-1`}
+                    >
+                      {campaign.metadata.status.value}
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex items-center space-x-6 text-sm text-gray-600">
+                    <div className="flex items-center space-x-1">
+                      <Mail className="h-4 w-4" />
+                      <span>{campaign.metadata.template?.metadata?.name || 'No template'}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      <Users className="h-4 w-4" />
+                      <span>{getRecipientCount(campaign)}</span>
+                    </div>
+                    
+                    <div className="flex items-center space-x-1">
+                      <Calendar className="h-4 w-4" />
+                      <span>{formatDate(campaign.metadata.send_date || '')}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stats - Right Side */}
+                <div className="flex items-center space-x-8 ml-6">
+                  {campaign.metadata.status.value === 'Sent' && campaign.metadata.stats ? (
+                    <>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-gray-900">
+                          {campaign.metadata.stats.sent || 0}
                         </div>
-                        <div className="text-sm text-gray-500">
-                          Created {new Date(campaign.created_at).toLocaleDateString()}
+                        <div className="text-xs text-gray-500">sent</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">
+                          {campaign.metadata.stats.open_rate || '0%'}
                         </div>
+                        <div className="text-xs text-gray-500">open rate</div>
                       </div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      <div className="text-sm text-gray-900">
-                        {campaign.metadata?.template?.title || 'No template'}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {campaign.metadata?.template?.metadata?.template_type?.value}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      {recipientCount} contacts
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      <span className={`inline-flex px-2 py-1 text-xs font-medium rounded-full ${
-                        campaign.metadata?.status?.value === 'Sent' 
-                          ? 'bg-green-100 text-green-800' 
-                          : campaign.metadata?.status?.value === 'Draft'
-                          ? 'bg-gray-100 text-gray-800'
-                          : campaign.metadata?.status?.value === 'Scheduled'
-                          ? 'bg-blue-100 text-blue-800'
-                          : campaign.metadata?.status?.value === 'Cancelled'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {campaign.metadata?.status?.value}
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      {campaign.metadata?.send_date ? 
-                        new Date(campaign.metadata.send_date).toLocaleDateString() : 
-                        'Not scheduled'
-                      }
-                    </Link>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <Link href={`/campaigns/${campaign.id}`} className="block">
-                      {campaign.metadata?.stats && Object.keys(campaign.metadata.stats).length > 0 ? (
-                        <div className="text-sm">
-                          <div className="text-gray-900">
-                            {campaign.metadata.stats.sent || 0} sent
-                          </div>
-                          <div className="text-gray-500">
-                            {campaign.metadata.stats.open_rate || '0%'} open rate
-                          </div>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-500">No stats</span>
-                      )}
-                    </Link>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
+                    </>
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-gray-400">—</div>
+                      <div className="text-xs text-gray-500">no stats yet</div>
+                    </div>
+                  )}
+                  
+                  {/* Action Button */}
+                  <div className="flex items-center">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      className="text-slate-600 hover:text-slate-800 hover:bg-slate-100"
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      View
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+      ))}
     </div>
   )
 }
