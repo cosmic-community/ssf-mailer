@@ -45,8 +45,14 @@ export default function ContactsList({ contacts }: ContactsListProps) {
         throw new Error(error.error || 'Failed to delete contact')
       }
 
-      // Refresh the page to show updated data
+      // Force refresh to get the latest data
       router.refresh()
+      
+      // Additional refresh after a short delay to ensure server updates are complete
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+      
     } catch (error) {
       console.error('Delete error:', error)
       alert(error instanceof Error ? error.message : 'Failed to delete contact')
@@ -83,7 +89,15 @@ export default function ContactsList({ contacts }: ContactsListProps) {
 
       setEditingContact(null)
       setIsEditDialogOpen(false)
+      
+      // Force refresh to get the latest data
       router.refresh()
+      
+      // Additional refresh after a short delay to ensure server updates are complete
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
+      
     } catch (error) {
       console.error('Update error:', error)
       alert(error instanceof Error ? error.message : 'Failed to update contact')
