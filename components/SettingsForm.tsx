@@ -22,6 +22,18 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   
+  // Helper function to extract ai_tone value safely
+  const getInitialAiTone = (): 'Professional' | 'Friendly' | 'Casual' | 'Formal' => {
+    const aiTone = initialSettings?.metadata?.ai_tone
+    if (aiTone && typeof aiTone === 'object' && 'value' in aiTone) {
+      return aiTone.value as 'Professional' | 'Friendly' | 'Casual' | 'Formal'
+    }
+    if (typeof aiTone === 'string') {
+      return aiTone as 'Professional' | 'Friendly' | 'Casual' | 'Formal'
+    }
+    return 'Professional'
+  }
+  
   // Form state with default values
   const [formData, setFormData] = useState<UpdateSettingsData>({
     from_name: initialSettings?.metadata.from_name || '',
@@ -34,7 +46,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     brand_guidelines: initialSettings?.metadata.brand_guidelines || '',
     primary_brand_color: initialSettings?.metadata.primary_brand_color || '#3b82f6',
     secondary_brand_color: initialSettings?.metadata.secondary_brand_color || '#1e40af',
-    ai_tone: (initialSettings?.metadata.ai_tone as 'Professional' | 'Friendly' | 'Casual' | 'Formal') || 'Professional',
+    ai_tone: getInitialAiTone(),
     privacy_policy_url: initialSettings?.metadata.privacy_policy_url || '',
     terms_of_service_url: initialSettings?.metadata.terms_of_service_url || '',
     google_analytics_id: initialSettings?.metadata.google_analytics_id || '',
