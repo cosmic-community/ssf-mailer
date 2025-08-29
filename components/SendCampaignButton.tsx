@@ -51,10 +51,9 @@ export default function SendCampaignButton({
       setShowConfirmation(false)
       setShowSuccess(true)
       
-      // Refresh the page after a short delay to show updated campaign status
-      setTimeout(() => {
-        router.refresh()
-      }, 2000)
+      // Refresh page data to show updated campaign status
+      // but don't close the modal automatically
+      router.refresh()
 
     } catch (error) {
       console.error('Send error:', error)
@@ -62,6 +61,12 @@ export default function SendCampaignButton({
     } finally {
       setIsSending(false)
     }
+  }
+
+  const handleSuccessClose = () => {
+    setShowSuccess(false)
+    // Optional: Navigate to campaigns list or refresh again
+    // router.push('/campaigns')
   }
 
   return (
@@ -161,7 +166,7 @@ export default function SendCampaignButton({
 
           <DialogFooter>
             <Button
-              onClick={() => setShowSuccess(false)}
+              onClick={handleSuccessClose}
               className="btn-primary w-full"
             >
               Continue
