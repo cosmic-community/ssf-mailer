@@ -21,16 +21,23 @@ export default async function EditTemplatePage({ params }: EditTemplatePageProps
   }
 
   return (
-    <div className="min-h-screen bg-slate-50">
-      {/* Container with max-width and padding for consistency */}
-      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-slate-800 mb-2">Edit Template</h1>
-          <p className="text-slate-600">Update your email template with AI assistance</p>
+    <div className="min-h-screen bg-gray-50 pb-16">
+      {/* Page Header */}
+      <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Edit Template</h1>
+              <p className="text-gray-600 mt-1">Update your email template with AI assistance</p>
+            </div>
+          </div>
         </div>
-        
-        <EditTemplateForm template={template} />
       </div>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <EditTemplateForm template={template} />
+      </main>
     </div>
   )
 }
