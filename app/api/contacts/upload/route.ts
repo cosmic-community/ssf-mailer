@@ -2,10 +2,36 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createEmailContact, getEmailContacts } from '@/lib/cosmic'
 import { EmailContact } from '@/types'
 
-export async function POST(request: NextRequest) {
+interface ContactData {
+  first_name: string;
+  last_name?: string;
+  email: string;
+  status: 'Active' | 'Unsubscribed' | 'Bounced';
+  tags?: string[];
+  subscribe_date?: string;
+  notes?: string;
+}
+
+interface UploadResult {
+  success: boolean;
+  message: string;
+  results: {
+    total_processed: number;
+    successful: number;
+    duplicates: number;
+    validation_errors: number;
+    creation_errors: number;
+  };
+  contacts: EmailContact[];
+  duplicates?: string[];
+  validation_errors?: string[];
+  creation_errors?: string[];
+}
+
+export async function POST(request: NextRequest): Promise<NextResponse<UploadResult | { error: string; errors?: string[]; total_errors?: number }>> {
   try {
     const formData = await request.formData()
-    const file = formData.get('file') as File
+    const file = formData.get('file') as File | null
     
     if (!file) {
       return NextResponse.json(
@@ -42,7 +68,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Parse CSV header
-    const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+    const headerLine = lines[0]
+    if (!headerLine) {
+      return NextResponse.json(
+        { error: 'CSV header row is missing or empty' },
+        { status: 400 }
+      )
+    }
+
+    const header = headerLine.split(',').map(h => h.trim().toLowerCase())
     
     // Validate required columns
     const requiredColumns = ['first_name', 'email']
@@ -56,31 +90,49 @@ export async function POST(request: NextRequest) {
     }
 
     // Get existing contacts to check for duplicates
-    const existingContacts = await getEmailContacts()
+    let existingContacts: EmailContact[] = []
+    try {
+      existingContacts = await getEmailContacts()
+    } catch (error) {
+      console.error('Error fetching existing contacts:', error)
+      // Continue without duplicate checking if we can't fetch existing contacts
+    }
+
     const existingEmails = new Set(
       existingContacts
-        .map(c => c.metadata?.email?.toLowerCase())
-        .filter((email): email is string => Boolean(email))
+        .map(c => c.metadata?.email)
+        .filter((email): email is string => typeof email === 'string' && email.length > 0)
+        .map(email => email.toLowerCase())
     )
 
-    const contacts: any[] = []
+    const contacts: ContactData[] = []
     const errors: string[] = []
     const duplicates: string[] = []
     
     // Process each data row
     for (let i = 1; i < lines.length; i++) {
-      const row = lines[i].split(',').map(cell => cell.trim())
-      
-      if (row.length !== header.length) {
-        errors.push(`Row ${i + 1}: Column count mismatch`)
+      const currentLine = lines[i]
+      if (!currentLine) {
+        errors.push(`Row ${i + 1}: Empty row`)
         continue
       }
 
-      const contact: any = {}
+      const row = currentLine.split(',').map(cell => cell.trim())
+      
+      if (row.length !== header.length) {
+        errors.push(`Row ${i + 1}: Column count mismatch (expected ${header.length}, got ${row.length})`)
+        continue
+      }
+
+      const contact: Partial<ContactData> = {}
       
       // Map CSV columns to contact fields
       header.forEach((column, index) => {
         const value = row[index]
+        
+        if (value === undefined) {
+          return // Skip undefined values
+        }
         
         switch (column) {
           case 'first_name':
@@ -90,20 +142,21 @@ export async function POST(request: NextRequest) {
             contact.last_name = value || ''
             break
           case 'email':
-            contact.email = value ? value.toLowerCase() : ''
+            contact.email = value ? value.toLowerCase().trim() : ''
             break
           case 'status':
             // Validate status value
-            if (value && ['active', 'unsubscribed', 'bounced'].includes(value.toLowerCase())) {
-              contact.status = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+            const normalizedStatus = value.toLowerCase()
+            if (['active', 'unsubscribed', 'bounced'].includes(normalizedStatus)) {
+              contact.status = (normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)) as 'Active' | 'Unsubscribed' | 'Bounced'
             } else {
               contact.status = 'Active'
             }
             break
           case 'tags':
             // Parse tags (comma-separated or semicolon-separated)
-            if (value) {
-              contact.tags = value.split(/[;,]/).map(tag => tag.trim()).filter(tag => tag)
+            if (value && value.trim()) {
+              contact.tags = value.split(/[;,]/).map(tag => tag.trim()).filter(tag => tag.length > 0)
             } else {
               contact.tags = []
             }
@@ -123,12 +176,12 @@ export async function POST(request: NextRequest) {
       })
 
       // Validate required fields
-      if (!contact.first_name) {
+      if (!contact.first_name || contact.first_name.trim() === '') {
         errors.push(`Row ${i + 1}: First name is required`)
         continue
       }
 
-      if (!contact.email) {
+      if (!contact.email || contact.email.trim() === '') {
         errors.push(`Row ${i + 1}: Email is required`)
         continue
       }
@@ -146,19 +199,22 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Set default values
-      if (!contact.status) contact.status = 'Active'
-      if (!contact.tags) contact.tags = []
-      if (!contact.last_name) contact.last_name = ''
-      if (!contact.notes) contact.notes = ''
-      if (!contact.subscribe_date) {
-        contact.subscribe_date = new Date().toISOString().split('T')[0]
+      // Set default values and ensure all required fields are present
+      const validContact: ContactData = {
+        first_name: contact.first_name,
+        last_name: contact.last_name || '',
+        email: contact.email,
+        status: contact.status || 'Active',
+        tags: contact.tags || [],
+        subscribe_date: contact.subscribe_date || new Date().toISOString().split('T')[0],
+        notes: contact.notes || ''
       }
 
-      contacts.push(contact)
-      // Ensure email exists and is a string before adding to Set
-      if (contact.email && typeof contact.email === 'string') {
-        existingEmails.add(contact.email) // Prevent duplicates within the same file
+      contacts.push(validContact)
+      
+      // Add to existing emails set to prevent duplicates within the same file
+      if (validContact.email) {
+        existingEmails.add(validContact.email)
       }
     }
 
@@ -181,7 +237,9 @@ export async function POST(request: NextRequest) {
     for (const contactData of contacts) {
       try {
         const newContact = await createEmailContact(contactData)
-        created.push(newContact)
+        if (newContact) {
+          created.push(newContact)
+        }
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
         creationErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`)
@@ -189,7 +247,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Return results
-    return NextResponse.json({
+    const result: UploadResult = {
       success: true,
       message: `Successfully imported ${created.length} contacts`,
       results: {
@@ -203,7 +261,9 @@ export async function POST(request: NextRequest) {
       duplicates: duplicates.length > 0 ? duplicates : undefined,
       validation_errors: errors.length > 0 ? errors : undefined,
       creation_errors: creationErrors.length > 0 ? creationErrors : undefined,
-    })
+    }
+
+    return NextResponse.json(result)
 
   } catch (error: unknown) {
     console.error('CSV upload error:', error)
