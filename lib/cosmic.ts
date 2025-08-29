@@ -266,31 +266,14 @@ export async function createMarketingCampaign(data: {
     }
     console.log('Template fetched successfully:', template.metadata?.name)
 
-    let targetContacts: EmailContact[] = []
-    
-    if (data.contact_ids && data.contact_ids.length > 0) {
-      console.log('Fetching specific contacts by IDs:', data.contact_ids)
-      // Get specific contacts by IDs
-      const contacts = await getEmailContacts()
-      targetContacts = contacts.filter(contact => data.contact_ids!.includes(contact.id))
-      console.log(`Found ${targetContacts.length} contacts from ${data.contact_ids.length} requested IDs`)
-    } else if (data.target_tags && data.target_tags.length > 0) {
-      console.log('Fetching contacts by tags:', data.target_tags)
-      // Get contacts by tags
-      const allContacts = await getEmailContacts()
-      targetContacts = allContacts.filter(contact =>
-        contact.metadata?.tags?.some(tag => data.target_tags!.includes(tag))
-      )
-      console.log(`Found ${targetContacts.length} contacts with matching tags`)
-    }
-
+    // Store contact IDs directly as strings, not full contact objects
     const campaignPayload = {
       title: data.name,
       type: 'marketing-campaigns',
       metadata: {
         name: data.name,
-        template: data.template_id,
-        target_contacts: targetContacts,
+        template: data.template_id, // Store template ID
+        target_contacts: data.contact_ids || [], // Store contact IDs as array of strings
         target_tags: data.target_tags || [],
         status: {
           key: 'draft',
@@ -348,16 +331,11 @@ export async function updateMarketingCampaign(id: string, data: {
     if (!template) {
       throw new Error('Template not found')
     }
-    metadata.template = template
+    metadata.template = data.template_id // Store template ID, not object
   }
 
   if (data.contact_ids !== undefined) {
-    let targetContacts: EmailContact[] = []
-    if (data.contact_ids.length > 0) {
-      const contacts = await getEmailContacts()
-      targetContacts = contacts.filter(contact => data.contact_ids!.includes(contact.id))
-    }
-    metadata.target_contacts = targetContacts
+    metadata.target_contacts = data.contact_ids // Store contact IDs directly
   }
 
   if (data.target_tags !== undefined) {

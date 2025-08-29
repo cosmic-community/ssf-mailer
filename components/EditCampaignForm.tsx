@@ -30,13 +30,18 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     return ''
   }
 
-  // Get target contact IDs from campaign metadata
+  // Get target contact IDs from campaign metadata - fix the contact ID extraction
   const getTargetContactIds = () => {
     if (!campaign.metadata?.target_contacts) return []
-    // Handle both array of contact objects and array of contact IDs
-    return campaign.metadata.target_contacts.map(contact => 
-      typeof contact === 'object' ? contact.id : contact
-    )
+    
+    // Handle array of contact IDs (strings)
+    if (Array.isArray(campaign.metadata.target_contacts)) {
+      return campaign.metadata.target_contacts.filter(contact => 
+        typeof contact === 'string'
+      ) as string[]
+    }
+    
+    return []
   }
   
   const [formData, setFormData] = useState({
@@ -50,6 +55,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   })
 
   console.log('Campaign metadata:', campaign.metadata)
+  console.log('Target contacts from metadata:', campaign.metadata?.target_contacts)
   console.log('Form data initialized:', formData)
 
   // Filter out unsubscribed contacts

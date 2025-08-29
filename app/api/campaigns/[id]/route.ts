@@ -19,12 +19,12 @@ export async function PUT(
       )
     }
 
-    // Update the campaign - only include changed fields, use template_id instead of template object
+    // Update the campaign - store template as ID reference, not object
     const result = await cosmic.objects.updateOne(id, {
       title: body.name,
       metadata: {
         name: body.name,
-        template: body.template_id,
+        template: body.template_id, // Store as ID reference
         target_contacts: body.contact_ids || [],
         target_tags: body.target_tags || [],
         send_date: body.send_date || ''
