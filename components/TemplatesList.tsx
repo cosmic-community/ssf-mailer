@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { EmailTemplate } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
@@ -16,6 +16,29 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState<EmailTemplate | null>(null)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+
+  // Handle escape key press and setup event listener
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && previewTemplate) {
+        setPreviewTemplate(null)
+      }
+    }
+
+    // Add event listener when modal is open
+    if (previewTemplate) {
+      document.addEventListener('keydown', handleEscapeKey)
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden'
+    }
+
+    // Cleanup function
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey)
+      // Restore body scroll when modal is closed
+      document.body.style.overflow = 'unset'
+    }
+  }, [previewTemplate])
 
   const generatePreviewContent = (template: EmailTemplate) => {
     if (!template.metadata?.content || !template.metadata?.subject) {
@@ -78,6 +101,14 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
     e.preventDefault()
     e.stopPropagation()
     setShowDuplicateConfirm(template)
+  }
+
+  // Handle click outside modal to close
+  const handleModalBackdropClick = (e: React.MouseEvent) => {
+    // Only close if clicking on the backdrop (not the modal content)
+    if (e.target === e.currentTarget) {
+      setPreviewTemplate(null)
+    }
   }
 
   if (templates.length === 0) {
@@ -199,7 +230,10 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
 
       {/* Preview Modal */}
       {previewTemplate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={handleModalBackdropClick}
+        >
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <div>
