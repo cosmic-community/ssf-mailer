@@ -66,6 +66,35 @@ export interface MarketingCampaign extends CosmicObject {
   };
 }
 
+// Settings interface
+export interface Settings extends CosmicObject {
+  type: 'settings';
+  metadata: {
+    from_name: string;
+    from_email: string;
+    reply_to_email?: string;
+    company_name: string;
+    company_address?: string;
+    website_url?: string;
+    support_email?: string;
+    brand_guidelines?: string;
+    primary_brand_color?: string;
+    secondary_brand_color?: string;
+    brand_logo?: {
+      url: string;
+      imgix_url: string;
+    };
+    ai_tone?: {
+      key: string;
+      value: 'Professional' | 'Friendly' | 'Casual' | 'Formal';
+    };
+    privacy_policy_url?: string;
+    terms_of_service_url?: string;
+    google_analytics_id?: string;
+    email_signature?: string;
+  };
+}
+
 // Campaign statistics interface
 export interface CampaignStats {
   sent?: number;
@@ -113,6 +142,24 @@ export interface CreateCampaignData {
   send_date?: string;
 }
 
+export interface UpdateSettingsData {
+  from_name: string;
+  from_email: string;
+  reply_to_email?: string;
+  company_name: string;
+  company_address?: string;
+  website_url?: string;
+  support_email?: string;
+  brand_guidelines?: string;
+  primary_brand_color?: string;
+  secondary_brand_color?: string;
+  ai_tone?: 'Professional' | 'Friendly' | 'Casual' | 'Formal';
+  privacy_policy_url?: string;
+  terms_of_service_url?: string;
+  google_analytics_id?: string;
+  email_signature?: string;
+}
+
 // Type guards
 export function isEmailContact(obj: CosmicObject): obj is EmailContact {
   return obj.type === 'email-contacts';
@@ -126,8 +173,13 @@ export function isMarketingCampaign(obj: CosmicObject): obj is MarketingCampaign
   return obj.type === 'marketing-campaigns';
 }
 
+export function isSettings(obj: CosmicObject): obj is Settings {
+  return obj.type === 'settings';
+}
+
 // Utility types - Fixed the generic constraint issue
 export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
 export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
 export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;
 export type CreateCampaignFormData = Omit<MarketingCampaign, 'id' | 'created_at' | 'modified_at'>;
+export type CreateSettingsFormData = Omit<Settings, 'id' | 'created_at' | 'modified_at'>;

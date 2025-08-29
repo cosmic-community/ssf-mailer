@@ -1,4 +1,4 @@
-# Email Marketing Hub
+# Cosmic Email Marketing
 
 ![App Preview](https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=300&fit=crop&auto=format)
 
@@ -61,7 +61,7 @@ The app has been tailored to work with your existing Cosmic content structure an
 1. Clone the repository:
 ```bash
 git clone <your-repo-url>
-cd email-marketing-hub
+cd cosmic-email-marketing
 ```
 
 2. Install dependencies:

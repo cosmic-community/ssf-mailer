@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server'
-import { cosmic } from '@/lib/cosmic'
+import { cosmic, getSettings } from '@/lib/cosmic'
 import { TextStreamingResponse } from '@cosmicjs/sdk'
 
 export async function POST(request: NextRequest) {
@@ -33,11 +33,28 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Analyzing current content...","progress":30}\n\n')
             )
 
+            // Get settings for brand guidelines and company info
+            const settings = await getSettings()
+            const brandGuidelines = settings?.metadata.brand_guidelines || ''
+            const companyName = settings?.metadata.company_name || 'Your Company'
+            const aiTone = settings?.metadata.ai_tone || 'Professional'
+            const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
+
+            // Get current year for copyright
+            const currentYear = new Date().getFullYear()
+
             // Create AI prompt for editing - ONLY for body content
             const aiPrompt = `Please improve this HTML email template based on the following instructions: "${prompt}"
 
 Current email template:
 ${currentContent}
+
+Brand Context:
+Company: ${companyName}
+Tone: ${aiTone}
+Primary Brand Color: ${primaryColor}
+Current Year: ${currentYear} (use this for copyright footer if updating footer)
+${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
 
 Instructions:
 - Maintain the HTML structure and email compatibility
@@ -46,6 +63,9 @@ Instructions:
 - Ensure the result is still a complete, valid HTML email template
 - Use inline CSS for email client compatibility
 - Make improvements that enhance readability and visual appeal
+- Apply brand guidelines and colors where appropriate
+- Use the specified tone for any text modifications
+- If updating footer copyright, use ${currentYear} as the current year
 
 IMPORTANT: DO NOT include or modify any unsubscribe links - these are added automatically to all emails. Return ONLY the improved HTML email template without any backticks, code block markers, or additional text. Start directly with the HTML content.`
 
