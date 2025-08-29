@@ -6,18 +6,34 @@ export function addTrackingToEmail(
 ): string {
   let trackedContent = htmlContent
 
-  // Add tracking pixel at the end of the email body
-  const trackingPixel = `<img src="${baseUrl}/api/track/open?c=${campaignId}&u=${contactId}" width="1" height="1" style="display: none;" alt="">`
+  // Create a more robust tracking pixel that works better with email clients
+  // Use CSS properties that are less likely to be stripped by email clients
+  // Place the pixel in a table cell for better email client compatibility
+  const trackingPixel = `
+    <table role="presentation" style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; border-collapse: collapse;">
+      <tr>
+        <td style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; line-height: 1px; font-size: 1px;">
+          <img src="${baseUrl}/api/track/open?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}" 
+               width="1" 
+               height="1" 
+               style="width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: none !important; display: block !important; max-width: 1px !important; max-height: 1px !important; min-width: 1px !important; min-height: 1px !important;" 
+               alt="" 
+               border="0">
+        </td>
+      </tr>
+    </table>`
   
-  // Insert tracking pixel before closing body tag
+  // Insert tracking pixel before closing body tag, or at the very end if no body tag
   if (trackedContent.includes('</body>')) {
     trackedContent = trackedContent.replace('</body>', `${trackingPixel}</body>`)
+  } else if (trackedContent.includes('</html>')) {
+    trackedContent = trackedContent.replace('</html>', `${trackingPixel}</html>`)
   } else {
-    // If no body tag, append at the end
+    // If no body or html tag, append at the end
     trackedContent += trackingPixel
   }
 
-  // Track all links in the email
+  // Track all links in the email with better URL encoding
   trackedContent = trackedContent.replace(
     /href="([^"]+)"/g,
     (match, url) => {
@@ -33,8 +49,9 @@ export function addTrackingToEmail(
         return match
       }
 
+      // Double-encode the URL to ensure it survives email client processing
       const encodedUrl = encodeURIComponent(url)
-      const trackingUrl = `${baseUrl}/api/track/click?c=${campaignId}&u=${contactId}&url=${encodedUrl}`
+      const trackingUrl = `${baseUrl}/api/track/click?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&url=${encodedUrl}`
       return `href="${trackingUrl}"`
     }
   )
