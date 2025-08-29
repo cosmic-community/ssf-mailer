@@ -28,6 +28,7 @@ export async function POST(
     const copyName = `${originalName} (Copy)`
 
     // Create the duplicate template with proper metadata structure
+    // Exclude file metafields like preview_image since they need special handling
     const duplicatedTemplate = await cosmic.objects.insertOne({
       title: copyName,
       type: 'email-templates',
@@ -36,8 +37,8 @@ export async function POST(
         subject: originalTemplate.metadata?.subject || '',
         content: originalTemplate.metadata?.content || '',
         template_type: originalTemplate.metadata?.template_type?.value || 'Newsletter',
-        active: false, // Set duplicates as inactive by default
-        preview_image: originalTemplate.metadata?.preview_image || null
+        active: false // Set duplicates as inactive by default
+        // Note: preview_image is excluded since file metafields need special handling
       }
     })
 
