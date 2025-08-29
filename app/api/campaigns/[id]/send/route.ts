@@ -134,7 +134,7 @@ export async function POST(
           personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, firstName)
 
           // Add unsubscribe link
-          const unsubscribeUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000'}/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
+          const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
           const unsubscribeFooter = `
             <div style="margin-top: 40px; padding: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
               <p style="margin: 0 0 10px 0;">
