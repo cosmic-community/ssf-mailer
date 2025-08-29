@@ -133,13 +133,16 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
 
 export async function getEmailTemplate(id: string): Promise<EmailTemplate | null> {
   try {
+    console.log(`Fetching email template with ID: ${id}`)
     const { object } = await cosmic.objects
       .findOne({ id, type: 'email-templates' })
       .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
     
+    console.log(`Template found: ${object ? object.title : 'null'}`)
     return object as EmailTemplate
-  } catch (error) {
+  } catch (error: any) {
+    console.error(`Error fetching template ${id}:`, error.message)
     if (hasStatus(error) && error.status === 404) {
       return null
     }
@@ -240,53 +243,77 @@ export async function createMarketingCampaign(data: {
   target_tags?: string[];
   send_date?: string;
 }): Promise<MarketingCampaign> {
-  // Get template and contacts if specified
-  const template = await getEmailTemplate(data.template_id)
-  if (!template) {
-    throw new Error('Template not found')
-  }
+  try {
+    console.log('Creating marketing campaign with data:', data)
+    
+    // Get template and contacts if specified
+    console.log('Fetching template for campaign creation...')
+    const template = await getEmailTemplate(data.template_id)
+    if (!template) {
+      throw new Error(`Template not found: ${data.template_id}`)
+    }
+    console.log('Template fetched successfully:', template.metadata?.name)
 
-  let targetContacts: EmailContact[] = []
-  
-  if (data.contact_ids && data.contact_ids.length > 0) {
-    // Get specific contacts by IDs
-    const contacts = await getEmailContacts()
-    targetContacts = contacts.filter(contact => data.contact_ids!.includes(contact.id))
-  } else if (data.target_tags && data.target_tags.length > 0) {
-    // Get contacts by tags
-    const allContacts = await getEmailContacts()
-    targetContacts = allContacts.filter(contact =>
-      contact.metadata?.tags?.some(tag => data.target_tags!.includes(tag))
-    )
-  }
+    let targetContacts: EmailContact[] = []
+    
+    if (data.contact_ids && data.contact_ids.length > 0) {
+      console.log('Fetching specific contacts by IDs:', data.contact_ids)
+      // Get specific contacts by IDs
+      const contacts = await getEmailContacts()
+      targetContacts = contacts.filter(contact => data.contact_ids!.includes(contact.id))
+      console.log(`Found ${targetContacts.length} contacts from ${data.contact_ids.length} requested IDs`)
+    } else if (data.target_tags && data.target_tags.length > 0) {
+      console.log('Fetching contacts by tags:', data.target_tags)
+      // Get contacts by tags
+      const allContacts = await getEmailContacts()
+      targetContacts = allContacts.filter(contact =>
+        contact.metadata?.tags?.some(tag => data.target_tags!.includes(tag))
+      )
+      console.log(`Found ${targetContacts.length} contacts with matching tags`)
+    }
 
-  const { object } = await cosmic.objects.insertOne({
-    title: data.name,
-    type: 'marketing-campaigns',
-    metadata: {
-      name: data.name,
-      template: template,
-      target_contacts: targetContacts,
-      target_tags: data.target_tags || [],
-      status: {
-        key: 'draft',
-        value: 'Draft'
-      },
-      send_date: data.send_date || '',
-      stats: {
-        sent: 0,
-        delivered: 0,
-        opened: 0,
-        clicked: 0,
-        bounced: 0,
-        unsubscribed: 0,
-        open_rate: '0%',
-        click_rate: '0%'
+    const campaignPayload = {
+      title: data.name,
+      type: 'marketing-campaigns',
+      metadata: {
+        name: data.name,
+        template: template,
+        target_contacts: targetContacts,
+        target_tags: data.target_tags || [],
+        status: {
+          key: 'draft',
+          value: 'Draft'
+        },
+        send_date: data.send_date || '',
+        stats: {
+          sent: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          unsubscribed: 0,
+          open_rate: '0%',
+          click_rate: '0%'
+        }
       }
     }
-  })
-  
-  return object as MarketingCampaign
+
+    console.log('Campaign payload prepared:', JSON.stringify(campaignPayload, null, 2))
+    console.log('Calling cosmic.objects.insertOne...')
+    
+    const { object } = await cosmic.objects.insertOne(campaignPayload)
+    
+    console.log('Campaign created successfully with ID:', object.id)
+    return object as MarketingCampaign
+  } catch (error: any) {
+    console.error('Error in createMarketingCampaign:')
+    console.error('Error message:', error.message)
+    console.error('Error stack:', error.stack)
+    console.error('Full error object:', error)
+    
+    // Re-throw with more context
+    throw new Error(`Campaign creation failed: ${error.message}`)
+  }
 }
 
 export async function updateMarketingCampaign(id: string, data: {
