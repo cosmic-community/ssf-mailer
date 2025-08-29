@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Sparkles, CheckCircle, AlertCircle } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, Info } from 'lucide-react'
 
 export default function CreateTemplateForm() {
   const router = useRouter()
@@ -393,6 +393,18 @@ export default function CreateTemplateForm() {
         </div>
       )}
 
+      {/* Unsubscribe Notice */}
+      <div className="flex items-start space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+        <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div>
+          <p className="text-blue-800 font-medium">Automatic Unsubscribe Links</p>
+          <p className="text-blue-700 text-sm">
+            All emails sent through campaigns will automatically include an unsubscribe link in the footer. 
+            Recipients can easily opt out of future communications with one click.
+          </p>
+        </div>
+      </div>
+
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -566,7 +578,7 @@ export default function CreateTemplateForm() {
                   <div className="border-b pb-4">
                     <h3 className="text-lg font-semibold text-gray-900 mb-2">Email Preview</h3>
                     <p className="text-sm text-gray-600">
-                      This is how your email will appear to recipients
+                      This is how your email will appear to recipients (unsubscribe link will be added automatically)
                     </p>
                   </div>
                   
@@ -583,12 +595,25 @@ export default function CreateTemplateForm() {
                     </div>
                     <div className="p-6 max-h-96 overflow-y-auto">
                       {formData.content ? (
-                        <div 
-                          className="prose max-w-none"
-                          dangerouslySetInnerHTML={{ 
-                            __html: formData.content
-                          }} 
-                        />
+                        <>
+                          <div 
+                            className="prose max-w-none"
+                            dangerouslySetInnerHTML={{ 
+                              __html: formData.content
+                            }} 
+                          />
+                          {/* Preview unsubscribe footer */}
+                          <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-500">
+                            <p>
+                              You received this email because you subscribed to our mailing list.
+                              <br />
+                              <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              ↑ This unsubscribe link will be added automatically to all campaign emails
+                            </p>
+                          </div>
+                        </>
                       ) : (
                         <div className="text-center py-12 text-gray-500">
                           <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
@@ -670,7 +695,8 @@ export default function CreateTemplateForm() {
                       className="font-mono text-sm"
                     />
                     <p className="text-sm text-gray-500">
-                      You can use HTML tags and merge fields like {'{{first_name}}'} for personalization
+                      You can use HTML tags and merge fields like {'{{first_name}}'} for personalization.
+                      An unsubscribe link will be automatically added to all campaign emails.
                     </p>
                   </div>
 
