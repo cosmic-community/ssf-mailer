@@ -34,11 +34,20 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   const getTargetContactIds = () => {
     if (!campaign.metadata?.target_contacts) return []
     
-    // Handle array of contact IDs (strings)
+    // Handle array of contact objects or IDs
     if (Array.isArray(campaign.metadata.target_contacts)) {
-      return campaign.metadata.target_contacts.filter(contact => 
-        typeof contact === 'string'
-      ) as string[]
+      return campaign.metadata.target_contacts.map(contact => {
+        // If it's a string, it's already an ID
+        if (typeof contact === 'string') {
+          return contact
+        }
+        // If it's an object with an id property, extract the ID
+        if (contact && typeof contact === 'object' && 'id' in contact) {
+          return contact.id
+        }
+        // Fallback - return the contact as-is if it's neither
+        return contact
+      }).filter(id => typeof id === 'string') as string[]
     }
     
     return []
