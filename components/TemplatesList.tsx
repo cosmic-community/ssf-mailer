@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { EmailTemplate } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import { Copy, Edit, Eye, MoreVertical } from 'lucide-react'
 
 interface TemplatesListProps {
   templates: EmailTemplate[]
@@ -11,6 +12,10 @@ interface TemplatesListProps {
 
 export default function TemplatesList({ templates }: TemplatesListProps) {
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState<EmailTemplate | null>(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
 
   const generatePreviewContent = (template: EmailTemplate) => {
     if (!template.metadata?.content || !template.metadata?.subject) {
@@ -27,6 +32,40 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
     subject = subject.replace(/\{\{last_name\}\}/g, 'Doe')
 
     return { subject, content }
+  }
+
+  const handleDuplicateTemplate = async (template: EmailTemplate) => {
+    setDuplicatingId(template.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/templates/${template.id}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to duplicate template')
+      }
+
+      const result = await response.json()
+      setSuccess(`Template "${template.metadata?.name}" duplicated successfully!`)
+      
+      // Refresh the page to show the new template
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+
+    } catch (error: any) {
+      setError(error.message || 'Failed to duplicate template')
+    } finally {
+      setDuplicatingId(null)
+      setShowDuplicateConfirm(null)
+    }
   }
 
   if (templates.length === 0) {
@@ -48,14 +87,27 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
 
   return (
     <div className="space-y-6">
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template) => (
-          <Link
+          <div
             key={template.id}
-            href={`/templates/${template.id}/edit`}
-            className="card hover:shadow-lg transition-shadow block"
+            className="card hover:shadow-lg transition-shadow relative group"
           >
+            {/* Template Card Content */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -83,9 +135,64 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
                 <p className="text-sm text-gray-900 font-medium">{template.metadata.subject}</p>
               </div>
             )}
-          </Link>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <div className="flex space-x-2">
+                <button
+                  onClick={() => setPreviewTemplate(template)}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                  title="Preview template"
+                >
+                  <Eye className="h-4 w-4" />
+                  <span>Preview</span>
+                </button>
+                <Link
+                  href={`/templates/${template.id}/edit`}
+                  className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                  title="Edit template"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span>Edit</span>
+                </Link>
+              </div>
+              
+              <button
+                onClick={() => setShowDuplicateConfirm(template)}
+                disabled={duplicatingId === template.id}
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                title="Duplicate template"
+              >
+                {duplicatingId === template.id ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                    <span>Duplicating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    <span>Duplicate</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         ))}
       </div>
+
+      {/* Duplicate Confirmation Modal */}
+      {showDuplicateConfirm && (
+        <ConfirmationModal
+          isOpen={true}
+          onOpenChange={(open) => !open && setShowDuplicateConfirm(null)}
+          title="Duplicate Template"
+          message={`Are you sure you want to duplicate "${showDuplicateConfirm.metadata?.name}"? A copy will be created with "(Copy)" added to the name.`}
+          confirmText="Duplicate Template"
+          cancelText="Cancel"
+          onConfirm={() => handleDuplicateTemplate(showDuplicateConfirm)}
+          isLoading={duplicatingId === showDuplicateConfirm.id}
+        />
+      )}
 
       {/* Preview Modal */}
       {previewTemplate && (
