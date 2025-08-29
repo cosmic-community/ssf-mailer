@@ -598,8 +598,8 @@ export default function CreateTemplateForm() {
               </Card>
             )}
 
-            {/* AI Content Editor - Only show when content exists */}
-            {formData.content && (
+            {/* AI Content Editor - Only show AFTER content exists AND generation is complete */}
+            {formData.content && hasGeneratedContent && (
               <Card className="border-purple-200 bg-purple-50/50">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-purple-800">
