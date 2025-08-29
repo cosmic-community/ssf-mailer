@@ -394,10 +394,140 @@ export default function CreateTemplateForm() {
           <span>Template created successfully!</span>
         </div>
       )}
+
+      {/* Error Messages */}
+      {error && (
+        <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
+          <AlertCircle className="h-5 w-5 text-red-600" />
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Success Messages */}
+      {success && (
+        <div className="flex items-center space-x-2 p-4 bg-green-50 border border-green-200 rounded-md">
+          <CheckCircle className="h-5 w-5 text-green-600" />
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: AI Content Generator and Editor */}
+        {/* Left Column: Template Info Section */}
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              {/* Template Name */}
+              <div className="space-y-2">
+                <Label htmlFor="name">Template Name *</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) => handleInputChange('name', e.target.value)}
+                  placeholder="Enter template name"
+                  disabled={isLoading}
+                  required
+                />
+              </div>
+
+              {/* Template Type - Moved here */}
+              <div className="space-y-2">
+                <Label>Template Type</Label>
+                <Select
+                  value={formData.template_type}
+                  onValueChange={(value) => handleInputChange('template_type', value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Newsletter">Newsletter</SelectItem>
+                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                    <SelectItem value="Promotional">Promotional</SelectItem>
+                    <SelectItem value="Transactional">Transactional</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Subject Line with AI Generate Button */}
+              <div className="space-y-2">
+                <Label htmlFor="subject">Email Subject *</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    id="subject"
+                    type="text"
+                    value={formData.subject}
+                    onChange={(e) => handleInputChange('subject', e.target.value)}
+                    placeholder="Enter email subject line"
+                    disabled={isLoading}
+                    required
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    onClick={handleGenerateSubject}
+                    disabled={isGeneratingSubject || !formData.content.trim()}
+                    className="bg-amber-600 hover:bg-amber-700 text-white px-3"
+                    title="Generate subject from email content"
+                  >
+                    {isGeneratingSubject ? (
+                      <Sparkles className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                {!formData.content.trim() && (
+                  <p className="text-xs text-gray-500">
+                    Generate or add email content first to use AI subject generation
+                  </p>
+                )}
+              </div>
+
+              {/* Active Toggle */}
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="space-y-1">
+                  <Label htmlFor="active" className="text-base font-medium">
+                    Active Template
+                  </Label>
+                  <p className="text-sm text-gray-600">
+                    Active templates are available for creating campaigns
+                  </p>
+                </div>
+                <Switch
+                  id="active"
+                  checked={formData.active}
+                  onCheckedChange={(checked) => handleInputChange('active', checked)}
+                  disabled={isLoading}
+                />
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex space-x-4 pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.back()}
+                  disabled={isLoading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={isLoading || !formData.name.trim() || !formData.subject.trim() || !formData.content.trim()}
+                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  {isLoading ? 'Creating...' : 'Create Template'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Right Column: AI Generator and Preview/Edit */}
         <div className="space-y-6">
           {/* AI Content Generator - Only show when no content has been generated */}
           {!hasGeneratedContent && (
@@ -412,24 +542,6 @@ export default function CreateTemplateForm() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Template Type</Label>
-                  <Select
-                    value={formData.template_type}
-                    onValueChange={(value) => handleInputChange('template_type', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Newsletter">Newsletter</SelectItem>
-                      <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                      <SelectItem value="Promotional">Promotional</SelectItem>
-                      <SelectItem value="Transactional">Transactional</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
                 <div className="space-y-2">
                   <Textarea
                     ref={aiPromptRef}
@@ -547,17 +659,7 @@ export default function CreateTemplateForm() {
             </Card>
           )}
 
-          {/* Error Messages */}
-          {error && (
-            <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
-              <AlertCircle className="h-5 w-5 text-red-600" />
-              <p className="text-red-600">{error}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Right Column: Preview / Edit */}
-        <div className="space-y-6">
+          {/* Preview / Edit Tabs */}
           <Card>
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <TabsList className="grid w-full grid-cols-2">
@@ -619,56 +721,7 @@ export default function CreateTemplateForm() {
               </TabsContent>
 
               <TabsContent value="edit" className="mt-6 p-6">
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Template Name */}
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Template Name *</Label>
-                    <Input
-                      id="name"
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => handleInputChange('name', e.target.value)}
-                      placeholder="Enter template name"
-                      disabled={isLoading}
-                      required
-                    />
-                  </div>
-
-                  {/* Subject Line with AI Generate Button */}
-                  <div className="space-y-2">
-                    <Label htmlFor="subject">Email Subject *</Label>
-                    <div className="flex space-x-2">
-                      <Input
-                        id="subject"
-                        type="text"
-                        value={formData.subject}
-                        onChange={(e) => handleInputChange('subject', e.target.value)}
-                        placeholder="Enter email subject line"
-                        disabled={isLoading}
-                        required
-                        className="flex-1"
-                      />
-                      <Button
-                        type="button"
-                        onClick={handleGenerateSubject}
-                        disabled={isGeneratingSubject || !formData.content.trim()}
-                        className="bg-amber-600 hover:bg-amber-700 text-white px-3"
-                        title="Generate subject from email content"
-                      >
-                        {isGeneratingSubject ? (
-                          <Sparkles className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Sparkles className="h-4 w-4" />
-                        )}
-                      </Button>
-                    </div>
-                    {!formData.content.trim() && (
-                      <p className="text-xs text-gray-500">
-                        Generate or add email content first to use AI subject generation
-                      </p>
-                    )}
-                  </div>
-
+                <div className="space-y-6">
                   {/* Email Content */}
                   <div className="space-y-2">
                     <Label htmlFor="content">Email Content *</Label>
@@ -691,52 +744,7 @@ export default function CreateTemplateForm() {
                       An unsubscribe link will be automatically added to all campaign emails.
                     </p>
                   </div>
-
-                  {/* Active Toggle */}
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="space-y-1">
-                      <Label htmlFor="active" className="text-base font-medium">
-                        Active Template
-                      </Label>
-                      <p className="text-sm text-gray-600">
-                        Active templates are available for creating campaigns
-                      </p>
-                    </div>
-                    <Switch
-                      id="active"
-                      checked={formData.active}
-                      onCheckedChange={(checked) => handleInputChange('active', checked)}
-                      disabled={isLoading}
-                    />
-                  </div>
-
-                  {/* Success Messages */}
-                  {success && (
-                    <div className="flex items-center space-x-2 p-4 bg-green-50 border border-green-200 rounded-md">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
-                      <p className="text-green-600">{success}</p>
-                    </div>
-                  )}
-
-                  {/* Form Actions */}
-                  <div className="flex space-x-4 pt-6">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => router.back()}
-                      disabled={isLoading}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="bg-slate-800 hover:bg-slate-900 text-white"
-                    >
-                      {isLoading ? 'Creating...' : 'Create Template'}
-                    </Button>
-                  </div>
-                </form>
+                </div>
               </TabsContent>
             </Tabs>
           </Card>
