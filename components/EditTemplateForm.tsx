@@ -349,7 +349,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </TabsList>
               
               <TabsContent value="preview" className="mt-6 p-6">
-                  
+                <div className="space-y-6">
                   <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
                     <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
                       <div className="flex items-center justify-between">
