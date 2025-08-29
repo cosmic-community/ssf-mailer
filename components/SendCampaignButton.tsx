@@ -13,11 +13,11 @@ interface SendCampaignButtonProps {
   disabled?: boolean
 }
 
-export default function SendCampaignButton({ 
-  campaignId, 
-  campaignName, 
+export default function SendCampaignButton({
+  campaignId,
+  campaignName,
   recipientCount,
-  disabled = false 
+  disabled = false
 }: SendCampaignButtonProps) {
   const router = useRouter()
   const [isSending, setIsSending] = useState(false)
@@ -27,7 +27,7 @@ export default function SendCampaignButton({
 
   const handleSendCampaign = async () => {
     setIsSending(true)
-    
+
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
@@ -40,7 +40,7 @@ export default function SendCampaignButton({
 
       const result = await response.json()
       setEmailsSent(result.emailsSent || recipientCount)
-      
+
       // Trigger confetti animation
       confetti({
         particleCount: 100,
@@ -50,10 +50,6 @@ export default function SendCampaignButton({
 
       setShowConfirmation(false)
       setShowSuccess(true)
-      
-      // Refresh page data to show updated campaign status
-      // but don't close the modal automatically
-      router.refresh()
 
     } catch (error) {
       console.error('Send error:', error)
@@ -65,13 +61,13 @@ export default function SendCampaignButton({
 
   const handleSuccessClose = () => {
     setShowSuccess(false)
-    // Optional: Navigate to campaigns list or refresh again
-    // router.push('/campaigns')
+    // Refresh the page when user manually closes the modal
+    router.refresh()
   }
 
   return (
     <>
-      <Button 
+      <Button
         onClick={() => setShowConfirmation(true)}
         disabled={disabled || isSending}
         className="btn-primary"
@@ -85,7 +81,7 @@ export default function SendCampaignButton({
           <DialogHeader>
             <DialogTitle>Send Campaign</DialogTitle>
           </DialogHeader>
-          
+
           <div className="py-4">
             <p className="text-gray-600 mb-4">
               Are you sure you want to send "{campaignName}" to {recipientCount} recipients?
@@ -127,7 +123,7 @@ export default function SendCampaignButton({
       </Dialog>
 
       {/* Success Dialog */}
-      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+      <Dialog open={showSuccess} onOpenChange={handleSuccessClose}>
         <DialogContent className="sm:max-w-[400px]">
           <DialogHeader>
             <div className="flex items-center space-x-3">
@@ -141,12 +137,12 @@ export default function SendCampaignButton({
               </DialogTitle>
             </div>
           </DialogHeader>
-          
+
           <div className="py-4">
             <p className="text-gray-600 text-lg">
               Campaign sent successfully! {emailsSent} emails sent.
             </p>
-            
+
             <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
               <div className="flex items-start space-x-2">
                 <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
