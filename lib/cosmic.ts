@@ -227,7 +227,19 @@ export async function getMarketingCampaign(id: string): Promise<MarketingCampaig
       .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
     
-    return object as MarketingCampaign
+    // If we got the campaign but need to fix the template structure
+    if (object) {
+      const campaign = object as MarketingCampaign
+      
+      // If template is an object (relationship), extract the ID for template_id
+      if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+        campaign.metadata.template_id = campaign.metadata.template.id
+      }
+      
+      return campaign
+    }
+    
+    return null
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return null
