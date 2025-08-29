@@ -57,7 +57,11 @@ export async function POST(request: NextRequest) {
 
     // Get existing contacts to check for duplicates
     const existingContacts = await getEmailContacts()
-    const existingEmails = new Set(existingContacts.map(c => c.metadata?.email?.toLowerCase()).filter(Boolean))
+    const existingEmails = new Set(
+      existingContacts
+        .map(c => c.metadata?.email?.toLowerCase())
+        .filter((email): email is string => Boolean(email))
+    )
 
     const contacts: any[] = []
     const errors: string[] = []
@@ -136,8 +140,8 @@ export async function POST(request: NextRequest) {
         continue
       }
 
-      // Check for duplicates - ensure contact.email exists before checking
-      if (contact.email && existingEmails.has(contact.email)) {
+      // Check for duplicates - ensure contact.email exists and is a string before checking
+      if (contact.email && typeof contact.email === 'string' && existingEmails.has(contact.email)) {
         duplicates.push(contact.email)
         continue
       }
@@ -152,7 +156,8 @@ export async function POST(request: NextRequest) {
       }
 
       contacts.push(contact)
-      if (contact.email) {
+      // Ensure email exists and is a string before adding to Set
+      if (contact.email && typeof contact.email === 'string') {
         existingEmails.add(contact.email) // Prevent duplicates within the same file
       }
     }
