@@ -11,7 +11,8 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2 } from 'lucide-react'
+import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface EditTemplateFormProps {
   template: EmailTemplate
@@ -29,6 +30,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [streamingContent, setStreamingContent] = useState('')
   const [aiStatus, setAiStatus] = useState('')
   const [aiProgress, setAiProgress] = useState(0)
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -227,6 +230,34 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     })
   }
 
+  const handleDeleteConfirm = async () => {
+    if (!template.id) {
+      setError('Template ID is missing')
+      return
+    }
+
+    setIsDeleting(true)
+    setShowDeleteModal(false)
+
+    try {
+      const response = await fetch(`/api/templates/${template.id}`, {
+        method: 'DELETE',
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to delete template')
+      }
+
+      // Redirect to templates list
+      router.push('/templates')
+    } catch (error) {
+      console.error('Delete error:', error)
+      setError(error instanceof Error ? error.message : 'Failed to delete template')
+      setIsDeleting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       {/* Success Toast */}
@@ -236,18 +267,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           <span>AI editing completed successfully!</span>
         </div>
       )}
-
-      {/* Unsubscribe Notice */}
-      <div className="flex items-start space-x-3 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-        <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-        <div>
-          <p className="text-blue-800 font-medium">Automatic Unsubscribe Links</p>
-          <p className="text-blue-700 text-sm">
-            All emails sent through campaigns will automatically include an unsubscribe link in the footer. 
-            Recipients can easily opt out of future communications with one click.
-          </p>
-        </div>
-      </div>
 
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -495,6 +514,45 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </Card>
         </div>
       </div>
+
+      {/* Delete Template Section */}
+      <div className="border-t pt-8 mt-8">
+        <Card className="border-red-200 bg-red-50/50">
+          <CardHeader>
+            <CardTitle className="text-red-800 flex items-center space-x-2">
+              <Trash2 className="h-5 w-5" />
+              <span>Danger Zone</span>
+            </CardTitle>
+            <p className="text-red-700 text-sm">
+              Permanently delete this email template. This action cannot be undone.
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteModal(true)}
+              disabled={isDeleting}
+              className="flex items-center space-x-2"
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Delete Template</span>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        title="Delete Template"
+        message={`Are you sure you want to delete "${formData.name}"? This action cannot be undone and will permanently remove this template from your account.`}
+        confirmText="Delete Template"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+      />
     </div>
   )
 }

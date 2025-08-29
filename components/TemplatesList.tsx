@@ -10,39 +10,7 @@ interface TemplatesListProps {
 }
 
 export default function TemplatesList({ templates }: TemplatesListProps) {
-  const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [showDeleteModal, setShowDeleteModal] = useState(false)
-  const [templateToDelete, setTemplateToDelete] = useState<EmailTemplate | null>(null)
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
-
-  const handleDeleteClick = (template: EmailTemplate) => {
-    setTemplateToDelete(template)
-    setShowDeleteModal(true)
-  }
-
-  const handleDeleteConfirm = async () => {
-    if (!templateToDelete) return
-
-    setDeletingId(templateToDelete.id)
-    try {
-      const response = await fetch(`/api/templates/${templateToDelete.id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to delete template')
-      }
-
-      window.location.reload()
-    } catch (error) {
-      console.error('Error deleting template:', error)
-      alert('Failed to delete template')
-    } finally {
-      setDeletingId(null)
-      setShowDeleteModal(false)
-      setTemplateToDelete(null)
-    }
-  }
 
   const generatePreviewContent = (template: EmailTemplate) => {
     if (!template.metadata?.content || !template.metadata?.subject) {
@@ -83,7 +51,11 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template) => (
-          <div key={template.id} className="card hover:shadow-lg transition-shadow">
+          <Link
+            key={template.id}
+            href={`/templates/${template.id}/edit`}
+            className="card hover:shadow-lg transition-shadow block"
+          >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -111,48 +83,9 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
                 <p className="text-sm text-gray-900 font-medium">{template.metadata.subject}</p>
               </div>
             )}
-
-            <div className="flex flex-wrap gap-2 mb-4">
-              <Link
-                href={`/templates/${template.id}/edit`}
-                className="btn-outline text-sm flex-1"
-              >
-                Edit
-              </Link>
-              <button
-                onClick={() => setPreviewTemplate(template)}
-                className="btn-secondary text-sm flex-1"
-              >
-                Preview
-              </button>
-              <button
-                onClick={() => handleDeleteClick(template)}
-                disabled={deletingId === template.id}
-                className="btn-outline text-red-600 border-red-200 hover:bg-red-50 hover:border-red-300 text-sm px-3"
-              >
-                {deletingId === template.id ? '...' : 'Delete'}
-              </button>
-            </div>
-
-            <div className="text-xs text-gray-400">
-              Created: {new Date(template.created_at).toLocaleDateString()}
-            </div>
-          </div>
+          </Link>
         ))}
       </div>
-
-      {/* Delete Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showDeleteModal}
-        onOpenChange={setShowDeleteModal}
-        title="Delete Template"
-        message={`Are you sure you want to delete "${templateToDelete?.metadata?.name}"? This action cannot be undone.`}
-        confirmText="Delete Template"
-        cancelText="Cancel"
-        variant="destructive"
-        onConfirm={handleDeleteConfirm}
-        isLoading={deletingId !== null}
-      />
 
       {/* Preview Modal */}
       {previewTemplate && (
