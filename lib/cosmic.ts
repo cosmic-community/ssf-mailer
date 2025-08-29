@@ -277,7 +277,7 @@ export async function createMarketingCampaign(data: {
       type: 'marketing-campaigns',
       metadata: {
         name: data.name,
-        template: template_id,
+        template: data.template_id,
         target_contacts: targetContacts,
         target_tags: data.target_tags || [],
         status: {
