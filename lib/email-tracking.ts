@@ -6,36 +6,55 @@ export function addTrackingToEmail(
 ): string {
   let trackedContent = htmlContent
 
-  // Create a more robust tracking pixel that works better with email clients
-  // Use CSS properties that are less likely to be stripped by email clients
-  // Place the pixel in a table cell for better email client compatibility
-  const trackingPixel = `
-    <table role="presentation" style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; border-collapse: collapse;">
+  // Create multiple tracking pixels with different approaches for maximum compatibility
+  // Some email clients block certain implementations, so we use multiple fallbacks
+  
+  // Method 1: Standard tracking pixel in a table (best for most email clients)
+  const standardPixel = `
+    <table role="presentation" style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; border-collapse: collapse; font-size: 1px; line-height: 1px;">
       <tr>
-        <td style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; line-height: 1px; font-size: 1px;">
-          <img src="${baseUrl}/api/track/open?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}" 
+        <td style="width: 1px; height: 1px; margin: 0; padding: 0; border: 0; font-size: 1px; line-height: 1px; overflow: hidden;">
+          <img src="${baseUrl}/api/track/open?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&t=${Date.now()}" 
                width="1" 
                height="1" 
-               style="width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: none !important; display: block !important; max-width: 1px !important; max-height: 1px !important; min-width: 1px !important; min-height: 1px !important;" 
+               style="width: 1px !important; height: 1px !important; margin: 0 !important; padding: 0 !important; border: none !important; display: block !important; max-width: 1px !important; max-height: 1px !important; min-width: 1px !important; min-height: 1px !important; opacity: 0; visibility: hidden;" 
                alt="" 
-               border="0">
+               border="0"
+               loading="eager">
         </td>
       </tr>
     </table>`
+
+  // Method 2: CSS background image pixel (backup for clients that strip img tags)
+  const backgroundPixel = `
+    <div style="width: 1px; height: 1px; background-image: url('${baseUrl}/api/track/open?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&m=bg&t=${Date.now()}'); background-repeat: no-repeat; background-size: 1px 1px; overflow: hidden; font-size: 1px; line-height: 1px; opacity: 0;"></div>`
+
+  // Method 3: Hidden div with fetch-based tracking (for modern email clients)
+  const scriptPixel = `
+    <div id="track-${campaignId}-${contactId}" style="display: none; width: 0; height: 0; overflow: hidden;">
+      <script type="text/javascript">
+        try {
+          var img = new Image();
+          img.src = '${baseUrl}/api/track/open?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&m=js&t=' + Date.now();
+        } catch(e) {}
+      </script>
+    </div>`
+
+  // Insert all tracking pixels before closing body tag, or at the very end
+  const allPixels = standardPixel + backgroundPixel + scriptPixel
   
-  // Insert tracking pixel before closing body tag, or at the very end if no body tag
   if (trackedContent.includes('</body>')) {
-    trackedContent = trackedContent.replace('</body>', `${trackingPixel}</body>`)
+    trackedContent = trackedContent.replace('</body>', `${allPixels}</body>`)
   } else if (trackedContent.includes('</html>')) {
-    trackedContent = trackedContent.replace('</html>', `${trackingPixel}</html>`)
+    trackedContent = trackedContent.replace('</html>', `${allPixels}</html>`)
   } else {
     // If no body or html tag, append at the end
-    trackedContent += trackingPixel
+    trackedContent += allPixels
   }
 
-  // Track all links in the email with better URL encoding
+  // Track all links in the email with improved URL encoding
   trackedContent = trackedContent.replace(
-    /href="([^"]+)"/g,
+    /href\s*=\s*["']([^"']+)["']/g,
     (match, url) => {
       // Skip tracking pixels, mailto links, tel links, anchors, and unsubscribe links
       if (
@@ -49,9 +68,9 @@ export function addTrackingToEmail(
         return match
       }
 
-      // Double-encode the URL to ensure it survives email client processing
+      // Create click tracking URL with timestamp for uniqueness
       const encodedUrl = encodeURIComponent(url)
-      const trackingUrl = `${baseUrl}/api/track/click?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&url=${encodedUrl}`
+      const trackingUrl = `${baseUrl}/api/track/click?c=${encodeURIComponent(campaignId)}&u=${encodeURIComponent(contactId)}&url=${encodedUrl}&t=${Date.now()}`
       return `href="${trackingUrl}"`
     }
   )
