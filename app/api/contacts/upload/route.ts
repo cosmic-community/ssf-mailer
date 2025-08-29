@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createEmailContact } from '@/lib/cosmic'
-import Papa from 'papaparse'
-
-interface CSVRow {
-  [key: string]: string;
-}
-
-interface ParsedContact {
-  first_name: string;
-  last_name?: string;
-  email: string;
-  status: 'Active' | 'Unsubscribed' | 'Bounced';
-  tags?: string[];
-  subscribe_date?: string;
-  notes?: string;
-}
+import { createEmailContact, getEmailContacts } from '@/lib/cosmic'
+import { EmailContact } from '@/types'
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,163 +9,200 @@ export async function POST(request: NextRequest) {
     
     if (!file) {
       return NextResponse.json(
-        { error: 'No file provided' },
+        { error: 'No file uploaded' },
         { status: 400 }
       )
     }
 
-    if (!file.name.endsWith('.csv')) {
+    // Validate file type
+    if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
       return NextResponse.json(
-        { error: 'File must be a CSV' },
+        { error: 'Please upload a CSV file' },
+        { status: 400 }
+      )
+    }
+
+    // Validate file size (10MB limit)
+    const maxSize = 10 * 1024 * 1024 // 10MB
+    if (file.size > maxSize) {
+      return NextResponse.json(
+        { error: 'File size must be less than 10MB' },
         { status: 400 }
       )
     }
 
     const text = await file.text()
+    const lines = text.split('\n').filter(line => line.trim())
     
-    return new Promise((resolve) => {
-      Papa.parse<CSVRow>(text, {
-        header: true,
-        skipEmptyLines: true,
-        complete: async (results) => {
-          try {
-            const contacts: ParsedContact[] = []
-            const errors: string[] = []
-            
-            // Validate and process each row
-            for (let i = 0; i < results.data.length; i++) {
-              const row = results.data[i]
-              const rowNumber = i + 2 // +2 because Papa Parse is 0-indexed and we have a header row
+    if (lines.length < 2) {
+      return NextResponse.json(
+        { error: 'CSV must contain at least a header row and one data row' },
+        { status: 400 }
+      )
+    }
 
-              // Check if row exists and is not undefined
-              if (!row) {
-                errors.push(`Row ${rowNumber}: Row data is missing or invalid`)
-                continue
-              }
+    // Parse CSV header
+    const header = lines[0].split(',').map(h => h.trim().toLowerCase())
+    
+    // Validate required columns
+    const requiredColumns = ['first_name', 'email']
+    const missingColumns = requiredColumns.filter(col => !header.includes(col))
+    
+    if (missingColumns.length > 0) {
+      return NextResponse.json(
+        { error: `Missing required columns: ${missingColumns.join(', ')}` },
+        { status: 400 }
+      )
+    }
 
-              // Extract and validate required fields
-              const firstName = row.first_name || row['First Name'] || row.firstname
-              const lastName = row.last_name || row['Last Name'] || row.lastname || ''
-              const email = row.email || row['Email'] || row.email_address
+    // Get existing contacts to check for duplicates
+    const existingContacts = await getEmailContacts()
+    const existingEmails = new Set(existingContacts.map(c => c.metadata?.email?.toLowerCase()))
 
-              if (!firstName || firstName.trim() === '') {
-                errors.push(`Row ${rowNumber}: First name is required`)
-                continue
-              }
+    const contacts: any[] = []
+    const errors: string[] = []
+    const duplicates: string[] = []
+    
+    // Process each data row
+    for (let i = 1; i < lines.length; i++) {
+      const row = lines[i].split(',').map(cell => cell.trim())
+      
+      if (row.length !== header.length) {
+        errors.push(`Row ${i + 1}: Column count mismatch`)
+        continue
+      }
 
-              if (!email || email.trim() === '') {
-                errors.push(`Row ${rowNumber}: Email is required`)
-                continue
-              }
-
-              // Validate email format
-              const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-              if (!emailRegex.test(email.trim())) {
-                errors.push(`Row ${rowNumber}: Invalid email format`)
-                continue
-              }
-
-              // Extract optional fields with safe access
-              const status = (row.status || row['Status'] || 'Active') as 'Active' | 'Unsubscribed' | 'Bounced'
-              const tagsString = row.tags || row['Tags'] || row.tag || ''
-              const tags = tagsString ? tagsString.split(',').map((tag: string) => tag.trim()).filter((tag: string) => tag.length > 0) : []
-              const subscribeDate = row.subscribe_date || row['Subscribe Date'] || row.date_subscribed || new Date().toISOString().split('T')[0]
-              const notes = row.notes || row['Notes'] || row.note || ''
-
-              // Validate status value
-              if (!['Active', 'Unsubscribed', 'Bounced'].includes(status)) {
-                errors.push(`Row ${rowNumber}: Status must be Active, Unsubscribed, or Bounced`)
-                continue
-              }
-
-              // Validate date format if provided
-              if (subscribeDate && subscribeDate !== new Date().toISOString().split('T')[0]) {
-                const dateRegex = /^\d{4}-\d{2}-\d{2}$/
-                if (!dateRegex.test(subscribeDate)) {
-                  errors.push(`Row ${rowNumber}: Subscribe date must be in YYYY-MM-DD format`)
-                  continue
-                }
-              }
-
-              contacts.push({
-                first_name: firstName.trim(),
-                last_name: lastName.trim(),
-                email: email.trim().toLowerCase(),
-                status,
-                tags: tags.length > 0 ? tags : undefined,
-                subscribe_date: subscribeDate,
-                notes: notes.trim() || undefined
-              })
+      const contact: any = {}
+      
+      // Map CSV columns to contact fields
+      header.forEach((column, index) => {
+        const value = row[index]
+        
+        switch (column) {
+          case 'first_name':
+            contact.first_name = value
+            break
+          case 'last_name':
+            contact.last_name = value || ''
+            break
+          case 'email':
+            contact.email = value?.toLowerCase()
+            break
+          case 'status':
+            // Validate status value
+            if (value && ['active', 'unsubscribed', 'bounced'].includes(value.toLowerCase())) {
+              contact.status = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
+            } else {
+              contact.status = 'Active'
             }
-
-            // Stop if there are validation errors
-            if (errors.length > 0) {
-              resolve(NextResponse.json({
-                error: 'Validation errors found',
-                details: errors,
-                processed: 0,
-                total: results.data.length
-              }, { status: 400 }))
-              return
+            break
+          case 'tags':
+            // Parse tags (comma-separated or semicolon-separated)
+            if (value) {
+              contact.tags = value.split(/[;,]/).map(tag => tag.trim()).filter(tag => tag)
+            } else {
+              contact.tags = []
             }
-
-            // Import contacts to Cosmic
-            let successCount = 0
-            const importErrors: string[] = []
-
-            for (let i = 0; i < contacts.length; i++) {
-              const contact = contacts[i]
-              if (!contact) {
-                importErrors.push(`Contact ${i + 1}: Contact data is missing`)
-                continue
-              }
-
-              try {
-                await createEmailContact({
-                  first_name: contact.first_name,
-                  last_name: contact.last_name,
-                  email: contact.email,
-                  status: contact.status,
-                  tags: contact.tags,
-                  subscribe_date: contact.subscribe_date,
-                  notes: contact.notes
-                })
-                successCount++
-              } catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-                importErrors.push(`Row ${i + 2}: Failed to create contact - ${errorMessage}`)
-              }
+            break
+          case 'notes':
+            contact.notes = value || ''
+            break
+          case 'subscribe_date':
+            // Validate date format (YYYY-MM-DD)
+            if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+              contact.subscribe_date = value
+            } else {
+              contact.subscribe_date = new Date().toISOString().split('T')[0]
             }
-
-            resolve(NextResponse.json({
-              success: true,
-              message: `Successfully imported ${successCount} contacts`,
-              processed: successCount,
-              total: contacts.length,
-              errors: importErrors.length > 0 ? importErrors : undefined
-            }))
-
-          } catch (error) {
-            console.error('CSV processing error:', error)
-            resolve(NextResponse.json(
-              { error: 'Failed to process CSV file' },
-              { status: 500 }
-            ))
-          }
-        },
-        error: (error) => {
-          console.error('CSV parsing error:', error)
-          resolve(NextResponse.json(
-            { error: 'Failed to parse CSV file' },
-            { status: 400 }
-          ))
+            break
         }
       })
+
+      // Validate required fields
+      if (!contact.first_name) {
+        errors.push(`Row ${i + 1}: First name is required`)
+        continue
+      }
+
+      if (!contact.email) {
+        errors.push(`Row ${i + 1}: Email is required`)
+        continue
+      }
+
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      if (!emailRegex.test(contact.email)) {
+        errors.push(`Row ${i + 1}: Invalid email format: ${contact.email}`)
+        continue
+      }
+
+      // Check for duplicates
+      if (existingEmails.has(contact.email)) {
+        duplicates.push(contact.email)
+        continue
+      }
+
+      // Set default values
+      if (!contact.status) contact.status = 'Active'
+      if (!contact.tags) contact.tags = []
+      if (!contact.last_name) contact.last_name = ''
+      if (!contact.notes) contact.notes = ''
+      if (!contact.subscribe_date) {
+        contact.subscribe_date = new Date().toISOString().split('T')[0]
+      }
+
+      contacts.push(contact)
+      existingEmails.add(contact.email) // Prevent duplicates within the same file
+    }
+
+    // If there are too many errors, abort
+    if (errors.length > 50) {
+      return NextResponse.json(
+        { 
+          error: 'Too many validation errors in the CSV file',
+          errors: errors.slice(0, 10),
+          total_errors: errors.length
+        },
+        { status: 400 }
+      )
+    }
+
+    // Create contacts in Cosmic
+    const created: EmailContact[] = []
+    const creationErrors: string[] = []
+
+    for (const contactData of contacts) {
+      try {
+        const newContact = await createEmailContact(contactData)
+        created.push(newContact)
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+        creationErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`)
+      }
+    }
+
+    // Return results
+    return NextResponse.json({
+      success: true,
+      message: `Successfully imported ${created.length} contacts`,
+      results: {
+        total_processed: lines.length - 1,
+        successful: created.length,
+        duplicates: duplicates.length,
+        validation_errors: errors.length,
+        creation_errors: creationErrors.length,
+      },
+      contacts: created,
+      duplicates: duplicates.length > 0 ? duplicates : undefined,
+      validation_errors: errors.length > 0 ? errors : undefined,
+      creation_errors: creationErrors.length > 0 ? creationErrors : undefined,
     })
-  } catch (error) {
-    console.error('Upload error:', error)
+
+  } catch (error: unknown) {
+    console.error('CSV upload error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'An unexpected error occurred'
     return NextResponse.json(
-      { error: 'Failed to upload file' },
+      { error: `Failed to process CSV file: ${errorMessage}` },
       { status: 500 }
     )
   }
