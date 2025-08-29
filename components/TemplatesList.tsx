@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { EmailTemplate } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
-import { Copy, Edit, Eye, MoreVertical } from 'lucide-react'
+import { Copy, Eye } from 'lucide-react'
 
 interface TemplatesListProps {
   templates: EmailTemplate[]
@@ -68,6 +68,18 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
     }
   }
 
+  const handlePreview = (e: React.MouseEvent, template: EmailTemplate) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPreviewTemplate(template)
+  }
+
+  const handleDuplicate = (e: React.MouseEvent, template: EmailTemplate) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowDuplicateConfirm(template)
+  }
+
   if (templates.length === 0) {
     return (
       <div className="text-center py-12">
@@ -103,9 +115,10 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template) => (
-          <div
+          <Link
             key={template.id}
-            className="card hover:shadow-lg transition-shadow relative group"
+            href={`/templates/${template.id}/edit`}
+            className="card hover:shadow-lg transition-shadow relative group cursor-pointer block"
           >
             {/* Template Card Content */}
             <div className="flex items-start justify-between mb-4">
@@ -138,27 +151,17 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
 
             {/* Action Buttons */}
             <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => setPreviewTemplate(template)}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                  title="Preview template"
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>Preview</span>
-                </button>
-                <Link
-                  href={`/templates/${template.id}/edit`}
-                  className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-                  title="Edit template"
-                >
-                  <Edit className="h-4 w-4" />
-                  <span>Edit</span>
-                </Link>
-              </div>
+              <button
+                onClick={(e) => handlePreview(e, template)}
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                title="Preview template"
+              >
+                <Eye className="h-4 w-4" />
+                <span>Preview</span>
+              </button>
               
               <button
-                onClick={() => setShowDuplicateConfirm(template)}
+                onClick={(e) => handleDuplicate(e, template)}
                 disabled={duplicatingId === template.id}
                 className="flex items-center space-x-1 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
                 title="Duplicate template"
@@ -176,7 +179,7 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
                 )}
               </button>
             </div>
-          </div>
+          </Link>
         ))}
       </div>
 

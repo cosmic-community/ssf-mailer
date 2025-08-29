@@ -1,6 +1,7 @@
 // app/api/templates/[id]/duplicate/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
+import { EmailTemplate } from '@/types'
 
 export async function POST(
   request: NextRequest,
@@ -13,7 +14,7 @@ export async function POST(
     const { object: originalTemplate } = await cosmic.objects.findOne({
       id: id,
       type: 'email-templates'
-    }).depth(1)
+    }).depth(1) as { object: EmailTemplate }
 
     if (!originalTemplate) {
       return NextResponse.json(
@@ -26,7 +27,7 @@ export async function POST(
     const originalName = originalTemplate.metadata?.name || originalTemplate.title
     const copyName = `${originalName} (Copy)`
 
-    // Create the duplicate template
+    // Create the duplicate template with proper metadata structure
     const duplicatedTemplate = await cosmic.objects.insertOne({
       title: copyName,
       type: 'email-templates',
@@ -34,7 +35,7 @@ export async function POST(
         name: copyName,
         subject: originalTemplate.metadata?.subject || '',
         content: originalTemplate.metadata?.content || '',
-        template_type: originalTemplate.metadata?.template_type || 'Newsletter',
+        template_type: originalTemplate.metadata?.template_type?.value || 'Newsletter',
         active: false, // Set duplicates as inactive by default
         preview_image: originalTemplate.metadata?.preview_image || null
       }
@@ -45,10 +46,10 @@ export async function POST(
       data: duplicatedTemplate,
       message: `Template "${originalName}" duplicated successfully as "${copyName}"`
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error duplicating template:', error)
     return NextResponse.json(
-      { error: 'Failed to duplicate template' },
+      { error: error.message || 'Failed to duplicate template' },
       { status: 500 }
     )
   }
