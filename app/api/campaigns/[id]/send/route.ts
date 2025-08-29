@@ -1,6 +1,6 @@
 // app/api/campaigns/[id]/send/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { getMarketingCampaign, updateCampaignStatus } from '@/lib/cosmic'
+import { getMarketingCampaign, updateCampaignStatus, getSettings } from '@/lib/cosmic'
 import { resend } from '@/lib/resend'
 
 // Helper function to generate unsubscribe token
@@ -59,6 +59,12 @@ export async function POST(
       )
     }
 
+    // Get settings for from name and email
+    const settings = await getSettings()
+    const fromName = settings?.metadata.from_name || 'Your Company'
+    const fromEmail = settings?.metadata.from_email || 'noreply@cosmicjs.com'
+    const replyToEmail = settings?.metadata.reply_to_email || fromEmail
+
     const template = campaign.metadata.template
     const targetContacts = campaign.metadata.target_contacts || []
 
@@ -108,15 +114,22 @@ export async function POST(
           emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
         }
 
+        // Add company name if available in settings
+        if (settings?.metadata.company_name) {
+          emailContent = emailContent.replace(/\{\{company_name\}\}/g, settings.metadata.company_name)
+          emailSubject = emailSubject.replace(/\{\{company_name\}\}/g, settings.metadata.company_name)
+        }
+
         // Add unsubscribe link to email content
         emailContent = addUnsubscribeLink(emailContent, contact.metadata.email)
 
         // Send email with proper error handling for Resend API
         const result = await resend.emails.send({
-          from: 'noreply@cosmicjs.com',
+          from: `${fromName} <${fromEmail}>`,
           to: contact.metadata.email,
           subject: emailSubject,
           html: emailContent,
+          reply_to: replyToEmail,
         })
 
         // If we get here, the email was sent successfully
