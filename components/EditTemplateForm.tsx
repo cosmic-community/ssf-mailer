@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef } from 'react'
+import { useState, useTransition, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,6 +33,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
 
+  // Refs for autofocus and auto-resize
+  const aiPromptRef = useRef<HTMLTextAreaElement>(null)
+
   // Form state
   const [formData, setFormData] = useState({
     name: template.metadata.name,
@@ -41,6 +44,43 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     template_type: template.metadata.template_type.value as TemplateType,
     active: template.metadata.active
   })
+
+  // Auto-resize textarea function
+  const autoResize = (textarea: HTMLTextAreaElement) => {
+    textarea.style.height = 'auto'
+    textarea.style.height = textarea.scrollHeight + 'px'
+  }
+
+  // Handle keyboard shortcuts for AI prompt textarea
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+      e.preventDefault()
+      handleAIEdit()
+    }
+  }
+
+  // Set up auto-resize for textarea
+  useEffect(() => {
+    if (aiPromptRef.current) {
+      const textarea = aiPromptRef.current
+      const handleInput = () => autoResize(textarea)
+      textarea.addEventListener('input', handleInput)
+      
+      // Initial resize
+      autoResize(textarea)
+      
+      return () => textarea.removeEventListener('input', handleInput)
+    }
+  }, [])
+
+  // Auto-focus AI prompt when AI section is shown
+  const handleAISectionFocus = () => {
+    setTimeout(() => {
+      if (aiPromptRef.current) {
+        aiPromptRef.current.focus()
+      }
+    }, 100)
+  }
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -395,12 +435,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Textarea
+                  ref={aiPromptRef}
                   placeholder="Describe how you'd like to modify the template (e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual')"
                   value={aiPrompt}
-                  onChange={(e) => setAiPrompt(e.target.value)}
+                  onChange={(e) => {
+                    setAiPrompt(e.target.value)
+                    autoResize(e.target)
+                  }}
+                  onKeyDown={handleKeyDown}
+                  onFocus={handleAISectionFocus}
                   className="min-h-[100px] resize-none"
                   disabled={isAIEditing}
                 />
+                <p className="text-xs text-purple-600">
+                  💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                </p>
               </div>
               
               {/* AI Edit Status Display */}
