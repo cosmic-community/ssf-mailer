@@ -393,11 +393,6 @@ export default function CreateTemplateForm() {
         </div>
       )}
 
-      <div className="mb-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Create New Template</h2>
-        <p className="text-gray-600">Use AI to generate content or create your template manually</p>
-      </div>
-
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
