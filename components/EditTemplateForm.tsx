@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2 } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface EditTemplateFormProps {
@@ -32,6 +32,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [aiProgress, setAiProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  
+  // Media URL state for AI editing
+  const [mediaUrl, setMediaUrl] = useState('')
 
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -98,6 +101,35 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 3000)
   }
 
+  // Detect file type from URL
+  const getFileType = (url: string) => {
+    const extension = url.split('.').pop()?.toLowerCase()
+    if (!extension) return 'file'
+    
+    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
+    const documentTypes = ['pdf', 'doc', 'docx', 'txt', 'rtf']
+    const spreadsheetTypes = ['xls', 'xlsx', 'csv']
+    
+    if (imageTypes.includes(extension)) return 'image'
+    if (documentTypes.includes(extension)) return 'document'
+    if (spreadsheetTypes.includes(extension)) return 'spreadsheet'
+    return 'file'
+  }
+
+  // Get appropriate icon for file type
+  const getFileIcon = (url: string) => {
+    const type = getFileType(url)
+    switch (type) {
+      case 'image':
+        return <Image className="h-4 w-4" />
+      case 'document':
+      case 'spreadsheet':
+        return <FileText className="h-4 w-4" />
+      default:
+        return <File className="h-4 w-4" />
+    }
+  }
+
   const handleAIEdit = async () => {
     if (!aiPrompt.trim()) {
       setError('Please provide instructions for AI editing')
@@ -123,7 +155,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         templateId: template.id, // Now safely guaranteed to be a string
         currentContent: formData.content,
         currentSubject: formData.subject,
-        prompt: aiPrompt
+        prompt: aiPrompt,
+        media_url: mediaUrl.trim() || undefined
       }
 
       const response = await fetch('/api/templates/edit-ai', {
@@ -177,6 +210,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     subject: data.data.subject || prev.subject
                   }))
                   setAiPrompt('')
+                  setMediaUrl('')
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
@@ -451,6 +485,45 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 />
                 <p className="text-xs text-purple-600">
                   💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                </p>
+              </div>
+
+              {/* Media URL Input for AI Editing */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_media_url" className="text-sm font-medium text-purple-800">
+                  Reference File (Optional)
+                </Label>
+                <div className="flex space-x-2">
+                  <Input
+                    id="edit_media_url"
+                    type="url"
+                    value={mediaUrl}
+                    onChange={(e) => setMediaUrl(e.target.value)}
+                    placeholder="https://example.com/style-reference.jpg or brand-guide.pdf"
+                    disabled={isAIEditing}
+                    className="flex-1"
+                  />
+                  {mediaUrl && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setMediaUrl('')}
+                      disabled={isAIEditing}
+                      className="px-2"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
+                {mediaUrl && (
+                  <div className="flex items-center space-x-2 text-xs text-purple-600">
+                    {getFileIcon(mediaUrl)}
+                    <span>AI will use this {getFileType(mediaUrl)} as reference for improvements</span>
+                  </div>
+                )}
+                <p className="text-xs text-purple-600">
+                  📎 Upload style guides, brand references, or examples for AI to follow
                 </p>
               </div>
               

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Sparkles, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
 
@@ -30,6 +30,10 @@ export default function CreateTemplateForm() {
   const [aiStatus, setAiStatus] = useState('')
   const [aiProgress, setAiProgress] = useState(0)
   const [hasGeneratedContent, setHasGeneratedContent] = useState(false)
+  
+  // Media URL state
+  const [mediaUrl, setMediaUrl] = useState('')
+  const [editMediaUrl, setEditMediaUrl] = useState('')
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -90,6 +94,35 @@ export default function CreateTemplateForm() {
     setSuccess('')
   }
 
+  // Detect file type from URL
+  const getFileType = (url: string) => {
+    const extension = url.split('.').pop()?.toLowerCase()
+    if (!extension) return 'file'
+    
+    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
+    const documentTypes = ['pdf', 'doc', 'docx', 'txt', 'rtf']
+    const spreadsheetTypes = ['xls', 'xlsx', 'csv']
+    
+    if (imageTypes.includes(extension)) return 'image'
+    if (documentTypes.includes(extension)) return 'document'
+    if (spreadsheetTypes.includes(extension)) return 'spreadsheet'
+    return 'file'
+  }
+
+  // Get appropriate icon for file type
+  const getFileIcon = (url: string) => {
+    const type = getFileType(url)
+    switch (type) {
+      case 'image':
+        return <Image className="h-4 w-4" />
+      case 'document':
+      case 'spreadsheet':
+        return <FileText className="h-4 w-4" />
+      default:
+        return <File className="h-4 w-4" />
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -146,7 +179,8 @@ export default function CreateTemplateForm() {
         },
         body: JSON.stringify({
           prompt: aiPrompt,
-          type: formData.template_type
+          type: formData.template_type,
+          media_url: mediaUrl.trim() || undefined
         }),
       })
 
@@ -192,6 +226,7 @@ export default function CreateTemplateForm() {
                     content: data.data.content // Only set content, no subject
                   }))
                   setAIPrompt('')
+                  setMediaUrl('')
                   setAiStatus('Generation complete!')
                   setAiProgress(100)
                   setHasGeneratedContent(true)
@@ -298,7 +333,8 @@ export default function CreateTemplateForm() {
           prompt: editPrompt,
           currentContent: formData.content,
           currentSubject: formData.subject,
-          templateId: 'new'
+          templateId: 'new',
+          media_url: editMediaUrl.trim() || undefined
         }),
       })
 
@@ -345,6 +381,7 @@ export default function CreateTemplateForm() {
                     subject: data.data.subject || prev.subject
                   }))
                   setEditPrompt('')
+                  setEditMediaUrl('')
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   addToast('AI content editing completed successfully!', 'success')
@@ -560,6 +597,45 @@ export default function CreateTemplateForm() {
                       💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-200 rounded">Cmd+Enter</kbd> to generate
                     </p>
                   </div>
+
+                  {/* Media URL Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="media_url" className="text-sm font-medium text-blue-800">
+                      Reference File (Optional)
+                    </Label>
+                    <div className="flex space-x-2">
+                      <Input
+                        id="media_url"
+                        type="url"
+                        value={mediaUrl}
+                        onChange={(e) => setMediaUrl(e.target.value)}
+                        placeholder="https://example.com/image.jpg or https://cdn.cosmicjs.com/document.pdf"
+                        disabled={isAIGenerating}
+                        className="flex-1"
+                      />
+                      {mediaUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setMediaUrl('')}
+                          disabled={isAIGenerating}
+                          className="px-2"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {mediaUrl && (
+                      <div className="flex items-center space-x-2 text-xs text-blue-600">
+                        {getFileIcon(mediaUrl)}
+                        <span>AI will analyze this {getFileType(mediaUrl)} when generating content</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-blue-600">
+                      📎 Supports images, PDFs, documents, spreadsheets, and more from your Cosmic bucket or any URL
+                    </p>
+                  </div>
                   
                   {/* AI Status Display */}
                   {(isAIGenerating && aiStatus) && (
@@ -627,6 +703,45 @@ export default function CreateTemplateForm() {
                     />
                     <p className="text-xs text-purple-600">
                       💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                    </p>
+                  </div>
+
+                  {/* Edit Media URL Input */}
+                  <div className="space-y-2">
+                    <Label htmlFor="edit_media_url" className="text-sm font-medium text-purple-800">
+                      Reference File (Optional)
+                    </Label>
+                    <div className="flex space-x-2">
+                      <Input
+                        id="edit_media_url"
+                        type="url"
+                        value={editMediaUrl}
+                        onChange={(e) => setEditMediaUrl(e.target.value)}
+                        placeholder="https://example.com/style-reference.jpg or brand-guide.pdf"
+                        disabled={isAIEditing}
+                        className="flex-1"
+                      />
+                      {editMediaUrl && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditMediaUrl('')}
+                          disabled={isAIEditing}
+                          className="px-2"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {editMediaUrl && (
+                      <div className="flex items-center space-x-2 text-xs text-purple-600">
+                        {getFileIcon(editMediaUrl)}
+                        <span>AI will use this {getFileType(editMediaUrl)} as reference for edits</span>
+                      </div>
+                    )}
+                    <p className="text-xs text-purple-600">
+                      📎 Upload style guides, brand references, or examples for AI to follow
                     </p>
                   </div>
                   

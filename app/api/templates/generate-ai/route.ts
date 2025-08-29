@@ -4,7 +4,7 @@ import { TextStreamingResponse } from '@cosmicjs/sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, type } = await request.json()
+    const { prompt, type, media_url } = await request.json()
     
     if (!prompt || !type) {
       return NextResponse.json(
@@ -48,6 +48,7 @@ export async function POST(request: NextRequest) {
             Primary Brand Color: ${primaryColor}
             Current Year: ${currentYear} (use this for copyright footer)
             ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
+            ${media_url ? `\n\nIMPORTANT: Analyze the provided file/media and incorporate relevant information from it into the email content.` : ''}
             `
 
             if (type === 'Newsletter') {
@@ -100,12 +101,22 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
             )
 
-            // Generate content with Cosmic AI streaming
-            const aiResponse = await cosmic.ai.generateText({
+            // Generate content with Cosmic AI streaming - include media_url if provided
+            const aiRequestPayload: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
-            })
+            }
+
+            // Add media_url to the request if provided
+            if (media_url && media_url.trim()) {
+              aiRequestPayload.media_url = media_url.trim()
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Analyzing provided media with AI...","progress":40}\n\n')
+              )
+            }
+
+            const aiResponse = await cosmic.ai.generateText(aiRequestPayload)
 
             // Check if aiResponse is a streaming response by checking for the 'on' method
             const isStreamingResponse = aiResponse && 

@@ -4,7 +4,7 @@ import { TextStreamingResponse } from '@cosmicjs/sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, currentContent, currentSubject, templateId } = await request.json()
+    const { prompt, currentContent, currentSubject, templateId, media_url } = await request.json()
     
     if (!prompt) {
       return new Response(
@@ -55,6 +55,7 @@ Tone: ${aiTone}
 Primary Brand Color: ${primaryColor}
 Current Year: ${currentYear} (use this for copyright footer if updating footer)
 ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
+${media_url ? `\n\nIMPORTANT: Use the provided file/media as reference for the improvements. Analyze its content and incorporate relevant information or styling cues.` : ''}
 
 Instructions:
 - Maintain the HTML structure and email compatibility
@@ -73,12 +74,26 @@ IMPORTANT: DO NOT include or modify any unsubscribe links - these are added auto
               encoder.encode('data: {"type":"status","message":"Applying AI improvements...","progress":60}\n\n')
             )
 
-            // Generate improved content with Cosmic AI streaming
-            const aiResponse = await cosmic.ai.generateText({
+            // Add media analysis status if media_url is provided
+            if (media_url && media_url.trim()) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Analyzing provided media for improvements...","progress":45}\n\n')
+              )
+            }
+
+            // Generate improved content with Cosmic AI streaming - include media_url if provided
+            const aiRequestPayload: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
-            })
+            }
+
+            // Add media_url to the request if provided
+            if (media_url && media_url.trim()) {
+              aiRequestPayload.media_url = media_url.trim()
+            }
+
+            const aiResponse = await cosmic.ai.generateText(aiRequestPayload)
 
             // Handle both streaming and non-streaming responses
             if (aiResponse && typeof aiResponse === 'object' && 'on' in aiResponse) {
