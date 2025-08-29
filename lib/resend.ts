@@ -14,6 +14,7 @@ export interface SendEmailOptions {
   html?: string
   text?: string
   reply_to?: string
+  headers?: Record<string, string>
 }
 
 // The Resend library returns a Promise that resolves to either success data or throws an error
@@ -24,4 +25,37 @@ export interface ResendSuccessResponse {
 export interface ResendErrorResponse {
   message: string
   name: string
+}
+
+// Export the sendEmail function that wraps the Resend SDK
+export async function sendEmail(options: SendEmailOptions): Promise<ResendSuccessResponse> {
+  try {
+    // Ensure text field is always a string (required by Resend API)
+    const textContent = options.text || (options.html ? options.html.replace(/<[^>]*>/g, '') : options.subject)
+    
+    const result = await resend.emails.send({
+      from: options.from,
+      to: options.to,
+      subject: options.subject,
+      html: options.html,
+      text: textContent, // Now guaranteed to be a string
+      reply_to: options.reply_to,
+      headers: options.headers
+    })
+
+    // The Resend SDK returns { data: { id: string }, error: null } on success
+    // or { data: null, error: ErrorObject } on failure
+    if (result.error) {
+      throw new Error(result.error.message || 'Failed to send email')
+    }
+
+    if (!result.data?.id) {
+      throw new Error('Invalid response from Resend API')
+    }
+
+    return { id: result.data.id }
+  } catch (error: any) {
+    console.error('Resend API error:', error)
+    throw new Error(error.message || 'Failed to send email via Resend')
+  }
 }
