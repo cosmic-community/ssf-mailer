@@ -3,6 +3,38 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getMarketingCampaign, updateCampaignStatus } from '@/lib/cosmic'
 import { resend } from '@/lib/resend'
 
+// Helper function to generate unsubscribe token
+function generateUnsubscribeToken(email: string): string {
+  return Buffer.from(email + process.env.COSMIC_BUCKET_SLUG).toString('base64')
+}
+
+// Helper function to add unsubscribe link to email content
+function addUnsubscribeLink(content: string, email: string): string {
+  const token = generateUnsubscribeToken(email)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+  const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`
+  
+  // Create unsubscribe footer
+  const unsubscribeFooter = `
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; text-align: center; color: #6b7280; font-size: 12px;">
+      <p>
+        You received this email because you subscribed to our mailing list.
+        <br>
+        <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a>
+        from future emails.
+      </p>
+    </div>
+  `
+
+  // If content already contains closing body tag, insert before it
+  if (content.includes('</body>')) {
+    return content.replace('</body>', `${unsubscribeFooter}</body>`)
+  } else {
+    // Otherwise, append at the end
+    return content + unsubscribeFooter
+  }
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -56,6 +88,11 @@ export async function POST(
         continue
       }
 
+      // Skip unsubscribed contacts
+      if (contact.metadata.status?.value === 'Unsubscribed') {
+        continue
+      }
+
       try {
         // Replace template variables in content
         let emailContent = template.metadata.content || ''
@@ -71,8 +108,10 @@ export async function POST(
           emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name)
         }
 
+        // Add unsubscribe link to email content
+        emailContent = addUnsubscribeLink(emailContent, contact.metadata.email)
+
         // Send email with proper error handling for Resend API
-        // The Resend library returns a promise that resolves with success data or rejects with an error
         const result = await resend.emails.send({
           from: 'noreply@cosmicjs.com',
           to: contact.metadata.email,
@@ -81,7 +120,6 @@ export async function POST(
         })
 
         // If we get here, the email was sent successfully
-        // The Resend library returns an object with an 'id' property on success
         if (result && typeof result === 'object' && 'id' in result) {
           sent++
         } else {
