@@ -42,6 +42,18 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
     return pathname?.startsWith(href)
   }
 
+  const handleNavClick = (href: string, e: React.MouseEvent) => {
+    e.preventDefault()
+    // Force a hard navigation to ensure proper route handling
+    if (href === '/') {
+      router.push('/')
+      router.refresh()
+    } else {
+      router.push(href)
+    }
+    setMobileMenuOpen(false)
+  }
+
   if (!showNav) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -61,9 +73,9 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
           <div className="flex justify-between items-center h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2">
+              <Link href="/" className="flex items-center space-x-2" onClick={(e) => handleNavClick('/', e)}>
                 <Mail className="h-8 w-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">EmailCMS</span>
+                <span className="text-xl font-bold text-gray-900">Cosmic Email Marketing</span>
               </Link>
             </div>
 
@@ -75,6 +87,7 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={(e) => handleNavClick(item.href, e)}
                     className={`
                       flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
                       ${isActive(item.href)
@@ -117,9 +130,9 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
             <div className="fixed top-0 right-0 bottom-0 w-64 bg-white shadow-xl z-50 overflow-y-auto">
               {/* Mobile menu header */}
               <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-                <Link href="/" className="flex items-center space-x-2">
+                <Link href="/" className="flex items-center space-x-2" onClick={(e) => handleNavClick('/', e)}>
                   <Mail className="h-6 w-6 text-blue-600" />
-                  <span className="text-lg font-bold text-gray-900">EmailCMS</span>
+                  <span className="text-lg font-bold text-gray-900">Cosmic Email Marketing</span>
                 </Link>
                 <button
                   onClick={() => setMobileMenuOpen(false)}
@@ -144,7 +157,7 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
                           : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                         }
                       `}
-                      onClick={() => setMobileMenuOpen(false)}
+                      onClick={(e) => handleNavClick(item.href, e)}
                     >
                       <Icon className="mr-3 h-5 w-5" />
                       {item.name}

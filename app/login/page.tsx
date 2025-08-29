@@ -52,7 +52,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-4xl font-bold text-slate-800 mb-3">
-            Email Marketing Hub
+            Cosmic Email Marketing
           </h1>
           <p className="text-lg text-slate-600 mb-8">
             Professional email campaigns made simple
@@ -173,7 +173,7 @@ export default function LoginPage() {
                   <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 11V7a4 4 0 118 0m-4 8v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2z" />
                   </svg>
-                  Access Email Marketing Hub
+                  Access Cosmic Email Marketing
                 </div>
               )}
             </Button>
