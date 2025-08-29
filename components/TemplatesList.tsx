@@ -1,9 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { EmailTemplate } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import { Copy, Eye } from 'lucide-react'
 
 interface TemplatesListProps {
   templates: EmailTemplate[]
@@ -11,6 +12,33 @@ interface TemplatesListProps {
 
 export default function TemplatesList({ templates }: TemplatesListProps) {
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
+  const [showDuplicateConfirm, setShowDuplicateConfirm] = useState<EmailTemplate | null>(null)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+
+  // Handle escape key press and setup event listener
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && previewTemplate) {
+        setPreviewTemplate(null)
+      }
+    }
+
+    // Add event listener when modal is open
+    if (previewTemplate) {
+      document.addEventListener('keydown', handleEscapeKey)
+      // Prevent body scroll when modal is open
+      document.body.style.overflow = 'hidden'
+    }
+
+    // Cleanup function
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey)
+      // Restore body scroll when modal is closed
+      document.body.style.overflow = 'unset'
+    }
+  }, [previewTemplate])
 
   const generatePreviewContent = (template: EmailTemplate) => {
     if (!template.metadata?.content || !template.metadata?.subject) {
@@ -27,6 +55,60 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
     subject = subject.replace(/\{\{last_name\}\}/g, 'Doe')
 
     return { subject, content }
+  }
+
+  const handleDuplicateTemplate = async (template: EmailTemplate) => {
+    setDuplicatingId(template.id)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`/api/templates/${template.id}/duplicate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to duplicate template')
+      }
+
+      const result = await response.json()
+      setSuccess(`Template "${template.metadata?.name}" duplicated successfully!`)
+      
+      // Refresh the page to show the new template
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
+
+    } catch (error: any) {
+      setError(error.message || 'Failed to duplicate template')
+    } finally {
+      setDuplicatingId(null)
+      setShowDuplicateConfirm(null)
+    }
+  }
+
+  const handlePreview = (e: React.MouseEvent, template: EmailTemplate) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setPreviewTemplate(template)
+  }
+
+  const handleDuplicate = (e: React.MouseEvent, template: EmailTemplate) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setShowDuplicateConfirm(template)
+  }
+
+  // Handle click outside modal to close
+  const handleModalBackdropClick = (e: React.MouseEvent) => {
+    // Only close if clicking on the backdrop (not the modal content)
+    if (e.target === e.currentTarget) {
+      setPreviewTemplate(null)
+    }
   }
 
   if (templates.length === 0) {
@@ -48,14 +130,28 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
 
   return (
     <div className="space-y-6">
+      {/* Success/Error Messages */}
+      {success && (
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <p className="text-green-600">{success}</p>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
       {/* Templates Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {templates.map((template) => (
           <Link
             key={template.id}
             href={`/templates/${template.id}/edit`}
-            className="card hover:shadow-lg transition-shadow block"
+            className="card hover:shadow-lg transition-shadow relative group cursor-pointer block"
           >
+            {/* Template Card Content */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center space-x-3">
                 <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
@@ -83,13 +179,61 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
                 <p className="text-sm text-gray-900 font-medium">{template.metadata.subject}</p>
               </div>
             )}
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+              <button
+                onClick={(e) => handlePreview(e, template)}
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+                title="Preview template"
+              >
+                <Eye className="h-4 w-4" />
+                <span>Preview</span>
+              </button>
+              
+              <button
+                onClick={(e) => handleDuplicate(e, template)}
+                disabled={duplicatingId === template.id}
+                className="flex items-center space-x-1 px-3 py-1.5 text-sm text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors disabled:opacity-50"
+                title="Duplicate template"
+              >
+                {duplicatingId === template.id ? (
+                  <>
+                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                    <span>Duplicating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-4 w-4" />
+                    <span>Duplicate</span>
+                  </>
+                )}
+              </button>
+            </div>
           </Link>
         ))}
       </div>
 
+      {/* Duplicate Confirmation Modal */}
+      {showDuplicateConfirm && (
+        <ConfirmationModal
+          isOpen={true}
+          onOpenChange={(open) => !open && setShowDuplicateConfirm(null)}
+          title="Duplicate Template"
+          message={`Are you sure you want to duplicate "${showDuplicateConfirm.metadata?.name}"? A copy will be created with "(Copy)" added to the name.`}
+          confirmText="Duplicate Template"
+          cancelText="Cancel"
+          onConfirm={() => handleDuplicateTemplate(showDuplicateConfirm)}
+          isLoading={duplicatingId === showDuplicateConfirm.id}
+        />
+      )}
+
       {/* Preview Modal */}
       {previewTemplate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={handleModalBackdropClick}
+        >
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
               <div>
