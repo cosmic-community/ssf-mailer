@@ -40,6 +40,9 @@ export async function POST(request: NextRequest) {
             const aiTone = settings?.metadata.ai_tone || 'Professional'
             const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
 
+            // Get current year for copyright
+            const currentYear = new Date().getFullYear()
+
             // Create AI prompt for editing - ONLY for body content
             const aiPrompt = `Please improve this HTML email template based on the following instructions: "${prompt}"
 
@@ -50,6 +53,7 @@ Brand Context:
 Company: ${companyName}
 Tone: ${aiTone}
 Primary Brand Color: ${primaryColor}
+Current Year: ${currentYear} (use this for copyright footer if updating footer)
 ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
 
 Instructions:
@@ -61,6 +65,7 @@ Instructions:
 - Make improvements that enhance readability and visual appeal
 - Apply brand guidelines and colors where appropriate
 - Use the specified tone for any text modifications
+- If updating footer copyright, use ${currentYear} as the current year
 
 IMPORTANT: DO NOT include or modify any unsubscribe links - these are added automatically to all emails. Return ONLY the improved HTML email template without any backticks, code block markers, or additional text. Start directly with the HTML content.`
 

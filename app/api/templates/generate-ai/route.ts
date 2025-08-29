@@ -37,12 +37,16 @@ export async function POST(request: NextRequest) {
             const aiTone = settings?.metadata.ai_tone || 'Professional'
             const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
 
+            // Get current year for copyright
+            const currentYear = new Date().getFullYear()
+
             // Create AI prompt based on template type - ONLY for body content
             let aiPrompt = ''
             const baseInstructions = `
             Company: ${companyName}
             Tone: ${aiTone}
             Primary Brand Color: ${primaryColor}
+            Current Year: ${currentYear} (use this for copyright footer)
             ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
             `
 
@@ -56,7 +60,7 @@ export async function POST(request: NextRequest) {
               - Welcome greeting with {{first_name}} placeholder
               - Main content section with highlights and bullet points
               - Call-to-action button using brand colors
-              - Professional footer with company name
+              - Professional footer with company name and copyright ${currentYear}
               - Responsive design with modern styling
               - Use inline CSS for email compatibility
               
@@ -72,7 +76,7 @@ export async function POST(request: NextRequest) {
               - Welcome message explaining what to expect
               - Getting started section with benefits
               - Prominent call-to-action button using brand colors
-              - Friendly footer with company name
+              - Friendly footer with company name and copyright ${currentYear}
               - Modern, friendly design with inline CSS
               
               IMPORTANT: DO NOT include an unsubscribe link - this will be added automatically to all emails. Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
@@ -86,7 +90,7 @@ export async function POST(request: NextRequest) {
               - Personalized greeting with {{first_name}} placeholder
               - Clear main content section
               - Call-to-action button using brand colors
-              - Footer with company name
+              - Footer with company name and copyright ${currentYear}
               - Clean, modern styling with inline CSS for email compatibility
               
               IMPORTANT: DO NOT include an unsubscribe link - this will be added automatically to all emails. Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
