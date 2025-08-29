@@ -26,10 +26,14 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   const getInitialAiTone = (): 'Professional' | 'Friendly' | 'Casual' | 'Formal' => {
     const aiTone = initialSettings?.metadata?.ai_tone
     if (aiTone && typeof aiTone === 'object' && 'value' in aiTone) {
-      return aiTone.value as 'Professional' | 'Friendly' | 'Casual' | 'Formal'
+      const value = aiTone.value
+      if (value === 'Professional' || value === 'Friendly' || value === 'Casual' || value === 'Formal') {
+        return value
+      }
     }
-    if (typeof aiTone === 'string') {
-      return aiTone as 'Professional' | 'Friendly' | 'Casual' | 'Formal'
+    if (typeof aiTone === 'string' && 
+        (aiTone === 'Professional' || aiTone === 'Friendly' || aiTone === 'Casual' || aiTone === 'Formal')) {
+      return aiTone
     }
     return 'Professional'
   }

@@ -33,34 +33,34 @@ export async function POST(request: NextRequest) {
     
     if (!data.subject?.trim()) {
       return NextResponse.json(
-        { error: 'Subject line is required' },
+        { error: 'Subject is required' },
         { status: 400 }
       )
     }
     
-    // Validate template_type is one of the allowed values
-    const validTypes: TemplateType[] = ['Welcome Email', 'Newsletter', 'Promotional', 'Transactional']
-    if (!validTypes.includes(data.template_type)) {
+    // Validate template_type is a valid value
+    const validTemplateTypes: TemplateType[] = ['Welcome Email', 'Newsletter', 'Promotional', 'Transactional']
+    if (!data.template_type || !validTemplateTypes.includes(data.template_type)) {
       return NextResponse.json(
-        { error: 'Invalid template type' },
+        { error: 'Invalid template type. Must be one of: ' + validTemplateTypes.join(', ') },
         { status: 400 }
       )
     }
     
     if (!data.content?.trim()) {
       return NextResponse.json(
-        { error: 'Template content is required' },
+        { error: 'Content is required' },
         { status: 400 }
       )
     }
     
-    // Create template
+    // Create the template
     const template = await createEmailTemplate({
       name: data.name.trim(),
       subject: data.subject.trim(),
       content: data.content.trim(),
       template_type: data.template_type,
-      active: data.active ?? true,
+      active: data.active ?? true
     })
     
     return NextResponse.json({
@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Template creation error:', error)
     return NextResponse.json(
-      { error: 'Failed to create template' },
+      { error: error instanceof Error ? error.message : 'Failed to create template' },
       { status: 500 }
     )
   }
