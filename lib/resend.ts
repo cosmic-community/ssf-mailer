@@ -30,12 +30,15 @@ export interface ResendErrorResponse {
 // Export the sendEmail function that wraps the Resend SDK
 export async function sendEmail(options: SendEmailOptions): Promise<ResendSuccessResponse> {
   try {
+    // Ensure text field is always a string (required by Resend API)
+    const textContent = options.text || (options.html ? options.html.replace(/<[^>]*>/g, '') : options.subject)
+    
     const result = await resend.emails.send({
       from: options.from,
       to: options.to,
       subject: options.subject,
       html: options.html,
-      text: options.text,
+      text: textContent, // Now guaranteed to be a string
       reply_to: options.reply_to,
       headers: options.headers
     })
