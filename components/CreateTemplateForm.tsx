@@ -113,9 +113,10 @@ export default function CreateTemplateForm() {
       addToast('Template created successfully!', 'success')
       scrollToTop()
       
-      // Navigate to templates page after a short delay
+      // Navigate to templates page after a short delay and refresh data
       setTimeout(() => {
         router.push('/templates')
+        router.refresh() // Ensure fresh data is fetched
       }, 1500)
     } catch (err: any) {
       addToast(err.message || 'Failed to create template. Please try again.', 'error')
@@ -597,8 +598,8 @@ export default function CreateTemplateForm() {
               </Card>
             )}
 
-            {/* AI Content Editor - Only show when content exists */}
-            {formData.content && (
+            {/* AI Content Editor - Only show AFTER content exists AND generation is complete */}
+            {formData.content && hasGeneratedContent && (
               <Card className="border-purple-200 bg-purple-50/50">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-purple-800">

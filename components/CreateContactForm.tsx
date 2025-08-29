@@ -62,10 +62,10 @@ export default function CreateContactForm() {
         addToast('Contact added successfully!', 'success')
         scrollToTop()
         
-        // Navigate after a short delay to show the toast
+        // Navigate after a short delay to show the toast and refresh data
         setTimeout(() => {
           router.push('/contacts')
-          router.refresh()
+          router.refresh() // Ensure fresh data is fetched
         }, 1500)
       } else {
         throw new Error('Failed to create contact')

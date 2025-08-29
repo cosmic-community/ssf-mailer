@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { EmailTemplate } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { Copy, Eye } from 'lucide-react'
@@ -11,6 +12,7 @@ interface TemplatesListProps {
 }
 
 export default function TemplatesList({ templates }: TemplatesListProps) {
+  const router = useRouter()
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplate | null>(null)
   const [duplicatingId, setDuplicatingId] = useState<string | null>(null)
   const [showDuplicateConfirm, setShowDuplicateConfirm] = useState<EmailTemplate | null>(null)
@@ -78,9 +80,12 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
       const result = await response.json()
       setSuccess(`Template "${template.metadata?.name}" duplicated successfully!`)
       
-      // Refresh the page to show the new template
+      // Force refresh to get the latest data immediately
+      router.refresh()
+      
+      // Additional refresh after a delay to ensure the new template appears
       setTimeout(() => {
-        window.location.reload()
+        router.refresh()
       }, 1500)
 
     } catch (error: any) {
