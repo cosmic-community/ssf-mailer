@@ -1,112 +1,174 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import confetti from 'canvas-confetti'
-import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface SendCampaignButtonProps {
   campaignId: string
+  campaignName: string
+  recipientCount: number
+  disabled?: boolean
 }
 
-export default function SendCampaignButton({ campaignId }: SendCampaignButtonProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [showSuccessModal, setShowSuccessModal] = useState(false)
-  const [successMessage, setSuccessMessage] = useState('')
+export default function SendCampaignButton({ 
+  campaignId, 
+  campaignName, 
+  recipientCount,
+  disabled = false 
+}: SendCampaignButtonProps) {
+  const router = useRouter()
+  const [isSending, setIsSending] = useState(false)
+  const [showConfirmation, setShowConfirmation] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
+  const [emailsSent, setEmailsSent] = useState(0)
 
-  const handleSendConfirm = async () => {
-    setShowConfirmModal(false)
-    setIsLoading(true)
-
+  const handleSendCampaign = async () => {
+    setIsSending(true)
+    
     try {
       const response = await fetch(`/api/campaigns/${campaignId}/send`, {
         method: 'POST',
       })
 
-      const result = await response.json()
-
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send campaign')
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to send campaign')
       }
 
-      // Show success confetti
+      const result = await response.json()
+      setEmailsSent(result.emailsSent || recipientCount)
+      
+      // Trigger confetti animation
       confetti({
         particleCount: 100,
         spread: 70,
         origin: { y: 0.6 }
       })
 
-      // Show success modal
-      setSuccessMessage(`Campaign sent successfully! ${result.stats.sent} emails sent.`)
-      setShowSuccessModal(true)
+      setShowConfirmation(false)
+      setShowSuccess(true)
+      
+      // Refresh the page after a short delay to show updated campaign status
+      setTimeout(() => {
+        router.refresh()
+      }, 2000)
 
     } catch (error) {
-      console.error('Error sending campaign:', error)
-      // You could add an error modal here too
+      console.error('Send error:', error)
       alert(error instanceof Error ? error.message : 'Failed to send campaign')
     } finally {
-      setIsLoading(false)
+      setIsSending(false)
     }
-  }
-
-  const handleSuccessClose = () => {
-    setShowSuccessModal(false)
-    window.location.reload()
   }
 
   return (
     <>
-      <button
-        onClick={() => setShowConfirmModal(true)}
-        disabled={isLoading}
-        className={`px-8 py-3 text-lg font-semibold rounded-lg transition-all duration-200 ${
-          isLoading
-            ? 'bg-gray-400 text-white cursor-not-allowed'
-            : 'bg-green-600 hover:bg-green-700 text-white transform hover:scale-105 shadow-lg hover:shadow-xl'
-        }`}
+      <Button 
+        onClick={() => setShowConfirmation(true)}
+        disabled={disabled || isSending}
+        className="btn-primary"
       >
-        {isLoading ? (
-          <div className="flex items-center space-x-2">
-            <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-            </svg>
-            <span>Sending Campaign...</span>
-          </div>
-        ) : (
-          <div className="flex items-center space-x-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-            <span>Send Campaign Now</span>
-          </div>
-        )}
-      </button>
+        {isSending ? 'Sending...' : 'Send Campaign'}
+      </Button>
 
-      {/* Confirmation Modal */}
-      <ConfirmationModal
-        isOpen={showConfirmModal}
-        onOpenChange={setShowConfirmModal}
-        title="Send Campaign"
-        message="Are you sure you want to send this campaign? This action cannot be undone."
-        confirmText="Send Campaign"
-        cancelText="Cancel"
-        variant="default"
-        onConfirm={handleSendConfirm}
-        isLoading={isLoading}
-      />
+      {/* Send Confirmation Dialog */}
+      <Dialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>Send Campaign</DialogTitle>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <p className="text-gray-600 mb-4">
+              Are you sure you want to send "{campaignName}" to {recipientCount} recipients?
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <svg className="w-5 h-5 text-yellow-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-yellow-800">
+                    This action cannot be undone
+                  </p>
+                  <p className="text-sm text-yellow-700 mt-1">
+                    The email campaign will be sent immediately to all selected recipients.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
 
-      {/* Success Modal */}
-      <ConfirmationModal
-        isOpen={showSuccessModal}
-        onOpenChange={() => {}}
-        title="Campaign Sent!"
-        message={successMessage}
-        confirmText="Continue"
-        cancelText=""
-        variant="default"
-        onConfirm={handleSuccessClose}
-      />
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowConfirmation(false)}
+              disabled={isSending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendCampaign}
+              disabled={isSending}
+              className="btn-primary"
+            >
+              {isSending ? 'Sending...' : `Send to ${recipientCount} Recipients`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={showSuccess} onOpenChange={setShowSuccess}>
+        <DialogContent className="sm:max-w-[400px]">
+          <DialogHeader>
+            <div className="flex items-center space-x-3">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <DialogTitle className="text-xl font-bold text-gray-900">
+                Campaign Sent!
+              </DialogTitle>
+            </div>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <p className="text-gray-600 text-lg">
+              Campaign sent successfully! {emailsSent} emails sent.
+            </p>
+            
+            <div className="mt-6 bg-green-50 border border-green-200 rounded-lg p-4">
+              <div className="flex items-start space-x-2">
+                <svg className="w-5 h-5 text-green-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <div>
+                  <p className="text-sm font-medium text-green-800">
+                    Campaign Status Updated
+                  </p>
+                  <p className="text-sm text-green-700 mt-1">
+                    Your campaign has been marked as "Sent" and delivery tracking has begun.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              onClick={() => setShowSuccess(false)}
+              className="btn-primary w-full"
+            >
+              Continue
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

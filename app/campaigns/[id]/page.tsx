@@ -48,6 +48,10 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   const preview = generatePreviewContent()
   const isDraft = campaign.metadata?.status?.value === 'Draft'
 
+  // Calculate recipient count
+  const recipientCount = (campaign.metadata?.target_contacts?.length || 0) + 
+                        (campaign.metadata?.target_tags?.length || 0)
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -84,7 +88,11 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
                     campaignName={campaign.metadata?.name || 'Campaign'}
                     isDraft={isDraft}
                   />
-                  <SendCampaignButton campaignId={campaign.id} />
+                  <SendCampaignButton 
+                    campaignId={campaign.id}
+                    campaignName={campaign.metadata?.name || 'Campaign'}
+                    recipientCount={recipientCount}
+                  />
                 </>
               )}
             </div>
