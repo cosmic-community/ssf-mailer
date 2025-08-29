@@ -1,6 +1,7 @@
 // app/api/campaigns/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
+import { revalidatePath } from 'next/cache'
 
 export async function PUT(
   request: NextRequest,
@@ -30,11 +31,38 @@ export async function PUT(
       }
     })
 
+    // Revalidate the campaigns page to ensure updates are reflected
+    revalidatePath('/campaigns')
+    revalidatePath(`/campaigns/${id}`)
+
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
     console.error('Error updating campaign:', error)
     return NextResponse.json(
       { error: 'Failed to update campaign' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params
+
+    // Delete the campaign from Cosmic
+    await cosmic.objects.deleteOne(id)
+
+    // Revalidate the campaigns page to reflect the deletion
+    revalidatePath('/campaigns')
+
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting campaign:', error)
+    return NextResponse.json(
+      { error: 'Failed to delete campaign' },
       { status: 500 }
     )
   }

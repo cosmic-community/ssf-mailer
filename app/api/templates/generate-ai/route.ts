@@ -38,11 +38,11 @@ export async function POST(request: NextRequest) {
               - Welcome greeting with {{first_name}} placeholder
               - Main content section with highlights and bullet points
               - Call-to-action button
-              - Professional footer with unsubscribe link
+              - Professional footer with contact information
               - Responsive design with modern styling
               - Use inline CSS for email compatibility
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+              IMPORTANT: DO NOT include an unsubscribe link - this will be added automatically to all emails. Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             } else if (type === 'Welcome Email') {
               aiPrompt = `Create ONLY the HTML body content for a welcome email template for "${prompt}". Include:
               - Warm welcome header with celebration emoji
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
               - Friendly footer with contact information
               - Modern, friendly design with inline CSS
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+              IMPORTANT: DO NOT include an unsubscribe link - this will be added automatically to all emails. Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             } else {
               aiPrompt = `Create ONLY the HTML body content for an email template for "${prompt}" (${type}). Include:
               - Professional header design
@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
               - Footer with contact information
               - Clean, modern styling with inline CSS for email compatibility
               
-              IMPORTANT: Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
+              IMPORTANT: DO NOT include an unsubscribe link - this will be added automatically to all emails. Return ONLY the HTML body content, no subject line, no backticks or code block markers, no explanation text. Start directly with HTML content.`
             }
 
             controller.enqueue(

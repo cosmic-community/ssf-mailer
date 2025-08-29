@@ -63,7 +63,9 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
         throw new Error('Failed to create campaign')
       }
 
-      router.push('/campaigns')
+      // Force refresh the campaigns page by adding a timestamp to avoid cache
+      router.push('/campaigns?refresh=' + Date.now())
+      router.refresh() // Force a refresh of the current route
     } catch (err) {
       setError('Failed to create campaign. Please try again.')
       console.error('Campaign creation error:', err)

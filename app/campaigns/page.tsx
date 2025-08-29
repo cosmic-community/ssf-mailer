@@ -2,7 +2,7 @@ import CampaignsList from '@/components/CampaignsList'
 import { getMarketingCampaigns } from '@/lib/cosmic'
 import Link from 'next/link'
 
-// Force dynamic rendering
+// Force dynamic rendering to ensure fresh data
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 

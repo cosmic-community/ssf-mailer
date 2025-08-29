@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createMarketingCampaign, getEmailTemplate } from '@/lib/cosmic'
+import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
   try {
@@ -31,6 +32,9 @@ export async function POST(request: NextRequest) {
       send_date: body.send_date || ''
     })
 
+    // Revalidate the campaigns page to ensure the new campaign appears
+    revalidatePath('/campaigns')
+    
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
     console.error('Error creating campaign:', error)
