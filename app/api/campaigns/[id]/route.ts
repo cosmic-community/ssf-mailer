@@ -1,6 +1,7 @@
 // app/api/campaigns/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
+import { revalidatePath } from 'next/cache'
 
 export async function PUT(
   request: NextRequest,
@@ -29,6 +30,10 @@ export async function PUT(
         send_date: body.send_date || ''
       }
     })
+
+    // Revalidate the campaigns page to ensure updates are reflected
+    revalidatePath('/campaigns')
+    revalidatePath(`/campaigns/${id}`)
 
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
