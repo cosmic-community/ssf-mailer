@@ -24,7 +24,7 @@ export default function BulkActionsModal({
   onUpdate,
   isLoading
 }: BulkActionsModalProps) {
-  const [updateStatus, setUpdateStatus] = useState<string>('')
+  const [updateStatus, setUpdateStatus] = useState<string>('no-change')
   const [updateTags, setUpdateTags] = useState<string[]>([])
   const [newTag, setNewTag] = useState('')
   const [tagAction, setTagAction] = useState<'replace' | 'add' | 'remove'>('replace')
@@ -43,7 +43,7 @@ export default function BulkActionsModal({
   const handleSubmit = async () => {
     const updates: { status?: string; tags?: string[] } = {}
     
-    if (updateStatus) {
+    if (updateStatus && updateStatus !== 'no-change') {
       updates.status = updateStatus
     }
     
@@ -56,7 +56,7 @@ export default function BulkActionsModal({
     }
 
     // Reset form
-    setUpdateStatus('')
+    setUpdateStatus('no-change')
     setUpdateTags([])
     setNewTag('')
     setTagAction('replace')
@@ -64,7 +64,7 @@ export default function BulkActionsModal({
 
   const handleClose = () => {
     // Reset form when closing
-    setUpdateStatus('')
+    setUpdateStatus('no-change')
     setUpdateTags([])
     setNewTag('')
     setTagAction('replace')
@@ -89,7 +89,7 @@ export default function BulkActionsModal({
                 <SelectValue placeholder="Select new status (optional)" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">No change</SelectItem>
+                <SelectItem value="no-change">No change</SelectItem>
                 <SelectItem value="Active">Active</SelectItem>
                 <SelectItem value="Unsubscribed">Unsubscribed</SelectItem>
                 <SelectItem value="Bounced">Bounced</SelectItem>
@@ -176,7 +176,7 @@ export default function BulkActionsModal({
           <Button
             type="button"
             onClick={handleSubmit}
-            disabled={isLoading || (!updateStatus && updateTags.length === 0)}
+            disabled={isLoading || (updateStatus === 'no-change' && updateTags.length === 0)}
           >
             {isLoading ? 'Updating...' : 'Update Contacts'}
           </Button>
