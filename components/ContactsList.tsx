@@ -9,8 +9,10 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { Users, Edit, Trash2 } from 'lucide-react'
+import { Users, Edit, Trash2, Plus, Upload } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import CreateContactModal from '@/components/CreateContactModal'
+import CSVUploadModal from '@/components/CSVUploadModal'
 
 interface ContactsListProps {
   contacts: EmailContact[]
@@ -23,6 +25,18 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [contactToDelete, setContactToDelete] = useState<{ id: string; name: string } | null>(null)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
+
+  const refreshContacts = () => {
+    // Force refresh to get the latest data
+    router.refresh()
+    
+    // Additional refresh after a short delay to ensure server updates are complete
+    setTimeout(() => {
+      router.refresh()
+    }, 1000)
+  }
 
   const handleDeleteClick = (contactId: string, contactName: string) => {
     setContactToDelete({ id: contactId, name: contactName })
@@ -45,13 +59,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
         throw new Error(error.error || 'Failed to delete contact')
       }
 
-      // Force refresh to get the latest data
-      router.refresh()
-      
-      // Additional refresh after a short delay to ensure server updates are complete
-      setTimeout(() => {
-        router.refresh()
-      }, 1000)
+      refreshContacts()
       
     } catch (error) {
       console.error('Delete error:', error)
@@ -90,13 +98,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
       setEditingContact(null)
       setIsEditDialogOpen(false)
       
-      // Force refresh to get the latest data
-      router.refresh()
-      
-      // Additional refresh after a short delay to ensure server updates are complete
-      setTimeout(() => {
-        router.refresh()
-      }, 1000)
+      refreshContacts()
       
     } catch (error) {
       console.error('Update error:', error)
@@ -104,23 +106,83 @@ export default function ContactsList({ contacts }: ContactsListProps) {
     }
   }
 
+  const handleCreateModalClose = (success: boolean) => {
+    setIsCreateModalOpen(false)
+    if (success) {
+      refreshContacts()
+    }
+  }
+
+  const handleUploadModalClose = (success: boolean) => {
+    setIsUploadModalOpen(false)
+    if (success) {
+      refreshContacts()
+    }
+  }
+
   if (!contacts || contacts.length === 0) {
     return (
-      <div className="card text-center py-12">
-        <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <Users className="w-12 h-12 text-gray-400" />
+      <>
+        <div className="flex justify-end mb-6 space-x-3">
+          <Button
+            variant="outline"
+            onClick={() => setIsCreateModalOpen(true)}
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Contact
+          </Button>
+          <Button
+            onClick={() => setIsUploadModalOpen(true)}
+          >
+            <Upload className="mr-2 h-4 w-4" />
+            Upload CSV
+          </Button>
         </div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">No contacts yet</h3>
-        <p className="text-gray-500 mb-6">Get started by adding your first email contact.</p>
-        <Button asChild>
-          <a href="/contacts/new">Add First Contact</a>
-        </Button>
-      </div>
+
+        <div className="card text-center py-12">
+          <div className="w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-12 h-12 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No contacts yet</h3>
+          <p className="text-gray-500 mb-6">Get started by adding your first email contact.</p>
+          <Button onClick={() => setIsCreateModalOpen(true)}>
+            Add First Contact
+          </Button>
+        </div>
+
+        {/* Modals */}
+        <CreateContactModal 
+          isOpen={isCreateModalOpen}
+          onClose={handleCreateModalClose}
+        />
+        <CSVUploadModal
+          isOpen={isUploadModalOpen}
+          onClose={handleUploadModalClose}
+        />
+      </>
     )
   }
 
   return (
     <>
+      {/* Action Buttons */}
+      <div className="flex justify-end mb-6 space-x-3">
+        <Button
+          variant="outline"
+          onClick={() => setIsCreateModalOpen(true)}
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Contact
+        </Button>
+        <Button
+          onClick={() => setIsUploadModalOpen(true)}
+        >
+          <Upload className="mr-2 h-4 w-4" />
+          Upload CSV
+        </Button>
+      </div>
+
+      {/* Contacts Table */}
       <div className="card">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
@@ -224,6 +286,17 @@ export default function ContactsList({ contacts }: ContactsListProps) {
           </table>
         </div>
       </div>
+
+      {/* Modals */}
+      <CreateContactModal 
+        isOpen={isCreateModalOpen}
+        onClose={handleCreateModalClose}
+      />
+
+      <CSVUploadModal
+        isOpen={isUploadModalOpen}
+        onClose={handleUploadModalClose}
+      />
 
       {/* Edit Modal */}
       {editingContact && (

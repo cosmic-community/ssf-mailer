@@ -1,7 +1,6 @@
 import ContactsList from '@/components/ContactsList'
 import { getEmailContacts } from '@/lib/cosmic'
 import { EmailContact } from '@/types'
-import Link from 'next/link'
 
 // Force dynamic rendering and disable caching completely
 export const dynamic = 'force-dynamic'
@@ -33,14 +32,6 @@ export default async function ContactsPage() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Email Contacts</h1>
               <p className="text-gray-600 mt-1">Manage your subscriber list</p>
-            </div>
-            <div className="flex space-x-3">
-              <Link href="/contacts/new" className="btn-outline">
-                Add Contact
-              </Link>
-              <Link href="/contacts/upload" className="btn-primary">
-                Upload CSV
-              </Link>
             </div>
           </div>
         </div>
