@@ -1,35 +1,33 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
-import { CheckCircle, AlertCircle, Upload } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog'
+import { CheckCircle, AlertCircle, Upload, Loader2 } from 'lucide-react'
 
 interface UploadResult {
   success: boolean
-  imported: number
-  errors: number
-  details: {
-    successful: Array<{
-      row: number
-      name: string
-      email: string
-      success: boolean
-      id?: string
-    }>
-    failed: string[]
+  message: string
+  results: {
+    total_processed: number
+    successful: number
+    duplicates: number
+    validation_errors: number
+    creation_errors: number
   }
+  contacts: any[]
+  duplicates?: string[]
+  validation_errors?: string[]
+  creation_errors?: string[]
 }
 
-interface CSVUploadModalProps {
-  isOpen: boolean
-  onClose: (success: boolean) => void
-}
-
-export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps) {
+export default function CSVUploadModal() {
+  const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [isOpen, setIsOpen] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
@@ -73,12 +71,7 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
         throw new Error(result.error || 'Upload failed')
       }
 
-      // Safely handle the response with proper type checking
-      if (result && typeof result === 'object' && 'success' in result) {
-        setUploadResult(result as UploadResult)
-      } else {
-        throw new Error('Invalid response format')
-      }
+      setUploadResult(result)
 
     } catch (err) {
       console.error('Upload error:', err)
@@ -96,10 +89,16 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
     }
   }
 
-  const handleClose = () => {
-    const success = uploadResult?.imported ? uploadResult.imported > 0 : false
-    resetForm()
-    onClose(success)
+  const handleClose = (open: boolean) => {
+    if (!open) {
+      const success = uploadResult?.results?.successful ? uploadResult.results.successful > 0 : false
+      if (success) {
+        // Refresh the page to show new contacts
+        router.refresh()
+      }
+      resetForm()
+      setIsOpen(false)
+    }
   }
 
   const handleUploadAnother = () => {
@@ -107,7 +106,13 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogTrigger asChild>
+        <Button variant="outline" onClick={() => setIsOpen(true)}>
+          <Upload className="mr-2 h-4 w-4" />
+          Upload CSV
+        </Button>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Upload Contacts from CSV</DialogTitle>
@@ -153,7 +158,6 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
                   type="button"
                   variant="outline"
                   disabled={isUploading}
-                  onClick={handleClose}
                 >
                   Cancel
                 </Button>
@@ -161,10 +165,11 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
               <Button
                 type="submit"
                 disabled={isUploading}
+                className="min-w-[120px]"
               >
                 {isUploading ? (
                   <>
-                    <Upload className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Uploading...
                   </>
                 ) : (
@@ -188,36 +193,49 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
                 <p className="text-gray-600">
-                  {uploadResult.imported} contacts imported successfully
-                  {uploadResult.errors > 0 && `, ${uploadResult.errors} errors`}
+                  {uploadResult.results.successful} contacts imported successfully
+                  {uploadResult.results.validation_errors > 0 && `, ${uploadResult.results.validation_errors} errors`}
                 </p>
               </div>
             </div>
 
             {/* Success Summary */}
-            {uploadResult.imported > 0 && (
+            {uploadResult.results.successful > 0 && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.imported})</h4>
-                <div className="max-h-32 overflow-y-auto space-y-1">
-                  {uploadResult.details.successful.map((contact, index) => (
-                    <div key={index} className="text-sm text-green-700">
-                      Row {contact.row}: {contact.name} ({contact.email})
-                    </div>
-                  ))}
+                <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful})</h4>
+                <p className="text-sm text-green-700">
+                  {uploadResult.results.successful} contacts have been added to your list.
+                </p>
+              </div>
+            )}
+
+            {/* Duplicates Summary */}
+            {uploadResult.results.duplicates > 0 && uploadResult.duplicates && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({uploadResult.results.duplicates})</h4>
+                <div className="max-h-24 overflow-y-auto">
+                  <p className="text-sm text-yellow-700">
+                    These email addresses already exist: {uploadResult.duplicates.join(', ')}
+                  </p>
                 </div>
               </div>
             )}
 
             {/* Error Summary */}
-            {uploadResult.errors > 0 && uploadResult.details.failed.length > 0 && (
+            {uploadResult.results.validation_errors > 0 && uploadResult.validation_errors && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                <h4 className="font-medium text-red-800 mb-2">Errors ({uploadResult.errors})</h4>
+                <h4 className="font-medium text-red-800 mb-2">Validation Errors ({uploadResult.results.validation_errors})</h4>
                 <div className="max-h-32 overflow-y-auto space-y-1">
-                  {uploadResult.details.failed.map((error, index) => (
+                  {uploadResult.validation_errors.slice(0, 5).map((error, index) => (
                     <div key={index} className="text-sm text-red-700">
                       {error}
                     </div>
                   ))}
+                  {uploadResult.validation_errors.length > 5 && (
+                    <div className="text-sm text-red-600">
+                      ... and {uploadResult.validation_errors.length - 5} more errors
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -230,7 +248,7 @@ export default function CSVUploadModal({ isOpen, onClose }: CSVUploadModalProps)
                 Upload Another File
               </Button>
               <Button
-                onClick={handleClose}
+                onClick={() => handleClose(false)}
               >
                 Done
               </Button>
