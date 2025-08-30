@@ -332,9 +332,9 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                     <div className="text-sm text-gray-900">{contact.metadata.email}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <Badge className={getStatusColor(contact.metadata.status.value)}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${getStatusColor(contact.metadata.status.value)}`}>
                       {contact.metadata.status.value}
-                    </Badge>
+                    </span>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-wrap gap-1">
