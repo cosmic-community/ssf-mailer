@@ -1,5 +1,5 @@
 import { createBucketClient } from '@cosmicjs/sdk'
-import { Campaign, EmailContact, EmailTemplate, Settings } from '@/types'
+import { EmailContact, EmailTemplate, Settings, MarketingCampaign } from '@/types'
 
 // Initialize Cosmic client
 const cosmic = createBucketClient({
@@ -7,6 +7,9 @@ const cosmic = createBucketClient({
   readKey: process.env.COSMIC_READ_KEY as string,
   writeKey: process.env.COSMIC_WRITE_KEY as string,
 })
+
+// Export cosmic client for direct use in API routes
+export { cosmic }
 
 // Email Contacts
 export async function getEmailContacts(): Promise<EmailContact[]> {
@@ -127,6 +130,43 @@ export async function deleteEmailContact(id: string): Promise<boolean> {
   }
 }
 
+// Unsubscribe contact function
+export async function unsubscribeContact(email: string): Promise<boolean> {
+  try {
+    // Find the contact by email
+    const { objects } = await cosmic.objects
+      .find({ 
+        type: 'email-contacts',
+        'metadata.email': email 
+      })
+      .props(['id', 'title', 'metadata'])
+      .depth(1)
+
+    if (!objects || objects.length === 0) {
+      console.log('Contact not found for unsubscribe:', email)
+      return false
+    }
+
+    const contact = objects[0]
+    
+    // Update the contact's status to unsubscribed
+    await cosmic.objects.updateOne(contact.id, {
+      metadata: {
+        status: {
+          key: 'unsubscribed',
+          value: 'Unsubscribed'
+        }
+      }
+    })
+
+    console.log('Contact unsubscribed successfully:', email)
+    return true
+  } catch (error) {
+    console.error('Error unsubscribing contact:', error)
+    return false
+  }
+}
+
 // Email Templates
 export async function getEmailTemplates(): Promise<EmailTemplate[]> {
   try {
@@ -166,9 +206,11 @@ interface TemplateCreateData {
   name: string
   subject: string
   content: string
+  template_type: string
   category?: string
   tags?: string[]
   is_ai_generated?: boolean
+  active: boolean
 }
 
 export async function createEmailTemplate(data: TemplateCreateData): Promise<EmailTemplate | null> {
@@ -181,9 +223,14 @@ export async function createEmailTemplate(data: TemplateCreateData): Promise<Ema
         name: data.name,
         subject: data.subject,
         content: data.content,
+        template_type: {
+          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+          value: data.template_type
+        },
         category: data.category || '',
         tags: data.tags || [],
-        is_ai_generated: data.is_ai_generated || false
+        is_ai_generated: data.is_ai_generated || false,
+        active: data.active
       }
     }
 
@@ -206,15 +253,22 @@ export async function updateEmailTemplate(
       updateData.title = data.title || data.name
     }
     
-    if (data.name || data.subject || data.content || data.category !== undefined || data.tags !== undefined || data.is_ai_generated !== undefined) {
+    if (data.name || data.subject || data.content || data.template_type || data.category !== undefined || data.tags !== undefined || data.is_ai_generated !== undefined || data.active !== undefined) {
       updateData.metadata = {}
       
       if (data.name) updateData.metadata.name = data.name
       if (data.subject) updateData.metadata.subject = data.subject
       if (data.content) updateData.metadata.content = data.content
+      if (data.template_type) {
+        updateData.metadata.template_type = {
+          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+          value: data.template_type
+        }
+      }
       if (data.category !== undefined) updateData.metadata.category = data.category
       if (data.tags !== undefined) updateData.metadata.tags = data.tags
       if (data.is_ai_generated !== undefined) updateData.metadata.is_ai_generated = data.is_ai_generated
+      if (data.active !== undefined) updateData.metadata.active = data.active
     }
 
     const { object } = await cosmic.objects.updateOne(id, updateData)
@@ -246,9 +300,11 @@ export async function duplicateEmailTemplate(id: string): Promise<EmailTemplate 
       name: `${original.metadata.name} (Copy)`,
       subject: original.metadata.subject,
       content: original.metadata.content,
+      template_type: original.metadata.template_type.value,
       category: original.metadata.category,
       tags: original.metadata.tags,
-      is_ai_generated: original.metadata.is_ai_generated
+      is_ai_generated: original.metadata.is_ai_generated,
+      active: false
     }
 
     return await createEmailTemplate(duplicateData)
@@ -258,11 +314,11 @@ export async function duplicateEmailTemplate(id: string): Promise<EmailTemplate 
   }
 }
 
-// Email Campaigns
-export async function getEmailCampaigns(): Promise<Campaign[]> {
+// Email Campaigns - Updated function names
+export async function getEmailCampaigns(): Promise<MarketingCampaign[]> {
   try {
     const { objects } = await cosmic.objects
-      .find({ type: 'email-campaigns' })
+      .find({ type: 'marketing-campaigns' })
       .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
 
@@ -276,10 +332,13 @@ export async function getEmailCampaigns(): Promise<Campaign[]> {
   }
 }
 
-export async function getEmailCampaign(id: string): Promise<Campaign | null> {
+// Alias for backward compatibility
+export const getMarketingCampaigns = getEmailCampaigns
+
+export async function getEmailCampaign(id: string): Promise<MarketingCampaign | null> {
   try {
     const { object } = await cosmic.objects
-      .findOne({ type: 'email-campaigns', id })
+      .findOne({ type: 'marketing-campaigns', id })
       .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
 
@@ -293,39 +352,43 @@ export async function getEmailCampaign(id: string): Promise<Campaign | null> {
   }
 }
 
+// Alias for backward compatibility
+export const getMarketingCampaign = getEmailCampaign
+
 interface CampaignCreateData {
   name: string
-  subject: string
-  content: string
-  template_id?: string
-  recipient_list?: string[]
-  scheduled_date?: string
-  campaign_status?: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused'
-  tags?: string[]
+  template_id: string
+  contact_ids?: string[]
+  target_tags?: string[]
+  send_date?: string
 }
 
-export async function createEmailCampaign(data: CampaignCreateData): Promise<Campaign | null> {
+export async function createEmailCampaign(data: CampaignCreateData): Promise<MarketingCampaign | null> {
   try {
     const campaignData = {
       title: data.name,
-      type: 'email-campaigns',
+      type: 'marketing-campaigns',
       status: 'published' as const,
       metadata: {
         name: data.name,
-        subject: data.subject,
-        content: data.content,
-        template_id: data.template_id || '',
-        recipient_list: data.recipient_list || [],
-        scheduled_date: data.scheduled_date || '',
-        campaign_status: {
-          key: (data.campaign_status || 'Draft').toLowerCase(),
-          value: data.campaign_status || 'Draft'
+        template_id: data.template_id,
+        target_contacts: [],
+        target_tags: data.target_tags || [],
+        status: {
+          key: 'draft',
+          value: 'Draft'
         },
-        tags: data.tags || [],
-        sent_count: 0,
-        open_count: 0,
-        click_count: 0,
-        sent_date: ''
+        send_date: data.send_date || '',
+        stats: {
+          sent: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          unsubscribed: 0,
+          open_rate: '0%',
+          click_rate: '0%'
+        }
       }
     }
 
@@ -337,6 +400,9 @@ export async function createEmailCampaign(data: CampaignCreateData): Promise<Cam
   }
 }
 
+// Alias for backward compatibility
+export const createMarketingCampaign = createEmailCampaign
+
 export async function updateEmailCampaign(
   id: string, 
   data: Partial<CampaignCreateData> & { 
@@ -345,8 +411,10 @@ export async function updateEmailCampaign(
     open_count?: number
     click_count?: number
     sent_date?: string
+    stats?: any
+    template_snapshot?: any
   }
-): Promise<Campaign | null> {
+): Promise<MarketingCampaign | null> {
   try {
     const updateData: any = {}
     
@@ -358,22 +426,12 @@ export async function updateEmailCampaign(
     const metadataUpdates: any = {}
     
     if (data.name) metadataUpdates.name = data.name
-    if (data.subject) metadataUpdates.subject = data.subject
-    if (data.content) metadataUpdates.content = data.content
     if (data.template_id !== undefined) metadataUpdates.template_id = data.template_id
-    if (data.recipient_list !== undefined) metadataUpdates.recipient_list = data.recipient_list
-    if (data.scheduled_date !== undefined) metadataUpdates.scheduled_date = data.scheduled_date
-    if (data.campaign_status) {
-      metadataUpdates.campaign_status = {
-        key: data.campaign_status.toLowerCase(),
-        value: data.campaign_status
-      }
-    }
-    if (data.tags !== undefined) metadataUpdates.tags = data.tags
-    if (data.sent_count !== undefined) metadataUpdates.sent_count = data.sent_count
-    if (data.open_count !== undefined) metadataUpdates.open_count = data.open_count
-    if (data.click_count !== undefined) metadataUpdates.click_count = data.click_count
-    if (data.sent_date !== undefined) metadataUpdates.sent_date = data.sent_date
+    if (data.contact_ids !== undefined) metadataUpdates.target_contacts = data.contact_ids
+    if (data.target_tags !== undefined) metadataUpdates.target_tags = data.target_tags
+    if (data.send_date !== undefined) metadataUpdates.send_date = data.send_date
+    if (data.stats !== undefined) metadataUpdates.stats = data.stats
+    if (data.template_snapshot !== undefined) metadataUpdates.template_snapshot = data.template_snapshot
 
     if (Object.keys(metadataUpdates).length > 0) {
       updateData.metadata = metadataUpdates
@@ -383,6 +441,39 @@ export async function updateEmailCampaign(
     return object || null
   } catch (error) {
     console.error('Error updating email campaign:', error)
+    throw error
+  }
+}
+
+export async function updateCampaignStatus(
+  id: string, 
+  status: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused',
+  stats?: any,
+  template_snapshot?: any
+): Promise<MarketingCampaign | null> {
+  try {
+    const metadataUpdates: any = {
+      status: {
+        key: status.toLowerCase(),
+        value: status
+      }
+    }
+
+    if (stats) {
+      metadataUpdates.stats = stats
+    }
+
+    if (template_snapshot) {
+      metadataUpdates.template_snapshot = template_snapshot
+    }
+
+    const { object } = await cosmic.objects.updateOne(id, {
+      metadata: metadataUpdates
+    })
+    
+    return object || null
+  } catch (error) {
+    console.error('Error updating campaign status:', error)
     throw error
   }
 }
@@ -434,7 +525,7 @@ export async function updateSettings(data: Partial<Settings['metadata']>): Promi
       })
       return object || null
     } else {
-      // Create new settings
+      // Create new settings with all required fields
       const settingsData = {
         title: 'Email Marketing Settings',
         type: 'settings',
@@ -448,7 +539,21 @@ export async function updateSettings(data: Partial<Settings['metadata']>): Promi
           reply_to_email: data.reply_to_email || '',
           unsubscribe_url: data.unsubscribe_url || '',
           tracking_enabled: data.tracking_enabled !== undefined ? data.tracking_enabled : true,
-          resend_api_key: data.resend_api_key || ''
+          resend_api_key: data.resend_api_key || '',
+          website_url: data.website_url || '',
+          support_email: data.support_email || '',
+          brand_guidelines: data.brand_guidelines || '',
+          primary_brand_color: data.primary_brand_color || '#3b82f6',
+          secondary_brand_color: data.secondary_brand_color || '#1e40af',
+          brand_logo: data.brand_logo || undefined,
+          ai_tone: data.ai_tone || {
+            key: 'professional',
+            value: 'Professional'
+          },
+          privacy_policy_url: data.privacy_policy_url || '',
+          terms_of_service_url: data.terms_of_service_url || '',
+          google_analytics_id: data.google_analytics_id || '',
+          email_signature: data.email_signature || ''
         }
       }
 
@@ -460,3 +565,6 @@ export async function updateSettings(data: Partial<Settings['metadata']>): Promi
     throw error
   }
 }
+
+// Alias for backward compatibility
+export const createOrUpdateSettings = updateSettings

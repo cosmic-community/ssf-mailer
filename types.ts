@@ -45,6 +45,9 @@ export interface EmailTemplate extends CosmicObject {
       url: string;
       imgix_url: string;
     };
+    category?: string;
+    tags?: string[];
+    is_ai_generated?: boolean;
     active: boolean;
   };
 }
@@ -60,6 +63,18 @@ export interface TemplateSnapshot {
   };
   snapshot_date: string;
   original_template_id: string;
+}
+
+// Campaign statistics interface
+export interface CampaignStats {
+  sent?: number;
+  delivered?: number;
+  opened?: number;
+  clicked?: number;
+  bounced?: number;
+  unsubscribed?: number;
+  open_rate?: string;
+  click_rate?: string;
 }
 
 // Marketing Campaign interface - Updated to include template snapshot
@@ -82,9 +97,26 @@ export interface MarketingCampaign extends CosmicObject {
 }
 
 // Add EmailCampaign as an alias for MarketingCampaign for backward compatibility
-export interface EmailCampaign extends MarketingCampaign {
-  type: 'email-campaigns' | 'marketing-campaigns';
+export interface EmailCampaign extends CosmicObject {
+  type: 'marketing-campaigns';
+  metadata: {
+    name: string;
+    template_id: string;
+    template?: EmailTemplate;
+    template_snapshot?: TemplateSnapshot;
+    target_contacts?: EmailContact[];
+    target_tags?: string[];
+    status: {
+      key: string;
+      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+    };
+    send_date?: string;
+    stats?: CampaignStats;
+  };
 }
+
+// Add Campaign type alias for backward compatibility
+export type Campaign = MarketingCampaign;
 
 // Settings interface
 export interface Settings extends CosmicObject {
@@ -112,19 +144,10 @@ export interface Settings extends CosmicObject {
     terms_of_service_url?: string;
     google_analytics_id?: string;
     email_signature?: string;
+    unsubscribe_url?: string;
+    tracking_enabled?: boolean;
+    resend_api_key?: string;
   };
-}
-
-// Campaign statistics interface
-export interface CampaignStats {
-  sent?: number;
-  delivered?: number;
-  opened?: number;
-  clicked?: number;
-  bounced?: number;
-  unsubscribed?: number;
-  open_rate?: string;
-  click_rate?: string;
 }
 
 // API response types
