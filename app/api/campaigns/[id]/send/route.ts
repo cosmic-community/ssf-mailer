@@ -108,7 +108,17 @@ export async function POST(
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'http://localhost:3000'
     console.log('Using base URL for tracking:', baseUrl)
 
-    // Update campaign status to 'Sending'
+    // Create template snapshot to preserve exact content that was sent
+    const templateSnapshot = {
+      name: template.metadata.name,
+      subject: template.metadata.subject,
+      content: template.metadata.content,
+      template_type: template.metadata.template_type,
+      snapshot_date: new Date().toISOString(),
+      original_template_id: template.id
+    }
+
+    // Update campaign status to 'Sending' and save template snapshot
     await updateCampaignStatus(id, 'Sent', {
       sent: 0,
       delivered: 0,
@@ -118,7 +128,7 @@ export async function POST(
       unsubscribed: 0,
       open_rate: '0%',
       click_rate: '0%'
-    })
+    }, templateSnapshot)
 
     // Send emails and track results
     const results = await Promise.allSettled(
@@ -135,9 +145,13 @@ export async function POST(
           const firstName = contact?.metadata?.first_name || 'there'
           const contactId = contact?.id || 'unknown'
 
-          // Personalize content
-          let personalizedContent = template.metadata.content
+          // Personalize content using the template snapshot
+          let personalizedContent = templateSnapshot.content
           personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, firstName)
+
+          // Personalize subject using the template snapshot
+          let personalizedSubject = templateSnapshot.subject
+          personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, firstName)
 
           // Add unsubscribe link
           const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
@@ -168,7 +182,7 @@ export async function POST(
           const emailOptions = {
             from: `${fromName} <${fromEmail}>`,
             to: [email],
-            subject: template.metadata.subject,
+            subject: personalizedSubject, // Use personalized subject from snapshot
             html: trackedContent, // Use tracked content with enhanced open/click tracking
             text: trackedContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
             reply_to: replyToEmail,
@@ -221,8 +235,8 @@ export async function POST(
       click_rate: successful > 0 ? `${Math.round((currentStats.clicked || 0) / successful * 100)}%` : '0%'
     }
 
-    // Update final campaign status
-    await updateCampaignStatus(id, 'Sent', finalStats)
+    // Update final campaign status with preserved template snapshot
+    await updateCampaignStatus(id, 'Sent', finalStats, templateSnapshot)
 
     return NextResponse.json({
       success: true,
