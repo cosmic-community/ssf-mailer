@@ -104,8 +104,9 @@ export async function POST(
       )
     }
 
-    // Get base URL for tracking
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    // Get base URL for tracking - ensure it's properly set
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin || 'http://localhost:3000'
+    console.log('Using base URL for tracking:', baseUrl)
 
     // Update campaign status to 'Sending'
     await updateCampaignStatus(id, 'Sent', {
@@ -139,7 +140,7 @@ export async function POST(
           personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, firstName)
 
           // Add unsubscribe link
-          const unsubscribeUrl = `${baseUrl}/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
+          const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(email)}&campaign=${id}`
           const unsubscribeFooter = `
             <div style="margin-top: 40px; padding: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
               <p style="margin: 0 0 10px 0;">
@@ -154,7 +155,8 @@ export async function POST(
 
           personalizedContent += unsubscribeFooter
 
-          // Add tracking to email content
+          // Add enhanced tracking to email content
+          console.log('Adding tracking for contact:', contactId, 'campaign:', id)
           const trackedContent = addTrackingToEmail(
             personalizedContent,
             id, // campaignId
@@ -162,27 +164,33 @@ export async function POST(
             baseUrl // baseUrl for tracking endpoints
           )
 
-          // Fix: Create proper SendEmailOptions with required text field
+          // Create proper SendEmailOptions with required text field
           const emailOptions = {
             from: `${fromName} <${fromEmail}>`,
             to: [email],
             subject: template.metadata.subject,
-            html: trackedContent, // Use tracked content with open/click tracking
+            html: trackedContent, // Use tracked content with enhanced open/click tracking
             text: trackedContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
             reply_to: replyToEmail,
             headers: {
               'X-Campaign-ID': id,
               'X-Contact-Email': email,
-              'X-Contact-ID': contactId
+              'X-Contact-ID': contactId,
+              // Additional headers for better deliverability
+              'List-Unsubscribe': `<${unsubscribeUrl}>`,
+              'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
             }
           }
 
-          // Fix: Proper type handling for Resend response
+          console.log('Sending email to:', email, 'with tracking enabled')
+          
+          // Send email with proper type handling
           const result = await sendEmail(emailOptions)
           
-          // Fix: Type assertion with proper validation
+          // Type assertion with proper validation
           if (result && typeof result === 'object' && 'id' in result) {
             const typedResult = result as ResendSuccessResponse
+            console.log('Email sent successfully to:', email, 'Message ID:', typedResult.id)
             return { success: true, email, messageId: typedResult.id }
           } else {
             throw new Error('Invalid response from email service')
@@ -198,7 +206,9 @@ export async function POST(
     const successful = results.filter(r => r.status === 'fulfilled' && r.value.success).length
     const failed = results.filter(r => r.status === 'rejected' || (r.status === 'fulfilled' && !r.value.success)).length
 
-    // Fix: Ensure stats properties are never undefined
+    console.log(`Campaign send completed: ${successful} successful, ${failed} failed`)
+
+    // Ensure stats properties are never undefined
     const currentStats = campaign.metadata?.stats || {}
     const finalStats: CampaignStats = {
       sent: successful,
