@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Pencil, Trash2, Search, Filter, Loader2, RefreshCw } from 'lucide-react'
 import { EmailContact } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import EditContactModal from '@/components/EditContactModal'
 
 interface ContactsListProps {
   contacts: EmailContact[]
@@ -201,13 +202,14 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push(`/contacts/${contact.id}/edit`)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <EditContactModal contact={contact}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </EditContactModal>
                       <ConfirmationModal
                         title="Delete Contact"
                         description={`Are you sure you want to delete ${contact.metadata.first_name} ${contact.metadata.last_name}? This action cannot be undone.`}
