@@ -1,9 +1,9 @@
 import { getEmailContacts } from '@/lib/cosmic'
 import ContactsList from '@/components/ContactsList'
 import { Button } from '@/components/ui/button'
-import { Plus, Upload } from 'lucide-react'
-import Link from 'next/link'
+import { RefreshCw, Upload } from 'lucide-react'
 import CSVUploadModal from '@/components/CSVUploadModal'
+import CreateContactModal from '@/components/CreateContactModal'
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = 'force-dynamic'
@@ -24,12 +24,7 @@ export default async function ContactsPage() {
             </div>
             <div className="flex space-x-4">
               <CSVUploadModal />
-              <Link href="/contacts/new">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Contact
-                </Button>
-              </Link>
+              <CreateContactModal />
             </div>
           </div>
         </div>

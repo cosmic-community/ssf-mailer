@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Pencil, Trash2, Search, Filter, Loader2 } from 'lucide-react'
+import { Pencil, Trash2, Search, Filter, Loader2, RefreshCw } from 'lucide-react'
 import { EmailContact } from '@/types'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import EditContactModal from '@/components/EditContactModal'
 
 interface ContactsListProps {
   contacts: EmailContact[]
@@ -19,6 +20,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   // Filter contacts based on search and status
   const filteredContacts = contacts.filter(contact => {
@@ -31,6 +33,18 @@ export default function ContactsList({ contacts }: ContactsListProps) {
     
     return matchesSearch && matchesStatus
   })
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      router.refresh()
+      // Add a small delay to show the loading state
+      setTimeout(() => setIsRefreshing(false), 500)
+    } catch (error) {
+      console.error('Error refreshing data:', error)
+      setIsRefreshing(false)
+    }
+  }
 
   const handleDelete = async (id: string) => {
     setDeletingId(id)
@@ -105,6 +119,19 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                 <SelectItem value="Bounced">Bounced</SelectItem>
               </SelectContent>
             </Select>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="ml-2"
+            >
+              {isRefreshing ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
         
@@ -175,13 +202,14 @@ export default function ContactsList({ contacts }: ContactsListProps) {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <div className="flex space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => router.push(`/contacts/${contact.id}/edit`)}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
+                      <EditContactModal contact={contact}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                      </EditContactModal>
                       <ConfirmationModal
                         title="Delete Contact"
                         description={`Are you sure you want to delete ${contact.metadata.first_name} ${contact.metadata.last_name}? This action cannot be undone.`}
