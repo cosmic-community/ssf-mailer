@@ -207,8 +207,7 @@ interface TemplateCreateData {
   subject: string
   content: string
   template_type: string
-  tags?: string[]
-  is_ai_generated?: boolean
+  preview_image?: string
   active: boolean
 }
 
@@ -222,12 +221,8 @@ export async function createEmailTemplate(data: TemplateCreateData): Promise<Ema
         name: data.name,
         subject: data.subject,
         content: data.content,
-        template_type: {
-          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
-          value: data.template_type
-        },
-        tags: data.tags || [],
-        is_ai_generated: data.is_ai_generated || false,
+        template_type: data.template_type, // Use the exact value from select-dropdown
+        preview_image: data.preview_image,
         active: data.active
       }
     }
@@ -251,20 +246,14 @@ export async function updateEmailTemplate(
       updateData.title = data.title || data.name
     }
     
-    if (data.name || data.subject || data.content || data.template_type || data.tags !== undefined || data.is_ai_generated !== undefined || data.active !== undefined) {
+    if (data.name || data.subject || data.content || data.template_type || data.preview_image !== undefined || data.active !== undefined) {
       updateData.metadata = {}
       
       if (data.name) updateData.metadata.name = data.name
       if (data.subject) updateData.metadata.subject = data.subject
       if (data.content) updateData.metadata.content = data.content
-      if (data.template_type) {
-        updateData.metadata.template_type = {
-          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
-          value: data.template_type
-        }
-      }
-      if (data.tags !== undefined) updateData.metadata.tags = data.tags
-      if (data.is_ai_generated !== undefined) updateData.metadata.is_ai_generated = data.is_ai_generated
+      if (data.template_type) updateData.metadata.template_type = data.template_type
+      if (data.preview_image !== undefined) updateData.metadata.preview_image = data.preview_image
       if (data.active !== undefined) updateData.metadata.active = data.active
     }
 
@@ -298,8 +287,7 @@ export async function duplicateEmailTemplate(id: string): Promise<EmailTemplate 
       subject: original.metadata.subject,
       content: original.metadata.content,
       template_type: original.metadata.template_type.value,
-      tags: original.metadata.tags,
-      is_ai_generated: original.metadata.is_ai_generated,
+      preview_image: original.metadata.preview_image?.url,
       active: false
     }
 
