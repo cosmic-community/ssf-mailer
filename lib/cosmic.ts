@@ -491,12 +491,19 @@ export async function deleteEmailCampaign(id: string): Promise<boolean> {
 // Settings
 export async function getSettings(): Promise<Settings | null> {
   try {
-    const { object } = await cosmic.objects
-      .findOne({ type: 'settings', slug: 'email-marketing-settings' })
+    // First try to find settings by type, which should work for any settings object
+    const { objects } = await cosmic.objects
+      .find({ type: 'settings' })
       .props(['id', 'title', 'slug', 'metadata'])
       .depth(1)
 
-    return object || null
+    if (objects && objects.length > 0) {
+      // Return the first settings object found
+      return objects[0]
+    }
+
+    // If no settings objects found, return null
+    return null
   } catch (error) {
     console.error('Error fetching settings:', error)
     if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
