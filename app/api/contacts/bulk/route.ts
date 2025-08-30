@@ -15,7 +15,7 @@ export async function DELETE(request: NextRequest) {
 
     // Delete contacts in parallel
     const results = await Promise.allSettled(
-      contactIds.map(id => cosmic.objects.deleteOne(id))
+      contactIds.map((id: string) => cosmic.objects.deleteOne(id))
     )
 
     // Count successful deletions
@@ -60,7 +60,7 @@ export async function PUT(request: NextRequest) {
 
     // First, fetch all contacts to get current data
     const contactsResponse = await Promise.allSettled(
-      contactIds.map(async (id) => {
+      contactIds.map(async (id: string) => {
         try {
           const { object } = await cosmic.objects.findOne({ id }).depth(0)
           return object
@@ -98,13 +98,13 @@ export async function PUT(request: NextRequest) {
         if (updates.tags !== undefined) {
           if (updates.tagAction === 'add') {
             // Add new tags to existing ones
-            const currentTags = contact.metadata.tags || []
-            const newTags = [...new Set([...currentTags, ...updates.tags])]
+            const currentTags: string[] = contact.metadata.tags || []
+            const newTags: string[] = Array.from(new Set([...currentTags, ...updates.tags]))
             updatedMetadata.tags = newTags
           } else if (updates.tagAction === 'remove') {
             // Remove specified tags
-            const currentTags = contact.metadata.tags || []
-            updatedMetadata.tags = currentTags.filter(tag => !updates.tags.includes(tag))
+            const currentTags: string[] = contact.metadata.tags || []
+            updatedMetadata.tags = currentTags.filter((tag: string) => !updates.tags.includes(tag))
           } else {
             // Replace all tags (default behavior)
             updatedMetadata.tags = updates.tags
