@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createEmailContact, getEmailContacts } from '@/lib/cosmic'
 import { EmailContact } from '@/types'
+import { revalidatePath, revalidateTag } from 'next/cache'
 
 interface ContactData {
   first_name: string;
@@ -244,6 +245,19 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
         const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
         creationErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`)
       }
+    }
+
+    // Enhanced cache invalidation after successful upload
+    if (created.length > 0) {
+      // Revalidate multiple paths and tags to ensure comprehensive cache refresh
+      revalidatePath('/contacts')
+      revalidatePath('/contacts/page')
+      revalidatePath('/(dashboard)/contacts')
+      revalidateTag('contacts')
+      revalidateTag('email-contacts')
+      
+      // Also revalidate the root dashboard to update stats
+      revalidatePath('/')
     }
 
     // Return results

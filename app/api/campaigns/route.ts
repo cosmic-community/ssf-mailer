@@ -47,6 +47,15 @@ export async function POST(request: NextRequest) {
       send_date: body.send_date || ''
     })
 
+    // Fix TS18047: Add null check for result
+    if (!result) {
+      console.error('Campaign creation failed: result is null')
+      return NextResponse.json(
+        { error: 'Failed to create campaign', details: 'Campaign creation returned null result' },
+        { status: 500 }
+      )
+    }
+
     console.log('Campaign created successfully:', result.id)
 
     // Revalidate the campaigns page to ensure the new campaign appears

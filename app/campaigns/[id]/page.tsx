@@ -5,6 +5,7 @@ import { getMarketingCampaign, getEmailTemplates, getEmailContacts } from '@/lib
 import EditCampaignForm from '@/components/EditCampaignForm'
 import SendCampaignButton from '@/components/SendCampaignButton'
 import DeleteCampaignButton from '@/components/DeleteCampaignButton'
+import { MarketingCampaign, EmailTemplate, EmailContact } from '@/types'
 
 // Force dynamic rendering
 export const dynamic = 'force-dynamic'
@@ -53,7 +54,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
     }
 
     // For draft campaigns, use current template (existing logic)
-    let templateData = null
+    let templateData: EmailTemplate | null = null
     
     // Try to get template from campaign metadata
     if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
@@ -61,7 +62,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
     } else if (campaign.metadata?.template_id || typeof campaign.metadata?.template === 'string') {
       // Find template by ID from the templates array
       const templateId = campaign.metadata.template_id || campaign.metadata.template
-      templateData = templates.find(t => t.id === templateId)
+      templateData = templates.find((t: EmailTemplate) => t.id === templateId) || null
     }
 
     if (!templateData?.metadata) {

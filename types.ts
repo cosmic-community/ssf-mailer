@@ -45,6 +45,9 @@ export interface EmailTemplate extends CosmicObject {
       url: string;
       imgix_url: string;
     };
+    category?: string;
+    tags?: string[];
+    is_ai_generated?: boolean;
     active: boolean;
   };
 }
@@ -62,14 +65,26 @@ export interface TemplateSnapshot {
   original_template_id: string;
 }
 
+// Campaign statistics interface
+export interface CampaignStats {
+  sent?: number;
+  delivered?: number;
+  opened?: number;
+  clicked?: number;
+  bounced?: number;
+  unsubscribed?: number;
+  open_rate?: string;
+  click_rate?: string;
+}
+
 // Marketing Campaign interface - Updated to include template snapshot
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
     template_id: string;
-    template?: EmailTemplate; // Add optional template object for when populated
-    template_snapshot?: TemplateSnapshot; // Snapshot of template at send time
+    template?: EmailTemplate;
+    template_snapshot?: TemplateSnapshot;
     target_contacts?: EmailContact[];
     target_tags?: string[];
     status: {
@@ -80,6 +95,28 @@ export interface MarketingCampaign extends CosmicObject {
     stats?: CampaignStats;
   };
 }
+
+// Add EmailCampaign as an alias for MarketingCampaign for backward compatibility
+export interface EmailCampaign extends CosmicObject {
+  type: 'marketing-campaigns';
+  metadata: {
+    name: string;
+    template_id: string;
+    template?: EmailTemplate;
+    template_snapshot?: TemplateSnapshot;
+    target_contacts?: EmailContact[];
+    target_tags?: string[];
+    status: {
+      key: string;
+      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+    };
+    send_date?: string;
+    stats?: CampaignStats;
+  };
+}
+
+// Add Campaign type alias for backward compatibility
+export type Campaign = MarketingCampaign;
 
 // Settings interface
 export interface Settings extends CosmicObject {
@@ -107,19 +144,10 @@ export interface Settings extends CosmicObject {
     terms_of_service_url?: string;
     google_analytics_id?: string;
     email_signature?: string;
+    unsubscribe_url?: string;
+    tracking_enabled?: boolean;
+    resend_api_key?: string;
   };
-}
-
-// Campaign statistics interface
-export interface CampaignStats {
-  sent?: number;
-  delivered?: number;
-  opened?: number;
-  clicked?: number;
-  bounced?: number;
-  unsubscribed?: number;
-  open_rate?: string;
-  click_rate?: string;
 }
 
 // API response types
@@ -192,7 +220,7 @@ export function isSettings(obj: CosmicObject): obj is Settings {
   return obj.type === 'settings';
 }
 
-// Utility types - Fixed the generic constraint issue
+// Utility types
 export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
 export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
 export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;

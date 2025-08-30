@@ -92,6 +92,38 @@ export default function CSVUploadForm() {
     }
   }
 
+  const handleViewContacts = async () => {
+    // Multiple approaches to ensure cache is refreshed
+    try {
+      // 1. Call the revalidate API endpoint
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: '/contacts' }),
+      })
+
+      // 2. Add a small delay to allow server-side updates to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // 3. Hard refresh the router to bypass any client-side caching
+      router.push('/contacts')
+      router.refresh()
+
+      // 4. Additional refresh after navigation to ensure data is current
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
+
+    } catch (error) {
+      console.error('Failed to refresh contacts page:', error)
+      // Still navigate even if refresh fails
+      router.push('/contacts')
+      router.refresh()
+    }
+  }
+
   return (
     <div className="card max-w-2xl">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Contacts from CSV</h2>
@@ -212,7 +244,7 @@ export default function CSVUploadForm() {
               Upload Another File
             </Button>
             <Button
-              onClick={() => router.push('/contacts')}
+              onClick={handleViewContacts}
             >
               View All Contacts
             </Button>

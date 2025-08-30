@@ -223,7 +223,7 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
       {showDuplicateConfirm && (
         <ConfirmationModal
           isOpen={true}
-          onOpenChange={(open) => !open && setShowDuplicateConfirm(null)}
+          onOpenChange={(open: boolean) => !open && setShowDuplicateConfirm(null)}
           title="Duplicate Template"
           message={`Are you sure you want to duplicate "${showDuplicateConfirm.metadata?.name}"? A copy will be created with "(Copy)" added to the name.`}
           confirmText="Duplicate Template"

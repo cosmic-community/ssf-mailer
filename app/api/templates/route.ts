@@ -54,7 +54,7 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Create the template
+    // Create the template with proper structure
     const template = await createEmailTemplate({
       name: data.name.trim(),
       subject: data.subject.trim(),

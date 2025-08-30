@@ -1,279 +1,378 @@
 import { createBucketClient } from '@cosmicjs/sdk'
-import { EmailContact, EmailTemplate, MarketingCampaign, Settings, CampaignStats, TemplateSnapshot } from '@/types'
+import { EmailContact, EmailTemplate, Settings, MarketingCampaign } from '@/types'
 
-// Create the Cosmic client for server-side operations (full access)
-export const cosmic = createBucketClient({
+// Initialize Cosmic client
+const cosmic = createBucketClient({
   bucketSlug: process.env.COSMIC_BUCKET_SLUG as string,
   readKey: process.env.COSMIC_READ_KEY as string,
   writeKey: process.env.COSMIC_WRITE_KEY as string,
 })
 
-// Create a read-only client for client-side operations
-export const cosmicReadOnly = createBucketClient({
-  bucketSlug: process.env.COSMIC_BUCKET_SLUG as string,
-  readKey: process.env.COSMIC_READ_KEY as string,
-})
+// Export cosmic client for direct use in API routes
+export { cosmic }
 
-// Email Contacts Functions
+// Email Contacts
 export async function getEmailContacts(): Promise<EmailContact[]> {
   try {
     const { objects } = await cosmic.objects
       .find({ type: 'email-contacts' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    return objects as EmailContact[]
+
+    return objects || []
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching email contacts:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return []
     }
-    throw new Error('Failed to fetch email contacts')
+    throw error
   }
 }
 
 export async function getEmailContact(id: string): Promise<EmailContact | null> {
   try {
     const { object } = await cosmic.objects
-      .findOne({ id, type: 'email-contacts' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .findOne({ type: 'email-contacts', id })
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    return object as EmailContact
+
+    return object || null
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching email contact:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return null
     }
     throw error
   }
 }
 
-export async function createEmailContact(data: {
-  first_name: string;
-  last_name?: string;
-  email: string;
-  status: 'Active' | 'Unsubscribed' | 'Bounced';
-  tags?: string[];
-  subscribe_date?: string;
-  notes?: string;
-}): Promise<EmailContact> {
-  const { object } = await cosmic.objects.insertOne({
-    title: `${data.first_name} ${data.last_name || ''}`.trim(),
-    type: 'email-contacts',
-    metadata: {
-      first_name: data.first_name,
-      last_name: data.last_name || '',
-      email: data.email,
-      status: {
-        key: data.status.toLowerCase(),
-        value: data.status
-      },
-      tags: data.tags || [],
-      subscribe_date: data.subscribe_date || new Date().toISOString().split('T')[0],
-      notes: data.notes || '',
+interface ContactCreateData {
+  first_name: string
+  last_name?: string
+  email: string
+  status?: 'Active' | 'Unsubscribed' | 'Bounced'
+  tags?: string[]
+  subscribe_date?: string
+  notes?: string
+}
+
+export async function createEmailContact(data: ContactCreateData): Promise<EmailContact | null> {
+  try {
+    const contactData = {
+      title: `${data.first_name} ${data.last_name || ''}`.trim(),
+      type: 'email-contacts',
+      status: 'published' as const,
+      metadata: {
+        first_name: data.first_name,
+        last_name: data.last_name || '',
+        email: data.email,
+        status: {
+          key: (data.status || 'Active').toLowerCase(),
+          value: data.status || 'Active'
+        },
+        tags: data.tags || [],
+        subscribe_date: data.subscribe_date || new Date().toISOString().split('T')[0],
+        notes: data.notes || ''
+      }
     }
-  })
-  
-  return object as EmailContact
+
+    const { object } = await cosmic.objects.insertOne(contactData)
+    return object || null
+  } catch (error) {
+    console.error('Error creating email contact:', error)
+    throw error
+  }
 }
 
-export async function updateEmailContact(id: string, data: Partial<{
-  first_name: string;
-  last_name?: string;
-  email: string;
-  status: 'Active' | 'Unsubscribed' | 'Bounced';
-  tags?: string[];
-  notes?: string;
-}>): Promise<EmailContact> {
-  // Only include the fields that are being updated
-  const updatePayload: any = {}
-  
-  if (data.first_name || data.last_name) {
-    updatePayload.title = `${data.first_name || ''} ${data.last_name || ''}`.trim()
+export async function updateEmailContact(
+  id: string, 
+  data: Partial<ContactCreateData> & { title?: string }
+): Promise<EmailContact | null> {
+  try {
+    const updateData: any = {}
+    
+    if (data.title) {
+      updateData.title = data.title
+    }
+    
+    if (data.first_name || data.last_name || data.email || data.status || data.tags !== undefined || data.subscribe_date || data.notes !== undefined) {
+      updateData.metadata = {}
+      
+      if (data.first_name) updateData.metadata.first_name = data.first_name
+      if (data.last_name !== undefined) updateData.metadata.last_name = data.last_name
+      if (data.email) updateData.metadata.email = data.email
+      if (data.status) {
+        updateData.metadata.status = {
+          key: data.status.toLowerCase(),
+          value: data.status
+        }
+      }
+      if (data.tags !== undefined) updateData.metadata.tags = data.tags
+      if (data.subscribe_date) updateData.metadata.subscribe_date = data.subscribe_date
+      if (data.notes !== undefined) updateData.metadata.notes = data.notes
+    }
+
+    const { object } = await cosmic.objects.updateOne(id, updateData)
+    return object || null
+  } catch (error) {
+    console.error('Error updating email contact:', error)
+    throw error
   }
-  
-  const metadata: any = {}
-  if (data.first_name !== undefined) metadata.first_name = data.first_name
-  if (data.last_name !== undefined) metadata.last_name = data.last_name
-  if (data.email !== undefined) metadata.email = data.email
-  if (data.status !== undefined) metadata.status = {
-    key: data.status.toLowerCase(),
-    value: data.status
-  }
-  if (data.tags !== undefined) metadata.tags = data.tags
-  if (data.notes !== undefined) metadata.notes = data.notes
-  
-  if (Object.keys(metadata).length > 0) {
-    updatePayload.metadata = metadata
-  }
-  
-  const { object } = await cosmic.objects.updateOne(id, updatePayload)
-  return object as EmailContact
 }
 
-export async function deleteEmailContact(id: string): Promise<void> {
-  await cosmic.objects.deleteOne(id)
+export async function deleteEmailContact(id: string): Promise<boolean> {
+  try {
+    await cosmic.objects.deleteOne(id)
+    return true
+  } catch (error) {
+    console.error('Error deleting email contact:', error)
+    throw error
+  }
 }
 
-// Email Templates Functions
+// Unsubscribe contact function
+export async function unsubscribeContact(email: string): Promise<boolean> {
+  try {
+    // Find the contact by email
+    const { objects } = await cosmic.objects
+      .find({ 
+        type: 'email-contacts',
+        'metadata.email': email 
+      })
+      .props(['id', 'title', 'metadata'])
+      .depth(1)
+
+    if (!objects || objects.length === 0) {
+      console.log('Contact not found for unsubscribe:', email)
+      return false
+    }
+
+    const contact = objects[0]
+    
+    // Update the contact's status to unsubscribed
+    await cosmic.objects.updateOne(contact.id, {
+      metadata: {
+        status: {
+          key: 'unsubscribed',
+          value: 'Unsubscribed'
+        }
+      }
+    })
+
+    console.log('Contact unsubscribed successfully:', email)
+    return true
+  } catch (error) {
+    console.error('Error unsubscribing contact:', error)
+    return false
+  }
+}
+
+// Email Templates
 export async function getEmailTemplates(): Promise<EmailTemplate[]> {
   try {
     const { objects } = await cosmic.objects
       .find({ type: 'email-templates' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    return objects as EmailTemplate[]
+
+    return objects || []
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching email templates:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return []
     }
-    throw new Error('Failed to fetch email templates')
+    throw error
   }
 }
 
 export async function getEmailTemplate(id: string): Promise<EmailTemplate | null> {
   try {
-    console.log(`Fetching email template with ID: ${id}`)
     const { object } = await cosmic.objects
-      .findOne({ id, type: 'email-templates' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .findOne({ type: 'email-templates', id })
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    console.log(`Template found: ${object ? object.title : 'null'}`)
-    return object as EmailTemplate
-  } catch (error: any) {
-    console.error(`Error fetching template ${id}:`, error.message)
-    if (hasStatus(error) && error.status === 404) {
+
+    return object || null
+  } catch (error) {
+    console.error('Error fetching email template:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return null
     }
     throw error
   }
 }
 
-export async function createEmailTemplate(data: {
-  name: string;
-  subject: string;
-  content: string;
-  template_type: 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
-  active: boolean;
-}): Promise<EmailTemplate> {
-  const { object } = await cosmic.objects.insertOne({
-    title: data.name,
-    type: 'email-templates',
-    metadata: {
-      name: data.name,
-      subject: data.subject,
-      content: data.content,
-      template_type: {
-        key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
-        value: data.template_type
-      },
-      active: data.active,
+interface TemplateCreateData {
+  name: string
+  subject: string
+  content: string
+  template_type: string
+  category?: string
+  tags?: string[]
+  is_ai_generated?: boolean
+  active: boolean
+}
+
+export async function createEmailTemplate(data: TemplateCreateData): Promise<EmailTemplate | null> {
+  try {
+    const templateData = {
+      title: data.name,
+      type: 'email-templates',
+      status: 'published' as const,
+      metadata: {
+        name: data.name,
+        subject: data.subject,
+        content: data.content,
+        template_type: {
+          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+          value: data.template_type
+        },
+        category: data.category || '',
+        tags: data.tags || [],
+        is_ai_generated: data.is_ai_generated || false,
+        active: data.active
+      }
     }
-  })
-  
-  return object as EmailTemplate
+
+    const { object } = await cosmic.objects.insertOne(templateData)
+    return object || null
+  } catch (error) {
+    console.error('Error creating email template:', error)
+    throw error
+  }
 }
 
-export async function updateEmailTemplate(id: string, data: {
-  name: string;
-  subject: string;
-  content: string;
-  template_type: 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
-  active: boolean;
-}): Promise<EmailTemplate> {
-  const { object } = await cosmic.objects.updateOne(id, {
-    title: data.name,
-    metadata: {
-      name: data.name,
-      subject: data.subject,
-      content: data.content,
-      template_type: {
-        key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
-        value: data.template_type
-      },
-      active: data.active,
+export async function updateEmailTemplate(
+  id: string, 
+  data: Partial<TemplateCreateData> & { title?: string }
+): Promise<EmailTemplate | null> {
+  try {
+    const updateData: any = {}
+    
+    if (data.title || data.name) {
+      updateData.title = data.title || data.name
     }
-  })
-  
-  return object as EmailTemplate
+    
+    if (data.name || data.subject || data.content || data.template_type || data.category !== undefined || data.tags !== undefined || data.is_ai_generated !== undefined || data.active !== undefined) {
+      updateData.metadata = {}
+      
+      if (data.name) updateData.metadata.name = data.name
+      if (data.subject) updateData.metadata.subject = data.subject
+      if (data.content) updateData.metadata.content = data.content
+      if (data.template_type) {
+        updateData.metadata.template_type = {
+          key: data.template_type.toLowerCase().replace(/\s+/g, '_'),
+          value: data.template_type
+        }
+      }
+      if (data.category !== undefined) updateData.metadata.category = data.category
+      if (data.tags !== undefined) updateData.metadata.tags = data.tags
+      if (data.is_ai_generated !== undefined) updateData.metadata.is_ai_generated = data.is_ai_generated
+      if (data.active !== undefined) updateData.metadata.active = data.active
+    }
+
+    const { object } = await cosmic.objects.updateOne(id, updateData)
+    return object || null
+  } catch (error) {
+    console.error('Error updating email template:', error)
+    throw error
+  }
 }
 
-export async function deleteEmailTemplate(id: string): Promise<void> {
-  await cosmic.objects.deleteOne(id)
+export async function deleteEmailTemplate(id: string): Promise<boolean> {
+  try {
+    await cosmic.objects.deleteOne(id)
+    return true
+  } catch (error) {
+    console.error('Error deleting email template:', error)
+    throw error
+  }
 }
 
-// Marketing Campaigns Functions
-export async function getMarketingCampaigns(): Promise<MarketingCampaign[]> {
+export async function duplicateEmailTemplate(id: string): Promise<EmailTemplate | null> {
+  try {
+    const original = await getEmailTemplate(id)
+    if (!original) {
+      throw new Error('Template not found')
+    }
+
+    const duplicateData = {
+      name: `${original.metadata.name} (Copy)`,
+      subject: original.metadata.subject,
+      content: original.metadata.content,
+      template_type: original.metadata.template_type.value,
+      category: original.metadata.category,
+      tags: original.metadata.tags,
+      is_ai_generated: original.metadata.is_ai_generated,
+      active: false
+    }
+
+    return await createEmailTemplate(duplicateData)
+  } catch (error) {
+    console.error('Error duplicating email template:', error)
+    throw error
+  }
+}
+
+// Email Campaigns - Updated function names
+export async function getEmailCampaigns(): Promise<MarketingCampaign[]> {
   try {
     const { objects } = await cosmic.objects
       .find({ type: 'marketing-campaigns' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    return objects as MarketingCampaign[]
+
+    return objects || []
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching email campaigns:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return []
     }
-    throw new Error('Failed to fetch marketing campaigns')
+    throw error
   }
 }
 
-export async function getMarketingCampaign(id: string): Promise<MarketingCampaign | null> {
+// Alias for backward compatibility
+export const getMarketingCampaigns = getEmailCampaigns
+
+export async function getEmailCampaign(id: string): Promise<MarketingCampaign | null> {
   try {
     const { object } = await cosmic.objects
-      .findOne({ id, type: 'marketing-campaigns' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .findOne({ type: 'marketing-campaigns', id })
+      .props(['id', 'title', 'slug', 'metadata', 'created_at', 'modified_at'])
       .depth(1)
-    
-    // If we got the campaign but need to fix the template structure
-    if (object) {
-      const campaign = object as MarketingCampaign
-      
-      // If template is an object (relationship), extract the ID for template_id
-      if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
-        campaign.metadata.template_id = campaign.metadata.template.id
-      }
-      
-      return campaign
-    }
-    
-    return null
+
+    return object || null
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching email campaign:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return null
     }
     throw error
   }
 }
 
-export async function createMarketingCampaign(data: {
-  name: string;
-  template_id: string;
-  contact_ids?: string[];
-  target_tags?: string[];
-  send_date?: string;
-}): Promise<MarketingCampaign> {
-  try {
-    console.log('Creating marketing campaign with data:', data)
-    
-    // Get template and contacts if specified
-    console.log('Fetching template for campaign creation...')
-    const template = await getEmailTemplate(data.template_id)
-    if (!template) {
-      throw new Error(`Template not found: ${data.template_id}`)
-    }
-    console.log('Template fetched successfully:', template.metadata?.name)
+// Alias for backward compatibility
+export const getMarketingCampaign = getEmailCampaign
 
-    // Store contact IDs directly as strings, not full contact objects
-    const campaignPayload = {
+interface CampaignCreateData {
+  name: string
+  template_id: string
+  contact_ids?: string[]
+  target_tags?: string[]
+  send_date?: string
+}
+
+export async function createEmailCampaign(data: CampaignCreateData): Promise<MarketingCampaign | null> {
+  try {
+    const campaignData = {
       title: data.name,
       type: 'marketing-campaigns',
+      status: 'published' as const,
       metadata: {
         name: data.name,
-        template: data.template_id, // Store template ID
-        target_contacts: data.contact_ids || [], // Store contact IDs as array of strings
+        template_id: data.template_id,
+        target_contacts: [],
         target_tags: data.target_tags || [],
         status: {
           key: 'draft',
@@ -293,208 +392,179 @@ export async function createMarketingCampaign(data: {
       }
     }
 
-    console.log('Campaign payload prepared:', JSON.stringify(campaignPayload, null, 2))
-    console.log('Calling cosmic.objects.insertOne...')
-    
-    const { object } = await cosmic.objects.insertOne(campaignPayload)
-    
-    console.log('Campaign created successfully with ID:', object.id)
-    return object as MarketingCampaign
-  } catch (error: any) {
-    console.error('Error in createMarketingCampaign:')
-    console.error('Error message:', error.message)
-    console.error('Error stack:', error.stack)
-    console.error('Full error object:', error)
-    
-    // Re-throw with more context
-    throw new Error(`Campaign creation failed: ${error.message}`)
+    const { object } = await cosmic.objects.insertOne(campaignData)
+    return object || null
+  } catch (error) {
+    console.error('Error creating email campaign:', error)
+    throw error
   }
 }
 
-export async function updateMarketingCampaign(id: string, data: {
-  name?: string;
-  template_id?: string;
-  contact_ids?: string[];
-  target_tags?: string[];
-  send_date?: string;
-}): Promise<MarketingCampaign> {
-  const metadata: any = {}
-  let updatePayload: any = {}
+// Alias for backward compatibility
+export const createMarketingCampaign = createEmailCampaign
 
-  if (data.name) {
-    updatePayload.title = data.name
-    metadata.name = data.name
+export async function updateEmailCampaign(
+  id: string, 
+  data: Partial<CampaignCreateData> & { 
+    title?: string
+    sent_count?: number
+    open_count?: number
+    click_count?: number
+    sent_date?: string
+    stats?: any
+    template_snapshot?: any
   }
-
-  if (data.template_id) {
-    const template = await getEmailTemplate(data.template_id)
-    if (!template) {
-      throw new Error('Template not found')
+): Promise<MarketingCampaign | null> {
+  try {
+    const updateData: any = {}
+    
+    if (data.title || data.name) {
+      updateData.title = data.title || data.name
     }
-    metadata.template = data.template_id // Store template ID, not object
-  }
+    
+    // Build metadata object with only the fields that are being updated
+    const metadataUpdates: any = {}
+    
+    if (data.name) metadataUpdates.name = data.name
+    if (data.template_id !== undefined) metadataUpdates.template_id = data.template_id
+    if (data.contact_ids !== undefined) metadataUpdates.target_contacts = data.contact_ids
+    if (data.target_tags !== undefined) metadataUpdates.target_tags = data.target_tags
+    if (data.send_date !== undefined) metadataUpdates.send_date = data.send_date
+    if (data.stats !== undefined) metadataUpdates.stats = data.stats
+    if (data.template_snapshot !== undefined) metadataUpdates.template_snapshot = data.template_snapshot
 
-  if (data.contact_ids !== undefined) {
-    metadata.target_contacts = data.contact_ids // Store contact IDs directly
-  }
+    if (Object.keys(metadataUpdates).length > 0) {
+      updateData.metadata = metadataUpdates
+    }
 
-  if (data.target_tags !== undefined) {
-    metadata.target_tags = data.target_tags
+    const { object } = await cosmic.objects.updateOne(id, updateData)
+    return object || null
+  } catch (error) {
+    console.error('Error updating email campaign:', error)
+    throw error
   }
-
-  if (data.send_date !== undefined) {
-    metadata.send_date = data.send_date
-  }
-
-  if (Object.keys(metadata).length > 0) {
-    updatePayload.metadata = metadata
-  }
-
-  const { object } = await cosmic.objects.updateOne(id, updatePayload)
-  return object as MarketingCampaign
 }
 
 export async function updateCampaignStatus(
   id: string, 
-  status: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled', 
-  stats?: CampaignStats, 
-  templateSnapshot?: TemplateSnapshot
-): Promise<MarketingCampaign> {
-  const metadata: any = { 
-    status: {
-      key: status.toLowerCase(),
-      value: status
+  status: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused',
+  stats?: any,
+  template_snapshot?: any
+): Promise<MarketingCampaign | null> {
+  try {
+    const metadataUpdates: any = {
+      status: {
+        key: status.toLowerCase(),
+        value: status
+      }
     }
-  }
-  
-  if (stats) {
-    metadata.stats = stats
-  }
-  
-  if (templateSnapshot) {
-    metadata.template_snapshot = templateSnapshot
-  }
 
-  const { object } = await cosmic.objects.updateOne(id, { metadata })
-  return object as MarketingCampaign
+    if (stats) {
+      metadataUpdates.stats = stats
+    }
+
+    if (template_snapshot) {
+      metadataUpdates.template_snapshot = template_snapshot
+    }
+
+    const { object } = await cosmic.objects.updateOne(id, {
+      metadata: metadataUpdates
+    })
+    
+    return object || null
+  } catch (error) {
+    console.error('Error updating campaign status:', error)
+    throw error
+  }
 }
 
-export async function deleteMarketingCampaign(id: string): Promise<void> {
-  await cosmic.objects.deleteOne(id)
+export async function deleteEmailCampaign(id: string): Promise<boolean> {
+  try {
+    await cosmic.objects.deleteOne(id)
+    return true
+  } catch (error) {
+    console.error('Error deleting email campaign:', error)
+    throw error
+  }
 }
 
-// Settings Functions
+// Settings
 export async function getSettings(): Promise<Settings | null> {
   try {
     const { object } = await cosmic.objects
-      .findOne({ type: 'settings', slug: 'global-settings' })
-      .props(['id', 'slug', 'title', 'metadata', 'created_at', 'modified_at'])
+      .findOne({ type: 'settings', slug: 'email-marketing-settings' })
+      .props(['id', 'title', 'slug', 'metadata'])
       .depth(1)
-    
-    return object as Settings
+
+    return object || null
   } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
+    console.error('Error fetching settings:', error)
+    if (error && typeof error === 'object' && 'status' in error && error.status === 404) {
       return null
     }
     throw error
   }
 }
 
-export async function createOrUpdateSettings(data: {
-  from_name: string;
-  from_email: string;
-  reply_to_email?: string;
-  company_name: string;
-  company_address?: string;
-  website_url?: string;
-  support_email?: string;
-  brand_guidelines?: string;
-  primary_brand_color?: string;
-  secondary_brand_color?: string;
-  ai_tone?: 'Professional' | 'Friendly' | 'Casual' | 'Formal';
-  privacy_policy_url?: string;
-  terms_of_service_url?: string;
-  google_analytics_id?: string;
-  email_signature?: string;
-}): Promise<Settings> {
-  // Check if settings already exist
-  const existingSettings = await getSettings()
-  
-  const settingsData = {
-    title: 'Global Settings',
-    slug: 'global-settings',
-    type: 'settings',
-    metadata: {
-      from_name: data.from_name,
-      from_email: data.from_email,
-      reply_to_email: data.reply_to_email || '',
-      company_name: data.company_name,
-      company_address: data.company_address || '',
-      website_url: data.website_url || '',
-      support_email: data.support_email || '',
-      brand_guidelines: data.brand_guidelines || '',
-      primary_brand_color: data.primary_brand_color || '#3b82f6',
-      secondary_brand_color: data.secondary_brand_color || '#1e40af',
-      ai_tone: {
-        key: (data.ai_tone || 'Professional').toLowerCase(),
-        value: data.ai_tone || 'Professional'
-      },
-      privacy_policy_url: data.privacy_policy_url || '',
-      terms_of_service_url: data.terms_of_service_url || '',
-      google_analytics_id: data.google_analytics_id || '',
-      email_signature: data.email_signature || '',
-    }
-  }
-
-  if (existingSettings) {
-    // Update existing settings - only include changed fields
-    const metadata: any = {}
-    if (data.from_name !== undefined) metadata.from_name = data.from_name
-    if (data.from_email !== undefined) metadata.from_email = data.from_email
-    if (data.reply_to_email !== undefined) metadata.reply_to_email = data.reply_to_email || ''
-    if (data.company_name !== undefined) metadata.company_name = data.company_name
-    if (data.company_address !== undefined) metadata.company_address = data.company_address || ''
-    if (data.website_url !== undefined) metadata.website_url = data.website_url || ''
-    if (data.support_email !== undefined) metadata.support_email = data.support_email || ''
-    if (data.brand_guidelines !== undefined) metadata.brand_guidelines = data.brand_guidelines || ''
-    if (data.primary_brand_color !== undefined) metadata.primary_brand_color = data.primary_brand_color || '#3b82f6'
-    if (data.secondary_brand_color !== undefined) metadata.secondary_brand_color = data.secondary_brand_color || '#1e40af'
-    if (data.ai_tone !== undefined) metadata.ai_tone = {
-      key: (data.ai_tone || 'Professional').toLowerCase(),
-      value: data.ai_tone || 'Professional'
-    }
-    if (data.privacy_policy_url !== undefined) metadata.privacy_policy_url = data.privacy_policy_url || ''
-    if (data.terms_of_service_url !== undefined) metadata.terms_of_service_url = data.terms_of_service_url || ''
-    if (data.google_analytics_id !== undefined) metadata.google_analytics_id = data.google_analytics_id || ''
-    if (data.email_signature !== undefined) metadata.email_signature = data.email_signature || ''
-
-    const { object } = await cosmic.objects.updateOne(existingSettings.id, { metadata })
-    return object as Settings
-  } else {
-    // Create new settings
-    const { object } = await cosmic.objects.insertOne(settingsData)
-    return object as Settings
-  }
-}
-
-// Utility function to check if error has status property
-function hasStatus(error: any): error is { status: number } {
-  return error && typeof error.status === 'number'
-}
-
-// Utility function to unsubscribe a contact
-export async function unsubscribeContact(email: string): Promise<boolean> {
+export async function updateSettings(data: Partial<Settings['metadata']>): Promise<Settings | null> {
   try {
-    const contacts = await getEmailContacts()
-    const contact = contacts.find(c => c.metadata?.email === email)
+    // First try to get existing settings
+    let settingsId: string | undefined
     
-    if (contact) {
-      await updateEmailContact(contact.id, { status: 'Unsubscribed' })
-      return true
+    try {
+      const existingSettings = await getSettings()
+      settingsId = existingSettings?.id
+    } catch (error) {
+      // Settings don't exist yet
     }
-    return false
+
+    if (settingsId) {
+      // Update existing settings - only include changed fields
+      const { object } = await cosmic.objects.updateOne(settingsId, {
+        metadata: data
+      })
+      return object || null
+    } else {
+      // Create new settings with all required fields
+      const settingsData = {
+        title: 'Email Marketing Settings',
+        type: 'settings',
+        slug: 'email-marketing-settings',
+        status: 'published' as const,
+        metadata: {
+          company_name: data.company_name || '',
+          company_address: data.company_address || '',
+          from_name: data.from_name || '',
+          from_email: data.from_email || '',
+          reply_to_email: data.reply_to_email || '',
+          unsubscribe_url: data.unsubscribe_url || '',
+          tracking_enabled: data.tracking_enabled !== undefined ? data.tracking_enabled : true,
+          resend_api_key: data.resend_api_key || '',
+          website_url: data.website_url || '',
+          support_email: data.support_email || '',
+          brand_guidelines: data.brand_guidelines || '',
+          primary_brand_color: data.primary_brand_color || '#3b82f6',
+          secondary_brand_color: data.secondary_brand_color || '#1e40af',
+          brand_logo: data.brand_logo || undefined,
+          ai_tone: data.ai_tone || {
+            key: 'professional',
+            value: 'Professional'
+          },
+          privacy_policy_url: data.privacy_policy_url || '',
+          terms_of_service_url: data.terms_of_service_url || '',
+          google_analytics_id: data.google_analytics_id || '',
+          email_signature: data.email_signature || ''
+        }
+      }
+
+      const { object } = await cosmic.objects.insertOne(settingsData)
+      return object || null
+    }
   } catch (error) {
-    console.error('Error unsubscribing contact:', error)
-    return false
+    console.error('Error updating settings:', error)
+    throw error
   }
 }
+
+// Alias for backward compatibility
+export const createOrUpdateSettings = updateSettings
