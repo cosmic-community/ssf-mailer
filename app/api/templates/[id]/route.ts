@@ -18,20 +18,20 @@ export async function PUT(
       )
     }
 
-    // Handle template_type - it could be a string or an object
+    // Handle template_type - extract value if it's an object, otherwise use as-is
     let templateType = body.template_type
     if (typeof templateType === 'object' && templateType.value) {
       templateType = templateType.value
     }
 
-    // Update the template with correct metadata structure
+    // Update the template with correct metadata structure matching Cosmic CMS object type
     const result = await cosmic.objects.updateOne(id, {
       title: body.name,
       metadata: {
         name: body.name,
         subject: body.subject,
         content: body.content,
-        template_type: templateType,
+        template_type: templateType, // Use the exact select-dropdown value
         active: body.active ?? true
       }
     })

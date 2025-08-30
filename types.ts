@@ -30,7 +30,7 @@ export interface EmailContact extends CosmicObject {
   };
 }
 
-// Email Template interface
+// Email Template interface - removed category field
 export interface EmailTemplate extends CosmicObject {
   type: 'email-templates';
   metadata: {
@@ -45,7 +45,6 @@ export interface EmailTemplate extends CosmicObject {
       url: string;
       imgix_url: string;
     };
-    category?: string;
     tags?: string[];
     is_ai_generated?: boolean;
     active: boolean;

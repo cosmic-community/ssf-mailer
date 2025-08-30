@@ -44,7 +44,7 @@ export default function CreateTemplateForm() {
     name: '',
     subject: '',
     content: '',
-    template_type: 'Newsletter',
+    template_type: 'Newsletter', // Use exact value from select-dropdown
     active: true
   })
 
@@ -469,7 +469,7 @@ export default function CreateTemplateForm() {
                   />
                 </div>
 
-                {/* Template Type - Moved here */}
+                {/* Template Type - Using exact select-dropdown values */}
                 <div className="space-y-2">
                   <Label>Template Type</Label>
                   <Select
