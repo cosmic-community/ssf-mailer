@@ -43,7 +43,14 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
   }
 
   const handleNavClick = (href: string, e: React.MouseEvent) => {
+    // Allow Cmd+Click (Mac) or Ctrl+Click (Windows/Linux) to open in new tab
+    if (e.metaKey || e.ctrlKey) {
+      return // Let the browser handle it naturally
+    }
+    
+    // For regular clicks, prevent default and use programmatic navigation
     e.preventDefault()
+    
     // Force a hard navigation to ensure proper route handling
     if (href === '/') {
       router.push('/')
