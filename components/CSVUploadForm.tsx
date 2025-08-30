@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, AlertCircle, Upload } from 'lucide-react'
-import { revalidatePath } from 'next/cache'
 
 interface UploadResult {
   success: boolean
@@ -73,15 +72,6 @@ export default function CSVUploadForm() {
       // Safely handle the response with proper type checking
       if (result && typeof result === 'object' && 'success' in result) {
         setUploadResult(result as UploadResult)
-        
-        // Revalidate the contacts page cache after successful upload
-        await fetch('/api/revalidate', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ path: '/contacts' }),
-        })
       } else {
         throw new Error('Invalid response format')
       }
@@ -103,8 +93,9 @@ export default function CSVUploadForm() {
   }
 
   const handleViewContacts = async () => {
-    // Revalidate the contacts page before navigating
+    // Multiple approaches to ensure cache is refreshed
     try {
+      // 1. Call the revalidate API endpoint
       await fetch('/api/revalidate', {
         method: 'POST',
         headers: {
@@ -112,13 +103,25 @@ export default function CSVUploadForm() {
         },
         body: JSON.stringify({ path: '/contacts' }),
       })
+
+      // 2. Add a small delay to allow server-side updates to complete
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      // 3. Hard refresh the router to bypass any client-side caching
+      router.push('/contacts')
+      router.refresh()
+
+      // 4. Additional refresh after navigation to ensure data is current
+      setTimeout(() => {
+        window.location.reload()
+      }, 100)
+
     } catch (error) {
-      console.error('Failed to revalidate contacts page:', error)
+      console.error('Failed to refresh contacts page:', error)
+      // Still navigate even if refresh fails
+      router.push('/contacts')
+      router.refresh()
     }
-    
-    // Navigate to contacts page
-    router.push('/contacts')
-    router.refresh()
   }
 
   return (
