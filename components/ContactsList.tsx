@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { EmailContact } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -28,15 +28,28 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
-  const refreshContacts = () => {
+  const refreshContacts = useCallback(async () => {
+    // Force a hard refresh by calling the revalidation API
+    try {
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: '/contacts' }),
+      })
+    } catch (error) {
+      console.error('Error revalidating cache:', error)
+    }
+
     // Force refresh to get the latest data
     router.refresh()
     
     // Additional refresh after a short delay to ensure server updates are complete
     setTimeout(() => {
       router.refresh()
-    }, 1000)
-  }
+    }, 1500)
+  }, [router])
 
   const handleDeleteClick = (contactId: string, contactName: string) => {
     setContactToDelete({ id: contactId, name: contactName })
@@ -59,7 +72,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
         throw new Error(error.error || 'Failed to delete contact')
       }
 
-      refreshContacts()
+      await refreshContacts()
       
     } catch (error) {
       console.error('Delete error:', error)
@@ -98,7 +111,7 @@ export default function ContactsList({ contacts }: ContactsListProps) {
       setEditingContact(null)
       setIsEditDialogOpen(false)
       
-      refreshContacts()
+      await refreshContacts()
       
     } catch (error) {
       console.error('Update error:', error)
@@ -106,17 +119,20 @@ export default function ContactsList({ contacts }: ContactsListProps) {
     }
   }
 
-  const handleCreateModalClose = (success: boolean) => {
+  const handleCreateModalClose = async (success: boolean) => {
     setIsCreateModalOpen(false)
     if (success) {
-      refreshContacts()
+      await refreshContacts()
     }
   }
 
-  const handleUploadModalClose = (success: boolean) => {
+  const handleUploadModalClose = async (success: boolean) => {
     setIsUploadModalOpen(false)
     if (success) {
-      refreshContacts()
+      // Add a small delay before refreshing to ensure the upload operation is fully complete
+      setTimeout(async () => {
+        await refreshContacts()
+      }, 500)
     }
   }
 
