@@ -13,7 +13,7 @@ interface BulkActionsModalProps {
   isOpen: boolean
   onClose: () => void
   selectedCount: number
-  onUpdate: (updates: { status?: string; tags?: string[] }) => Promise<void>
+  onUpdate: (updates: { status?: string; tags?: string[]; tagAction?: string }) => Promise<void>
   isLoading: boolean
 }
 
@@ -41,14 +41,17 @@ export default function BulkActionsModal({
   }
 
   const handleSubmit = async () => {
-    const updates: { status?: string; tags?: string[] } = {}
+    const updates: { status?: string; tags?: string[]; tagAction?: string } = {}
     
+    // Send status as string value, not object
     if (updateStatus && updateStatus !== 'no-change') {
       updates.status = updateStatus
     }
     
+    // Include tag action for proper processing
     if (updateTags.length > 0 || tagAction === 'replace') {
       updates.tags = updateTags
+      updates.tagAction = tagAction
     }
 
     if (Object.keys(updates).length > 0) {

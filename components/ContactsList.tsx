@@ -97,11 +97,16 @@ export default function ContactsList({ contacts }: ContactsListProps) {
   const handleBulkDelete = async () => {
     setBulkActionLoading(true)
     try {
-      await Promise.all(
-        selectedContacts.map(id =>
-          fetch(`/api/contacts/${id}`, { method: 'DELETE' })
-        )
-      )
+      const response = await fetch('/api/contacts/bulk', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contactIds: selectedContacts })
+      })
+
+      if (!response.ok) {
+        throw new Error('Failed to delete contacts')
+      }
+
       setSelectedContacts([])
       router.refresh()
     } catch (error) {
@@ -112,43 +117,32 @@ export default function ContactsList({ contacts }: ContactsListProps) {
     }
   }
 
-  const handleBulkUpdate = async (updates: { status?: string; tags?: string[] }) => {
+  const handleBulkUpdate = async (updates: { status?: string; tags?: string[]; tagAction?: string }) => {
     setBulkActionLoading(true)
     try {
-      await Promise.all(
-        selectedContacts.map(async id => {
-          const contact = contacts.find(c => c.id === id)
-          if (!contact) return
-
-          const updatedMetadata = { ...contact.metadata }
-          
-          if (updates.status) {
-            updatedMetadata.status = {
-              key: updates.status.toLowerCase(),
-              value: updates.status as 'Active' | 'Unsubscribed' | 'Bounced'
-            }
-          }
-          
-          if (updates.tags !== undefined) {
-            updatedMetadata.tags = updates.tags
-          }
-
-          return fetch(`/api/contacts/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              title: contact.title,
-              metadata: updatedMetadata
-            })
-          })
+      const response = await fetch('/api/contacts/bulk', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contactIds: selectedContacts,
+          updates: updates
         })
-      )
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to update contacts')
+      }
+
+      const result = await response.json()
+      console.log('Bulk update result:', result)
+
       setSelectedContacts([])
       setShowBulkActions(false)
       router.refresh()
     } catch (error) {
       console.error('Error updating contacts:', error)
-      alert('Failed to update some contacts')
+      alert(error instanceof Error ? error.message : 'Failed to update contacts')
     } finally {
       setBulkActionLoading(false)
     }

@@ -84,14 +84,12 @@ export async function PUT(request: NextRequest) {
     // Update contacts in parallel
     const updateResults = await Promise.allSettled(
       contacts.map(async (contact) => {
-        const updatedMetadata = { ...contact.metadata }
+        // Only include the fields that are being updated
+        const metadataUpdates: any = {}
         
-        // Update status if provided
+        // Update status if provided - send as string value only
         if (updates.status) {
-          updatedMetadata.status = {
-            key: updates.status.toLowerCase(),
-            value: updates.status
-          }
+          metadataUpdates.status = updates.status
         }
         
         // Update tags if provided
@@ -100,19 +98,20 @@ export async function PUT(request: NextRequest) {
             // Add new tags to existing ones
             const currentTags: string[] = contact.metadata.tags || []
             const newTags: string[] = Array.from(new Set([...currentTags, ...updates.tags]))
-            updatedMetadata.tags = newTags
+            metadataUpdates.tags = newTags
           } else if (updates.tagAction === 'remove') {
             // Remove specified tags
             const currentTags: string[] = contact.metadata.tags || []
-            updatedMetadata.tags = currentTags.filter((tag: string) => !updates.tags.includes(tag))
+            metadataUpdates.tags = currentTags.filter((tag: string) => !updates.tags.includes(tag))
           } else {
             // Replace all tags (default behavior)
-            updatedMetadata.tags = updates.tags
+            metadataUpdates.tags = updates.tags
           }
         }
 
+        // Only update the changed fields
         return cosmic.objects.updateOne(contact.id, {
-          metadata: updatedMetadata
+          metadata: metadataUpdates
         })
       })
     )
@@ -120,6 +119,13 @@ export async function PUT(request: NextRequest) {
     // Count successful updates
     const successful = updateResults.filter(result => result.status === 'fulfilled').length
     const failed = updateResults.length - successful
+
+    // Log any failures for debugging
+    updateResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(`Failed to update contact ${contacts[index]?.id}:`, result.reason)
+      }
+    })
 
     // Revalidate the contacts page
     revalidatePath('/contacts')
