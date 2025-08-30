@@ -2,12 +2,26 @@ import ContactsList from '@/components/ContactsList'
 import { getEmailContacts } from '@/lib/cosmic'
 import Link from 'next/link'
 
-// Force dynamic rendering
+// Force dynamic rendering and disable caching completely
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
+// Disable static generation
+export const fetchCache = 'force-no-store'
+export const runtime = 'nodejs'
+
 export default async function ContactsPage() {
-  const contacts = await getEmailContacts()
+  // Add cache-busting timestamp to ensure fresh data
+  const timestamp = Date.now()
+  
+  let contacts
+  try {
+    contacts = await getEmailContacts()
+    console.log(`[${timestamp}] Fetched ${contacts.length} contacts`)
+  } catch (error) {
+    console.error('Error fetching contacts:', error)
+    contacts = []
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 pb-16">

@@ -92,6 +92,17 @@ export default function CSVUploadForm() {
     }
   }
 
+  const handleViewContacts = () => {
+    // Force a hard refresh of the contacts page to show newly uploaded data
+    router.push('/contacts')
+    router.refresh()
+    
+    // Additional refresh after navigation to ensure data is updated
+    setTimeout(() => {
+      router.refresh()
+    }, 100)
+  }
+
   return (
     <div className="card max-w-2xl">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Contacts from CSV</h2>
@@ -212,7 +223,7 @@ export default function CSVUploadForm() {
               Upload Another File
             </Button>
             <Button
-              onClick={() => router.push('/contacts')}
+              onClick={handleViewContacts}
             >
               View All Contacts
             </Button>
