@@ -105,11 +105,19 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
       addToast('Campaign created successfully!', 'success')
       scrollToTop()
       
-      // Navigate to campaigns page after a short delay and refresh data
-      setTimeout(() => {
-        router.push('/campaigns')
-        router.refresh() // Ensure fresh data is fetched
-      }, 1500)
+      // Navigate to the newly created campaign page using the returned campaign ID
+      if (responseData.data && responseData.data.id) {
+        setTimeout(() => {
+          router.push(`/campaigns/${responseData.data.id}`)
+          router.refresh() // Ensure fresh data is fetched
+        }, 1500)
+      } else {
+        // Fallback to campaigns list if no ID is returned
+        setTimeout(() => {
+          router.push('/campaigns')
+          router.refresh()
+        }, 1500)
+      }
     } catch (err: any) {
       console.error('Campaign creation error:', err)
       const errorMessage = `Failed to create campaign: ${err.message || 'Unknown error occurred'}`
