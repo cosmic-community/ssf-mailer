@@ -1,34 +1,53 @@
 'use client'
 
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
+import { useState, ReactNode } from 'react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { AlertTriangle } from 'lucide-react'
 
 interface ConfirmationModalProps {
-  isOpen: boolean
-  onOpenChange: (open: boolean) => void
   title: string
-  message: string
+  description: string
+  onConfirm: () => void | Promise<void>
+  trigger: ReactNode
   confirmText?: string
   cancelText?: string
   variant?: 'default' | 'destructive'
-  onConfirm: () => void
   isLoading?: boolean
 }
 
 export default function ConfirmationModal({
-  isOpen,
-  onOpenChange,
   title,
-  message,
+  description,
+  onConfirm,
+  trigger,
   confirmText = 'Confirm',
   cancelText = 'Cancel',
   variant = 'default',
-  onConfirm,
   isLoading = false
 }: ConfirmationModalProps) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [isProcessing, setIsProcessing] = useState(false)
+
+  const handleConfirm = async () => {
+    setIsProcessing(true)
+    try {
+      await onConfirm()
+      setIsOpen(false)
+    } catch (error) {
+      console.error('Confirmation action failed:', error)
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const loading = isLoading || isProcessing
+
   return (
-    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        {trigger}
+      </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <div className="flex items-center space-x-3">
@@ -42,7 +61,7 @@ export default function ConfirmationModal({
         </DialogHeader>
         
         <div className="py-4">
-          <p className="text-sm text-gray-600">{message}</p>
+          <p className="text-sm text-gray-600">{description}</p>
         </div>
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end space-y-2 space-y-reverse sm:space-y-0 sm:space-x-2">
@@ -50,7 +69,7 @@ export default function ConfirmationModal({
             <Button
               type="button"
               variant="outline"
-              disabled={isLoading}
+              disabled={loading}
             >
               {cancelText}
             </Button>
@@ -58,10 +77,10 @@ export default function ConfirmationModal({
           <Button
             type="button"
             variant={variant === 'destructive' ? 'destructive' : 'default'}
-            onClick={onConfirm}
-            disabled={isLoading}
+            onClick={handleConfirm}
+            disabled={loading}
           >
-            {isLoading ? 'Processing...' : confirmText}
+            {loading ? 'Processing...' : confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>
