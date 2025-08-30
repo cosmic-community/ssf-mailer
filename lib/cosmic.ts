@@ -355,7 +355,7 @@ export async function createEmailCampaign(data: CampaignCreateData): Promise<Mar
       status: 'published' as const,
       metadata: {
         name: data.name,
-        template_id: data.template_id,
+        template: data.template_id,
         target_contacts: [],
         target_tags: data.target_tags || [],
         status: {
