@@ -1,5 +1,5 @@
 import { createBucketClient } from '@cosmicjs/sdk'
-import { EmailContact, EmailTemplate, MarketingCampaign, Settings, CampaignStats } from '@/types'
+import { EmailContact, EmailTemplate, MarketingCampaign, Settings, CampaignStats, TemplateSnapshot } from '@/types'
 
 // Create the Cosmic client for server-side operations (full access)
 export const cosmic = createBucketClient({
@@ -354,15 +354,25 @@ export async function updateMarketingCampaign(id: string, data: {
   return object as MarketingCampaign
 }
 
-export async function updateCampaignStatus(id: string, status: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled', stats?: CampaignStats): Promise<MarketingCampaign> {
+export async function updateCampaignStatus(
+  id: string, 
+  status: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled', 
+  stats?: CampaignStats, 
+  templateSnapshot?: TemplateSnapshot
+): Promise<MarketingCampaign> {
   const metadata: any = { 
     status: {
       key: status.toLowerCase(),
       value: status
     }
   }
+  
   if (stats) {
     metadata.stats = stats
+  }
+  
+  if (templateSnapshot) {
+    metadata.template_snapshot = templateSnapshot
   }
 
   const { object } = await cosmic.objects.updateOne(id, { metadata })

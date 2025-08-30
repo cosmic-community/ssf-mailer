@@ -49,13 +49,27 @@ export interface EmailTemplate extends CosmicObject {
   };
 }
 
-// Marketing Campaign interface - Updated to include both template_id and template object
+// Template snapshot interface for preserving sent content
+export interface TemplateSnapshot {
+  name: string;
+  subject: string;
+  content: string;
+  template_type: {
+    key: string;
+    value: TemplateType;
+  };
+  snapshot_date: string;
+  original_template_id: string;
+}
+
+// Marketing Campaign interface - Updated to include template snapshot
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
     template_id: string;
     template?: EmailTemplate; // Add optional template object for when populated
+    template_snapshot?: TemplateSnapshot; // Snapshot of template at send time
     target_contacts?: EmailContact[];
     target_tags?: string[];
     status: {

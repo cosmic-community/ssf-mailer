@@ -29,8 +29,30 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
 
   console.log('Campaign data in page:', JSON.stringify(campaign.metadata, null, 2))
 
-  // Generate preview content - handle both template object and template_id
+  // Generate preview content - prioritize template snapshot for sent campaigns
   const generatePreviewContent = () => {
+    // If campaign has been sent, use the template snapshot
+    if (campaign.metadata?.status?.value === 'Sent' && campaign.metadata?.template_snapshot) {
+      const snapshot = campaign.metadata.template_snapshot
+      
+      let emailContent = snapshot.content || ''
+      let emailSubject = snapshot.subject || ''
+
+      // Replace template variables with sample data
+      emailContent = emailContent.replace(/\{\{first_name\}\}/g, 'John')
+      emailContent = emailContent.replace(/\{\{last_name\}\}/g, 'Doe')
+      emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, 'John')
+      emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, 'Doe')
+
+      return { 
+        subject: emailSubject, 
+        content: emailContent,
+        isSnapshot: true,
+        snapshotDate: snapshot.snapshot_date
+      }
+    }
+
+    // For draft campaigns, use current template (existing logic)
     let templateData = null
     
     // Try to get template from campaign metadata
@@ -43,7 +65,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
     }
 
     if (!templateData?.metadata) {
-      return { subject: 'No template selected', content: 'No template content available' }
+      return { subject: 'No template selected', content: 'No template content available', isSnapshot: false }
     }
 
     let emailContent = templateData.metadata.content || ''
@@ -55,7 +77,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
     emailSubject = emailSubject.replace(/\{\{first_name\}\}/g, 'John')
     emailSubject = emailSubject.replace(/\{\{last_name\}\}/g, 'Doe')
 
-    return { subject: emailSubject, content: emailContent }
+    return { subject: emailSubject, content: emailContent, isSnapshot: false }
   }
 
   const preview = generatePreviewContent()
@@ -156,7 +178,31 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
 
         {/* Email Preview */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Email Preview</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Email Preview</h2>
+            {preview.isSnapshot && (
+              <div className="flex items-center space-x-2">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  📸 Sent Snapshot
+                </span>
+                {preview.snapshotDate && (
+                  <span className="text-xs text-gray-500">
+                    Captured: {new Date(preview.snapshotDate).toLocaleDateString()}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+          
+          {preview.isSnapshot && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-md">
+              <p className="text-sm text-green-700">
+                <strong>📸 Snapshot Content:</strong> This shows the exact email content that was sent to recipients. 
+                The original template may have changed since this campaign was sent.
+              </p>
+            </div>
+          )}
+          
           <div className="card">
             <div className="border-b border-gray-200 pb-4 mb-6">
               <div className="text-sm text-gray-500 mb-2">Subject Line:</div>
@@ -234,6 +280,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <p className="text-sm text-blue-700">
                 <strong>Note:</strong> Template variables like {`{{first_name}}`} and {`{{last_name}}`} will be replaced with actual contact data when sent.
+                {preview.isSnapshot && ' This preview shows the exact content that was sent to recipients.'}
               </p>
             </div>
           </div>
