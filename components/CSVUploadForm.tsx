@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CheckCircle, AlertCircle, Upload } from 'lucide-react'
+import { revalidatePath } from 'next/cache'
 
 interface UploadResult {
   success: boolean
@@ -72,6 +73,15 @@ export default function CSVUploadForm() {
       // Safely handle the response with proper type checking
       if (result && typeof result === 'object' && 'success' in result) {
         setUploadResult(result as UploadResult)
+        
+        // Revalidate the contacts page cache after successful upload
+        await fetch('/api/revalidate', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ path: '/contacts' }),
+        })
       } else {
         throw new Error('Invalid response format')
       }
@@ -92,15 +102,23 @@ export default function CSVUploadForm() {
     }
   }
 
-  const handleViewContacts = () => {
-    // Force a hard refresh of the contacts page to show newly uploaded data
+  const handleViewContacts = async () => {
+    // Revalidate the contacts page before navigating
+    try {
+      await fetch('/api/revalidate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path: '/contacts' }),
+      })
+    } catch (error) {
+      console.error('Failed to revalidate contacts page:', error)
+    }
+    
+    // Navigate to contacts page
     router.push('/contacts')
     router.refresh()
-    
-    // Additional refresh after navigation to ensure data is updated
-    setTimeout(() => {
-      router.refresh()
-    }, 100)
   }
 
   return (

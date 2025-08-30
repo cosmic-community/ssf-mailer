@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createEmailContact } from '@/lib/cosmic'
+import { revalidatePath } from 'next/cache'
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +24,9 @@ export async function POST(request: NextRequest) {
       subscribe_date: body.subscribe_date || new Date().toISOString().split('T')[0],
       notes: body.notes || ''
     })
+
+    // Revalidate the contacts page after creating a contact
+    revalidatePath('/contacts')
 
     return NextResponse.json({ success: true, data: result })
   } catch (error) {
