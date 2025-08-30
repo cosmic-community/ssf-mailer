@@ -1,5 +1,6 @@
 import ContactsList from '@/components/ContactsList'
 import { getEmailContacts } from '@/lib/cosmic'
+import { EmailContact } from '@/types'
 import Link from 'next/link'
 
 // Force dynamic rendering and disable caching completely
@@ -14,7 +15,7 @@ export default async function ContactsPage() {
   // Add cache-busting timestamp to ensure fresh data
   const timestamp = Date.now()
   
-  let contacts
+  let contacts: EmailContact[] = []
   try {
     contacts = await getEmailContacts()
     console.log(`[${timestamp}] Fetched ${contacts.length} contacts`)

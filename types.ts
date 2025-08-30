@@ -68,8 +68,8 @@ export interface MarketingCampaign extends CosmicObject {
   metadata: {
     name: string;
     template_id: string;
-    template?: EmailTemplate; // Add optional template object for when populated
-    template_snapshot?: TemplateSnapshot; // Snapshot of template at send time
+    template?: EmailTemplate;
+    template_snapshot?: TemplateSnapshot;
     target_contacts?: EmailContact[];
     target_tags?: string[];
     status: {
@@ -79,6 +79,11 @@ export interface MarketingCampaign extends CosmicObject {
     send_date?: string;
     stats?: CampaignStats;
   };
+}
+
+// Add EmailCampaign as an alias for MarketingCampaign for backward compatibility
+export interface EmailCampaign extends MarketingCampaign {
+  type: 'email-campaigns' | 'marketing-campaigns';
 }
 
 // Settings interface
@@ -192,7 +197,7 @@ export function isSettings(obj: CosmicObject): obj is Settings {
   return obj.type === 'settings';
 }
 
-// Utility types - Fixed the generic constraint issue
+// Utility types
 export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
 export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
 export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;
