@@ -356,7 +356,7 @@ export async function createEmailCampaign(data: CampaignCreateData): Promise<Mar
       metadata: {
         name: data.name,
         template: data.template_id,
-        target_contacts: [],
+        target_contacts: data.contact_ids || [], // Fix: Use contact_ids parameter instead of hardcoded empty array
         target_tags: data.target_tags || [],
         status: {
           key: 'draft',
