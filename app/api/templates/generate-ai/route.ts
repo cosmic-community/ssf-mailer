@@ -63,7 +63,7 @@ async function processMediaFile(url: string) {
     const buffer = await response.arrayBuffer()
     const filename = url.split('/').pop() || 'media-file'
     
-    // Upload to Cosmic media library - removed 'name' property as it's not supported
+    // Upload to Cosmic media library - removed 'name' property as it's not part of InsertMediaType
     const mediaResponse = await cosmic.media.insertOne({
       media: new Blob([buffer], { 
         type: response.headers.get('content-type') || 'application/octet-stream' 
