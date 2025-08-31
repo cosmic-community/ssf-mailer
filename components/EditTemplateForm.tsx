@@ -540,15 +540,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <Wand2 className="h-4 w-4 mr-2" />
                     Edit with AI
                   </Button>
-                  <Button
-                    type="button"
-                    onClick={() => setShowAIModal(true)}
-                    size="sm"
-                    variant="outline"
-                  >
-                    <Edit className="h-4 w-4 mr-2" />
-                    Edit
-                  </Button>
                 </div>
               </div>
             </CardHeader>
