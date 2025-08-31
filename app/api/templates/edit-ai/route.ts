@@ -33,11 +33,18 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Analyzing current content...","progress":30}\n\n')
             )
 
+            // Show context analysis status if context_items are provided
+            if (context_items && context_items.length > 0) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Analyzing provided context for improvements...","progress":35}\n\n')
+              )
+            }
+
             // Get settings for brand guidelines and company info
             const settings = await getSettings()
             const brandGuidelines = settings?.metadata.brand_guidelines || ''
             const companyName = settings?.metadata.company_name || 'Your Company'
-            const aiTone = settings?.metadata.ai_tone || 'Professional'
+            const aiTone = settings?.metadata.ai_tone?.value || 'Professional'
             const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
 
             // Get current year for copyright
@@ -55,7 +62,7 @@ Tone: ${aiTone}
 Primary Brand Color: ${primaryColor}
 Current Year: ${currentYear} (use this for copyright footer if updating footer)
 ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
-${context_items && context_items.length > 0 ? `\n\nIMPORTANT: Use the provided context items (files/web pages) as reference for the improvements. Analyze their content and incorporate relevant information or styling cues.` : ''}
+${context_items && context_items.length > 0 ? `\n\nIMPORTANT: I have provided context items (files/web pages) for you to analyze. Please use these as reference for the improvements. Analyze their content, design elements, or styling cues and incorporate relevant aspects into the email template improvements.` : ''}
 
 Instructions:
 - Maintain the HTML structure and email compatibility
@@ -74,23 +81,22 @@ IMPORTANT: DO NOT include or modify any unsubscribe links - these are added auto
               encoder.encode('data: {"type":"status","message":"Applying AI improvements...","progress":60}\n\n')
             )
 
-            // Add context analysis status if context_items are provided
-            if (context_items && context_items.length > 0) {
-              controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Analyzing provided context for improvements...","progress":45}\n\n')
-              )
-            }
-
-            // Generate improved content with Cosmic AI streaming - include context_items if provided
+            // Generate improved content with Cosmic AI streaming - properly include context_items
             const aiRequestPayload: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
             }
 
-            // Add context_items to the request if provided
+            // CRITICAL FIX: Add context_items to the request payload if provided
             if (context_items && context_items.length > 0) {
-              aiRequestPayload.context_items = context_items
+              // Convert context items to the format expected by Cosmic AI
+              const formattedContextItems = context_items.map((item: any) => ({
+                url: item.url,
+                type: item.type || 'webpage'
+              }))
+              
+              aiRequestPayload.context_items = formattedContextItems
             }
 
             const aiResponse = await cosmic.ai.generateText(aiRequestPayload)

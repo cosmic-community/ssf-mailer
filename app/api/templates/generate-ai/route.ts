@@ -26,6 +26,13 @@ export async function POST(request: NextRequest) {
         // Generate AI content using Cosmic AI streaming
         setTimeout(async () => {
           try {
+            // Show context analysis status if context_items are provided
+            if (context_items && context_items.length > 0) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Analyzing provided context with AI...","progress":20}\n\n')
+              )
+            }
+
             controller.enqueue(
               encoder.encode('data: {"type":"status","message":"Generating email content...","progress":30}\n\n')
             )
@@ -34,7 +41,7 @@ export async function POST(request: NextRequest) {
             const settings = await getSettings()
             const brandGuidelines = settings?.metadata.brand_guidelines || ''
             const companyName = settings?.metadata.company_name || 'Your Company'
-            const aiTone = settings?.metadata.ai_tone || 'Professional'
+            const aiTone = settings?.metadata.ai_tone?.value || 'Professional'
             const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
 
             // Get current year for copyright
@@ -48,7 +55,7 @@ export async function POST(request: NextRequest) {
             Primary Brand Color: ${primaryColor}
             Current Year: ${currentYear} (use this for copyright footer)
             ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
-            ${context_items && context_items.length > 0 ? `\n\nIMPORTANT: Analyze the provided context items (files/web pages) and incorporate relevant information from them into the email content.` : ''}
+            ${context_items && context_items.length > 0 ? `\n\nIMPORTANT: I have provided context items (files/web pages) for you to analyze. Please incorporate relevant information, styling cues, or content from these context items into the email template.` : ''}
             `
 
             if (type === 'Newsletter') {
@@ -101,18 +108,25 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
             )
 
-            // Generate content with Cosmic AI streaming - include context_items if provided
+            // Generate content with Cosmic AI streaming - properly include context_items
             const aiRequestPayload: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
             }
 
-            // Add context_items to the request if provided
+            // CRITICAL FIX: Add context_items to the request payload if provided
             if (context_items && context_items.length > 0) {
-              aiRequestPayload.context_items = context_items
+              // Convert context items to the format expected by Cosmic AI
+              const formattedContextItems = context_items.map((item: any) => ({
+                url: item.url,
+                type: item.type || 'webpage'
+              }))
+              
+              aiRequestPayload.context_items = formattedContextItems
+              
               controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Analyzing provided context with AI...","progress":40}\n\n')
+                encoder.encode('data: {"type":"status","message":"Analyzing context and generating...","progress":40}\n\n')
               )
             }
 
