@@ -2,9 +2,92 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cosmic, getSettings } from '@/lib/cosmic'
 import { TextStreamingResponse } from '@cosmicjs/sdk'
 
+// Helper function to fetch webpage content
+async function fetchWebpageContent(url: string) {
+  try {
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; CosmicAI/1.0)'
+      }
+    })
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`)
+    }
+    
+    const html = await response.text()
+    
+    // Extract text content and images from HTML
+    const textContent = html
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 5000) // Limit content length
+    
+    // Extract image URLs
+    const imageMatches = html.match(/<img[^>]+src="([^"]+)"/gi) || []
+    const images = imageMatches
+      .map(match => {
+        const srcMatch = match.match(/src="([^"]+)"/)
+        return srcMatch ? srcMatch[1] : null
+      })
+      .filter(Boolean)
+      .slice(0, 10) // Limit number of images
+    
+    return {
+      title: html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || 'Webpage',
+      content: textContent,
+      images: images
+    }
+  } catch (error) {
+    console.error('Error fetching webpage:', error)
+    return {
+      title: 'Error loading webpage',
+      content: `Failed to load content from ${url}`,
+      images: []
+    }
+  }
+}
+
+// Helper function to process media files by uploading to Cosmic
+async function processMediaFile(url: string) {
+  try {
+    // For direct media URLs, upload to Cosmic media library
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch media: ${response.status}`)
+    }
+    
+    const buffer = await response.arrayBuffer()
+    const filename = url.split('/').pop() || 'media-file'
+    
+    // Upload to Cosmic media library - removed invalid 'name' property
+    const mediaResponse = await cosmic.media.insertOne({
+      media: new Blob([buffer], { 
+        type: response.headers.get('content-type') || 'application/octet-stream' 
+      })
+    })
+    
+    return {
+      title: filename,
+      media_url: mediaResponse.media?.url || url,
+      imgix_url: mediaResponse.media?.imgix_url || url
+    }
+  } catch (error) {
+    console.error('Error processing media file:', error)
+    return {
+      title: 'Media file',
+      media_url: url,
+      imgix_url: url
+    }
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, type, media_url } = await request.json()
+    const { prompt, type, context_items } = await request.json()
     
     if (!prompt || !type) {
       return NextResponse.json(
@@ -26,15 +109,48 @@ export async function POST(request: NextRequest) {
         // Generate AI content using Cosmic AI streaming
         setTimeout(async () => {
           try {
+            let processedContext = ''
+            
+            // Process context items if provided
+            if (context_items && context_items.length > 0) {
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Processing context items...","progress":20}\n\n')
+              )
+              
+              const contextPromises = context_items.map(async (item: any) => {
+                if (item.type === 'webpage') {
+                  controller.enqueue(
+                    encoder.encode('data: {"type":"status","message":"Fetching webpage content...","progress":25}\n\n')
+                  )
+                  const webContent = await fetchWebpageContent(item.url)
+                  return `\nWebpage: ${webContent.title}\nContent: ${webContent.content}\n${webContent.images.length > 0 ? `Images found: ${webContent.images.join(', ')}` : ''}\n---\n`
+                } else if (item.type === 'file') {
+                  controller.enqueue(
+                    encoder.encode('data: {"type":"status","message":"Processing media file...","progress":25}\n\n')
+                  )
+                  const mediaData = await processMediaFile(item.url)
+                  return `\nMedia File: ${mediaData.title}\nURL: ${mediaData.media_url}\n${mediaData.imgix_url ? `Optimized URL: ${mediaData.imgix_url}` : ''}\n---\n`
+                }
+                return `\nReference: ${item.url}\n---\n`
+              })
+              
+              const contextResults = await Promise.all(contextPromises)
+              processedContext = contextResults.join('')
+              
+              controller.enqueue(
+                encoder.encode('data: {"type":"status","message":"Context analysis complete. Generating content...","progress":35}\n\n')
+              )
+            }
+
             controller.enqueue(
-              encoder.encode('data: {"type":"status","message":"Generating email content...","progress":30}\n\n')
+              encoder.encode('data: {"type":"status","message":"Generating email content...","progress":40}\n\n')
             )
 
             // Get settings for brand guidelines and company info
             const settings = await getSettings()
             const brandGuidelines = settings?.metadata.brand_guidelines || ''
             const companyName = settings?.metadata.company_name || 'Your Company'
-            const aiTone = settings?.metadata.ai_tone || 'Professional'
+            const aiTone = settings?.metadata.ai_tone?.value || 'Professional'
             const primaryColor = settings?.metadata.primary_brand_color || '#3b82f6'
 
             // Get current year for copyright
@@ -48,7 +164,8 @@ export async function POST(request: NextRequest) {
             Primary Brand Color: ${primaryColor}
             Current Year: ${currentYear} (use this for copyright footer)
             ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
-            ${media_url ? `\n\nIMPORTANT: Analyze the provided file/media and incorporate relevant information from it into the email content.` : ''}
+            ${processedContext ? `\nContext Information:\n${processedContext}` : ''}
+            ${processedContext ? `\nIMPORTANT: I have provided context information above. Please analyze and incorporate relevant information, styling cues, or content from this context into the email template.` : ''}
             `
 
             if (type === 'Newsletter') {
@@ -101,22 +218,12 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
             )
 
-            // Generate content with Cosmic AI streaming - include media_url if provided
-            const aiRequestPayload: any = {
+            // Generate content with Cosmic AI streaming
+            const aiResponse = await cosmic.ai.generateText({
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
-            }
-
-            // Add media_url to the request if provided
-            if (media_url && media_url.trim()) {
-              aiRequestPayload.media_url = media_url.trim()
-              controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Analyzing provided media with AI...","progress":40}\n\n')
-              )
-            }
-
-            const aiResponse = await cosmic.ai.generateText(aiRequestPayload)
+            })
 
             // Check if aiResponse is a streaming response by checking for the 'on' method
             const isStreamingResponse = aiResponse && 
