@@ -309,10 +309,8 @@ export default function CreateTemplateForm() {
                   setHasGeneratedContent(true)
                   addToast('AI content generated successfully!', 'success')
                   
-                  // Close modal after successful generation
-                  setTimeout(() => {
-                    setShowAIModal(false)
-                  }, 1500)
+                  // Modal stays open - removed auto-close timeout
+                  // User can continue editing or close manually
                   
                   // Auto-resize content textarea after update
                   setTimeout(() => {
@@ -468,10 +466,8 @@ export default function CreateTemplateForm() {
                   setAiProgress(100)
                   addToast('AI content editing completed successfully!', 'success')
                   
-                  // Close modal after successful editing
-                  setTimeout(() => {
-                    setShowAIModal(false)
-                  }, 1500)
+                  // Modal stays open - removed auto-close timeout
+                  // User can continue editing or close manually
                   
                   // Auto-resize content textarea after update
                   setTimeout(() => {

@@ -276,10 +276,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   setSuccess('Template updated with AI suggestions!')
                   showToast()
                   
-                  // Close modal after successful editing
-                  setTimeout(() => {
-                    setShowAIModal(false)
-                  }, 1500)
+                  // Modal stays open - removed auto-close timeout
+                  // User can continue editing or close manually
                 } else if (data.type === 'error') {
                   throw new Error(data.error)
                 }
