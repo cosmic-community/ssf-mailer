@@ -337,7 +337,7 @@ export default function CreateTemplateForm() {
                       }
                     }, 100)
                     
-                    addToast('Ready to edit! Add refinement instructions below.', 'info')
+                    addToast('Ready to edit! Add refinement instructions below.', 'success')
                   }, 1500)
                   
                   // Auto-resize content textarea after update
@@ -554,7 +554,7 @@ export default function CreateTemplateForm() {
     setEditContextItems([])
     setHasGeneratedContent(false)
     setFormData(prev => ({ ...prev, content: '', subject: prev.subject }))
-    addToast('Reset to generation mode', 'info')
+    addToast('Reset to generation mode', 'success')
   }
 
   return (
@@ -914,7 +914,6 @@ export default function CreateTemplateForm() {
                                 id="preserve-context"
                                 checked={preserveContext}
                                 onCheckedChange={setPreserveContext}
-                                size="sm"
                               />
                               <Label htmlFor="preserve-context" className="text-xs text-blue-600">
                                 Keep for editing
