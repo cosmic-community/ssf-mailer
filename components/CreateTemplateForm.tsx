@@ -1180,7 +1180,7 @@ export default function CreateTemplateForm() {
                         </div>
                       </div>
                     </CardContent>
-                  </Tab>
+                  </Card>
                 </TabsContent>
               </Tabs>
             </div>
@@ -1241,33 +1241,33 @@ export default function CreateTemplateForm() {
                         </div>
                       </div>
                     </CardContent>
-                  </TabsContent>
+                  </Card>
+                </TabsContent>
 
-                  <TabsContent value="edit" className="mt-6">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle>Edit Content</CardTitle>
-                        <p className="text-sm text-gray-600">
-                          Direct HTML editing with live preview
-                        </p>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-4">
-                          <div className="space-y-2">
-                            <Label htmlFor="modal-content">Email Content</Label>
-                            <Textarea
-                              id="modal-content"
-                              value={formData.content}
-                              onChange={(e) => handleInputChange('content', e.target.value)}
-                              placeholder="Enter email content (HTML supported)"
-                              rows={12}
-                              className="font-mono text-sm"
-                            />
-                          </div>
+                <TabsContent value="edit" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Edit Content</CardTitle>
+                      <p className="text-sm text-gray-600">
+                        Direct HTML editing with live preview
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="modal-content">Email Content</Label>
+                          <Textarea
+                            id="modal-content"
+                            value={formData.content}
+                            onChange={(e) => handleInputChange('content', e.target.value)}
+                            placeholder="Enter email content (HTML supported)"
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
                         </div>
-                      </CardContent>
-                    </TabsContent>
-                  </Tabs>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
               </Tabs>
             </div>
