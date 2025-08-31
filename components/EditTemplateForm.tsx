@@ -11,8 +11,17 @@ import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
+
+interface ContextItem {
+  id: string;
+  url: string;
+  type: 'file' | 'webpage';
+  status: 'pending' | 'analyzing' | 'ready' | 'error';
+  title?: string;
+  error?: string;
+}
 
 interface EditTemplateFormProps {
   template: EmailTemplate
@@ -33,8 +42,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   
-  // Media URL state for AI editing
-  const [mediaUrl, setMediaUrl] = useState('')
+  // Context items state for AI editing
+  const [contextItems, setContextItems] = useState<ContextItem[]>([])
+  const [showContextInput, setShowContextInput] = useState(false)
+  const [contextUrl, setContextUrl] = useState('')
 
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -101,32 +112,75 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 3000)
   }
 
-  // Detect file type from URL
-  const getFileType = (url: string) => {
+  // Detect content type from URL
+  const detectContentType = (url: string): 'file' | 'webpage' => {
+    // Check if it's a direct file URL
+    const fileExtensions = [
+      'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg',
+      'pdf', 'doc', 'docx', 'txt', 'rtf', 'md',
+      'xls', 'xlsx', 'csv', 'ppt', 'pptx'
+    ]
+    
     const extension = url.split('.').pop()?.toLowerCase()
-    if (!extension) return 'file'
+    if (extension && fileExtensions.includes(extension)) {
+      return 'file'
+    }
     
-    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
-    const documentTypes = ['pdf', 'doc', 'docx', 'txt', 'rtf']
-    const spreadsheetTypes = ['xls', 'xlsx', 'csv']
+    // Check if it's a Cosmic CDN URL or other direct file URLs
+    if (url.includes('cdn.cosmicjs.com') || url.includes('/uploads/') || url.includes('/files/')) {
+      return 'file'
+    }
     
-    if (imageTypes.includes(extension)) return 'image'
-    if (documentTypes.includes(extension)) return 'document'
-    if (spreadsheetTypes.includes(extension)) return 'spreadsheet'
-    return 'file'
+    // Otherwise, treat as webpage
+    return 'webpage'
   }
 
-  // Get appropriate icon for file type
-  const getFileIcon = (url: string) => {
-    const type = getFileType(url)
-    switch (type) {
-      case 'image':
-        return <Image className="h-4 w-4" />
-      case 'document':
-      case 'spreadsheet':
-        return <FileText className="h-4 w-4" />
-      default:
-        return <File className="h-4 w-4" />
+  // Get appropriate icon for content type
+  const getContextIcon = (item: ContextItem) => {
+    if (item.type === 'webpage') {
+      return <Globe className="h-4 w-4" />
+    }
+    
+    const extension = item.url.split('.').pop()?.toLowerCase()
+    if (!extension) return <File className="h-4 w-4" />
+    
+    const imageTypes = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg']
+    const documentTypes = ['pdf', 'doc', 'docx', 'txt', 'rtf', 'md']
+    
+    if (imageTypes.includes(extension)) return <Image className="h-4 w-4" />
+    if (documentTypes.includes(extension)) return <FileText className="h-4 w-4" />
+    return <File className="h-4 w-4" />
+  }
+
+  // Add context item
+  const addContextItem = (url: string) => {
+    if (!url.trim()) return
+    
+    const newItem: ContextItem = {
+      id: Date.now().toString(),
+      url: url.trim(),
+      type: detectContentType(url.trim()),
+      status: 'pending'
+    }
+    
+    setContextItems(prev => [...prev, newItem])
+    setContextUrl('')
+    setShowContextInput(false)
+  }
+
+  // Remove context item
+  const removeContextItem = (id: string) => {
+    setContextItems(prev => prev.filter(item => item.id !== id))
+  }
+
+  // Handle context URL input
+  const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      addContextItem(contextUrl)
+    } else if (e.key === 'Escape') {
+      setShowContextInput(false)
+      setContextUrl('')
     }
   }
 
@@ -156,7 +210,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         currentContent: formData.content,
         currentSubject: formData.subject,
         prompt: aiPrompt,
-        media_url: mediaUrl.trim() || undefined
+        context_items: contextItems.filter(item => item.status === 'ready' || item.status === 'pending')
       }
 
       const response = await fetch('/api/templates/edit-ai', {
@@ -210,7 +264,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     subject: data.data.subject || prev.subject
                   }))
                   setAiPrompt('')
-                  setMediaUrl('')
+                  setContextItems([])
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
@@ -488,42 +542,94 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 </p>
               </div>
 
-              {/* Media URL Input for AI Editing */}
-              <div className="space-y-2">
-                <Label htmlFor="edit_media_url" className="text-sm font-medium text-purple-800">
-                  Reference File (Optional)
-                </Label>
-                <div className="flex space-x-2">
-                  <Input
-                    id="edit_media_url"
-                    type="url"
-                    value={mediaUrl}
-                    onChange={(e) => setMediaUrl(e.target.value)}
-                    placeholder="https://example.com/style-reference.jpg or brand-guide.pdf"
+              {/* Context Items */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
+                  <Button
+                    type="button"
+                    onClick={() => setShowContextInput(true)}
                     disabled={isAIEditing}
-                    className="flex-1"
-                  />
-                  {mediaUrl && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setMediaUrl('')}
-                      disabled={isAIEditing}
-                      className="px-2"
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  )}
+                    size="sm"
+                    variant="outline"
+                    className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Context
+                  </Button>
                 </div>
-                {mediaUrl && (
-                  <div className="flex items-center space-x-2 text-xs text-purple-600">
-                    {getFileIcon(mediaUrl)}
-                    <span>AI will use this {getFileType(mediaUrl)} as reference for improvements</span>
+
+                {/* Context Input */}
+                {showContextInput && (
+                  <div className="p-3 border border-purple-200 rounded-lg bg-white">
+                    <div className="flex space-x-2">
+                      <Input
+                        type="url"
+                        value={contextUrl}
+                        onChange={(e) => setContextUrl(e.target.value)}
+                        placeholder="Enter style reference, brand guide, or example URL..."
+                        onKeyDown={handleContextUrlKeyDown}
+                        className="flex-1"
+                        autoFocus
+                      />
+                      <Button
+                        type="button"
+                        onClick={() => addContextItem(contextUrl)}
+                        disabled={!contextUrl.trim()}
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700"
+                      >
+                        Add
+                      </Button>
+                      <Button
+                        type="button"
+                        onClick={() => {
+                          setShowContextInput(false)
+                          setContextUrl('')
+                        }}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                    <p className="text-xs text-purple-600 mt-2">
+                      📎 Add style guides, brand references, or web pages for AI to follow
+                    </p>
                   </div>
                 )}
+
+                {/* Context Items List */}
+                {contextItems.length > 0 && (
+                  <div className="space-y-2">
+                    {contextItems.map((item) => (
+                      <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md">
+                        <div className="flex items-center space-x-2 flex-1 min-w-0">
+                          {getContextIcon(item)}
+                          <span className="text-sm text-purple-700 truncate">
+                            {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
+                          </span>
+                          <span className="text-xs text-purple-500 capitalize">
+                            ({item.type})
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          onClick={() => removeContextItem(item.id)}
+                          disabled={isAIEditing}
+                          size="sm"
+                          variant="ghost"
+                          className="text-purple-400 hover:text-red-600 p-1"
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
                 <p className="text-xs text-purple-600">
-                  📎 Upload style guides, brand references, or examples for AI to follow
+                  📎 AI will use context items as reference for improvements
                 </p>
               </div>
               

@@ -4,7 +4,7 @@ import { TextStreamingResponse } from '@cosmicjs/sdk'
 
 export async function POST(request: NextRequest) {
   try {
-    const { prompt, type, media_url } = await request.json()
+    const { prompt, type, context_items } = await request.json()
     
     if (!prompt || !type) {
       return NextResponse.json(
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
             Primary Brand Color: ${primaryColor}
             Current Year: ${currentYear} (use this for copyright footer)
             ${brandGuidelines ? `Brand Guidelines: ${brandGuidelines}` : ''}
-            ${media_url ? `\n\nIMPORTANT: Analyze the provided file/media and incorporate relevant information from it into the email content.` : ''}
+            ${context_items && context_items.length > 0 ? `\n\nIMPORTANT: Analyze the provided context items (files/web pages) and incorporate relevant information from them into the email content.` : ''}
             `
 
             if (type === 'Newsletter') {
@@ -101,18 +101,18 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
             )
 
-            // Generate content with Cosmic AI streaming - include media_url if provided
+            // Generate content with Cosmic AI streaming - include context_items if provided
             const aiRequestPayload: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
             }
 
-            // Add media_url to the request if provided
-            if (media_url && media_url.trim()) {
-              aiRequestPayload.media_url = media_url.trim()
+            // Add context_items to the request if provided
+            if (context_items && context_items.length > 0) {
+              aiRequestPayload.context_items = context_items
               controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Analyzing provided media with AI...","progress":40}\n\n')
+                encoder.encode('data: {"type":"status","message":"Analyzing provided context with AI...","progress":40}\n\n')
               )
             }
 
