@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2 } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2, ArrowRight, RefreshCw } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
 
@@ -39,19 +39,21 @@ export default function CreateTemplateForm() {
   const [aiStatus, setAiStatus] = useState('')
   const [aiProgress, setAiProgress] = useState(0)
   const [hasGeneratedContent, setHasGeneratedContent] = useState(false)
+  const [showEditPrompt, setShowEditPrompt] = useState(false) // New state for showing edit section
   
   // Modal states
   const [showAIModal, setShowAIModal] = useState(false)
   const [modalType, setModalType] = useState<'generate' | 'edit'>('generate')
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
-  // Context items state
+  // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [editContextItems, setEditContextItems] = useState<ContextItem[]>([])
   const [showContextInput, setShowContextInput] = useState(false)
   const [showEditContextInput, setShowEditContextInput] = useState(false)
   const [contextUrl, setContextUrl] = useState('')
   const [editContextUrl, setEditContextUrl] = useState('')
+  const [preserveContext, setPreserveContext] = useState(true) // New state for context preservation
   
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
@@ -183,6 +185,12 @@ export default function CreateTemplateForm() {
     }
   }
 
+  // Share context from generation to editing
+  const shareContextToEdit = () => {
+    setEditContextItems(prev => [...prev, ...contextItems])
+    addToast('Context items shared with editor', 'success')
+  }
+
   // Handle context URL input
   const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, isEdit: boolean = false) => {
     if (e.key === 'Enter') {
@@ -302,16 +310,34 @@ export default function CreateTemplateForm() {
                     ...prev,
                     content: data.data.content // Only set content, no subject
                   }))
-                  setAIPrompt('')
-                  setContextItems([])
                   setAiStatus('Generation complete!')
                   setAiProgress(100)
                   setHasGeneratedContent(true)
-                  addToast('AI content generated successfully!', 'success')
                   
-                  // Close modal after successful generation
+                  // NEW: Automatically transition to edit mode
                   setTimeout(() => {
-                    setShowAIModal(false)
+                    setModalType('edit')
+                    setShowEditPrompt(true)
+                    
+                    // Share context if preservation is enabled
+                    if (preserveContext && contextItems.length > 0) {
+                      setEditContextItems(prev => [...prev, ...contextItems])
+                    }
+                    
+                    // Clear generation prompt but keep context if preserving
+                    setAIPrompt('')
+                    if (!preserveContext) {
+                      setContextItems([])
+                    }
+                    
+                    // Switch to edit tab and focus edit prompt
+                    setTimeout(() => {
+                      if (editPromptRef.current) {
+                        editPromptRef.current.focus()
+                      }
+                    }, 100)
+                    
+                    addToast('Ready to edit! Add refinement instructions below.', 'success')
                   }, 1500)
                   
                   // Auto-resize content textarea after update
@@ -463,15 +489,9 @@ export default function CreateTemplateForm() {
                     subject: data.data.subject || prev.subject
                   }))
                   setEditPrompt('')
-                  setEditContextItems([])
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
-                  addToast('AI content editing completed successfully!', 'success')
-                  
-                  // Close modal after successful editing
-                  setTimeout(() => {
-                    setShowAIModal(false)
-                  }, 1500)
+                  addToast('Content edited successfully! Continue editing or save template.', 'success')
                   
                   // Auto-resize content textarea after update
                   setTimeout(() => {
@@ -519,6 +539,22 @@ export default function CreateTemplateForm() {
     setModalType(type)
     setModalActiveTab('preview')
     setShowAIModal(true)
+    
+    // If switching to edit after generation, show the edit prompt section
+    if (type === 'edit' && hasGeneratedContent) {
+      setShowEditPrompt(true)
+    }
+  }
+
+  // Reset to generation mode
+  const resetToGenerate = () => {
+    setModalType('generate')
+    setShowEditPrompt(false)
+    setEditPrompt('')
+    setEditContextItems([])
+    setHasGeneratedContent(false)
+    setFormData(prev => ({ ...prev, content: '', subject: prev.subject }))
+    addToast('Reset to generation mode', 'success')
   }
 
   return (
@@ -681,18 +717,40 @@ export default function CreateTemplateForm() {
                         Generate with AI
                       </Button>
                     ) : (
-                      <Button
-                        type="button"
-                        onClick={() => openAIModal('edit')}
-                        size="sm"
-                        className="bg-purple-600 hover:bg-purple-700 text-white"
-                      >
-                        <Wand2 className="h-4 w-4 mr-2" />
-                        Edit with AI
-                      </Button>
+                      <>
+                        <Button
+                          type="button"
+                          onClick={resetToGenerate}
+                          size="sm"
+                          variant="outline"
+                          className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Regenerate
+                        </Button>
+                        <Button
+                          type="button"
+                          onClick={() => openAIModal('edit')}
+                          size="sm"
+                          className="bg-purple-600 hover:bg-purple-700 text-white"
+                        >
+                          <Wand2 className="h-4 w-4 mr-2" />
+                          Edit with AI
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
+                
+                {/* AI workflow status indicator */}
+                {hasGeneratedContent && (
+                  <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
+                    <CheckCircle className="h-4 w-4 text-blue-600" />
+                    <span className="text-sm text-blue-800">Content generated</span>
+                    <ArrowRight className="h-4 w-4 text-blue-400" />
+                    <span className="text-sm text-purple-700">Ready to edit</span>
+                  </div>
+                )}
               </CardHeader>
 
               <CardContent className="px-6 pb-6">
@@ -758,16 +816,48 @@ export default function CreateTemplateForm() {
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
         <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle className="flex items-center space-x-2">
-              <Sparkles className="h-5 w-5 text-blue-600" />
-              <span>
-                {modalType === 'generate' ? 'AI Content Generator' : 'AI Content Editor'}
-              </span>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                {modalType === 'generate' ? (
+                  <Sparkles className="h-5 w-5 text-blue-600" />
+                ) : (
+                  <Wand2 className="h-5 w-5 text-purple-600" />
+                )}
+                <span>
+                  {modalType === 'generate' ? 'AI Content Generator' : 'AI Content Editor'}
+                </span>
+              </div>
+              
+              {/* Mode switcher */}
+              <div className="flex items-center space-x-2">
+                {hasGeneratedContent && modalType === 'generate' && (
+                  <Button
+                    onClick={() => setModalType('edit')}
+                    size="sm"
+                    variant="outline"
+                    className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                  >
+                    Switch to Edit Mode
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </Button>
+                )}
+                {modalType === 'edit' && (
+                  <Button
+                    onClick={() => setModalType('generate')}
+                    size="sm"
+                    variant="outline"
+                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                  >
+                    <ArrowRight className="h-4 w-4 mr-1 rotate-180" />
+                    Back to Generate
+                  </Button>
+                )}
+              </div>
             </DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-1 overflow-hidden">
-            {/* Left Side: AI Interface - No tabs, just content */}
+            {/* Left Side: AI Interface - Dynamic based on mode */}
             <div className="w-1/2 p-6 overflow-y-auto border-r">
               {modalType === 'generate' ? (
                 /* AI Generator Interface */
@@ -806,17 +896,30 @@ export default function CreateTemplateForm() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label className="text-sm font-medium text-blue-800">Context (Optional)</Label>
-                          <Button
-                            type="button"
-                            onClick={() => setShowContextInput(true)}
-                            disabled={isAIGenerating}
-                            size="sm"
-                            variant="outline"
-                            className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add Context
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              type="button"
+                              onClick={() => setShowContextInput(true)}
+                              disabled={isAIGenerating}
+                              size="sm"
+                              variant="outline"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Context
+                            </Button>
+                            {/* Context preservation toggle */}
+                            <div className="flex items-center space-x-1">
+                              <Switch
+                                id="preserve-context"
+                                checked={preserveContext}
+                                onCheckedChange={setPreserveContext}
+                              />
+                              <Label htmlFor="preserve-context" className="text-xs text-blue-600">
+                                Keep for editing
+                              </Label>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Context Input */}
@@ -942,7 +1045,7 @@ export default function CreateTemplateForm() {
                       <div className="space-y-2">
                         <Textarea
                           ref={editPromptRef}
-                          placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button'"
+                          placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button', 'Change the tone to be more casual'"
                           value={editPrompt}
                           onChange={(e) => {
                             setEditPrompt(e.target.value)
@@ -962,17 +1065,33 @@ export default function CreateTemplateForm() {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
                           <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
-                          <Button
-                            type="button"
-                            onClick={() => setShowEditContextInput(true)}
-                            disabled={isAIEditing}
-                            size="sm"
-                            variant="outline"
-                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Add Context
-                          </Button>
+                          <div className="flex items-center space-x-2">
+                            <Button
+                              type="button"
+                              onClick={() => setShowEditContextInput(true)}
+                              disabled={isAIEditing}
+                              size="sm"
+                              variant="outline"
+                              className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                            >
+                              <Plus className="h-4 w-4 mr-1" />
+                              Add Context
+                            </Button>
+                            {/* Share context from generation */}
+                            {contextItems.length > 0 && editContextItems.length === 0 && (
+                              <Button
+                                type="button"
+                                onClick={shareContextToEdit}
+                                disabled={isAIEditing}
+                                size="sm"
+                                variant="outline"
+                                className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                              >
+                                <ArrowRight className="h-4 w-4 mr-1" />
+                                Use Generation Context
+                              </Button>
+                            )}
+                          </div>
                         </div>
 
                         {/* Edit Context Input */}

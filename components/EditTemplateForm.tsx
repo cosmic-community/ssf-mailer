@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2 } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight, RefreshCw } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface ContextItem {
@@ -41,6 +41,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [aiProgress, setAiProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [editingSessionActive, setEditingSessionActive] = useState(false) // Track if actively editing
   
   // Modal states
   const [showAIModal, setShowAIModal] = useState(false)
@@ -203,6 +204,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
 
     setIsAIEditing(true)
+    setEditingSessionActive(true)
     setError('')
     setSuccess('')
     setStreamingContent('')
@@ -269,17 +271,31 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     content: data.data.content,
                     subject: data.data.subject || prev.subject
                   }))
-                  setAiPrompt('')
-                  setContextItems([])
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
                   showToast()
                   
-                  // Close modal after successful editing
+                  // Clear the current prompt but maintain session for continued editing
+                  setAiPrompt('')
+                  
+                  // Auto-resize content textarea after update
                   setTimeout(() => {
-                    setShowAIModal(false)
-                  }, 1500)
+                    if (contentRef.current) {
+                      autoResize(contentRef.current)
+                    }
+                    
+                    // Focus back to edit prompt for continued editing
+                    if (aiPromptRef.current) {
+                      aiPromptRef.current.focus()
+                    }
+                  }, 100)
+                  
+                  // Show continuation prompt after success
+                  setTimeout(() => {
+                    setSuccess('Ready for more edits! Add another instruction or save template.')
+                  }, 2000)
+                  
                 } else if (data.type === 'error') {
                   throw new Error(data.error)
                 }
@@ -297,6 +313,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       console.error('AI edit error:', error)
       setError(error instanceof Error ? error.message : 'Failed to edit template with AI')
       setAiStatus('Editing failed')
+      setEditingSessionActive(false)
     } finally {
       setIsAIEditing(false)
       setTimeout(() => {
@@ -304,6 +321,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         setAiProgress(0)
       }, 2000)
     }
+  }
+
+  // End editing session
+  const endEditingSession = () => {
+    setEditingSessionActive(false)
+    setAiPrompt('')
+    setContextItems([])
+    setShowAIModal(false)
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -356,6 +381,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
         setSuccess('Template updated successfully!')
         showToast()
+        
+        // End any active editing session
+        setEditingSessionActive(false)
         
         // Redirect to templates list after a short delay and refresh data
         setTimeout(() => {
@@ -505,11 +533,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => router.back()}
+                  onClick={editingSessionActive ? endEditingSession : () => router.back()}
                   disabled={isPending}
                   className="flex-1"
                 >
-                  Cancel
+                  {editingSessionActive ? 'End Editing' : 'Cancel'}
                 </Button>
                 <Button
                   type="button"
@@ -538,10 +566,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     className="bg-purple-600 hover:bg-purple-700 text-white"
                   >
                     <Wand2 className="h-4 w-4 mr-2" />
-                    Edit with AI
+                    {editingSessionActive ? 'Continue Editing' : 'Edit with AI'}
                   </Button>
                 </div>
               </div>
+              
+              {/* AI editing session indicator */}
+              {editingSessionActive && (
+                <div className="flex items-center space-x-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
+                  <Wand2 className="h-4 w-4 text-purple-600" />
+                  <span className="text-sm text-purple-800">AI editing session active</span>
+                  <ArrowRight className="h-4 w-4 text-purple-400" />
+                  <span className="text-sm text-purple-700">Continue refining</span>
+                </div>
+              )}
             </CardHeader>
 
             <CardContent className="px-6 pb-6">
@@ -615,31 +653,51 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
         <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
           <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle className="flex items-center space-x-2">
-              <Wand2 className="h-5 w-5 text-purple-600" />
-              <span>AI Content Editor</span>
+            <DialogTitle className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Wand2 className="h-5 w-5 text-purple-600" />
+                <span>{editingSessionActive ? 'Continue AI Editing' : 'AI Content Editor'}</span>
+              </div>
+              
+              {/* Session controls */}
+              {editingSessionActive && (
+                <Button
+                  onClick={endEditingSession}
+                  size="sm"
+                  variant="outline"
+                  className="text-gray-600 border-gray-300 hover:bg-gray-50"
+                >
+                  End Session
+                </Button>
+              )}
             </DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-1 overflow-hidden">
-            {/* Left Side: AI Interface - No tabs, just content */}
+            {/* Left Side: AI Interface */}
             <div className="w-1/2 p-6 overflow-y-auto border-r">
               <div className="space-y-6">
                 <Card className="border-purple-200 bg-purple-50/50">
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2 text-purple-800">
                       <Wand2 className="h-5 w-5" />
-                      <span>Edit Content</span>
+                      <span>{editingSessionActive ? 'Refine Further' : 'Edit Content'}</span>
                     </CardTitle>
                     <p className="text-purple-700 text-sm">
-                      How should we improve the current content?
+                      {editingSessionActive 
+                        ? 'Add more refinement instructions to continue improving the template'
+                        : 'How should we improve the current content?'
+                      }
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Textarea
                         ref={aiPromptRef}
-                        placeholder="Describe how you'd like to modify the template (e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual')"
+                        placeholder={editingSessionActive
+                          ? "e.g., 'Make the call-to-action button larger', 'Add social media links at the bottom'"
+                          : "e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual'"
+                        }
                         value={aiPrompt}
                         onChange={(e) => {
                           setAiPrompt(e.target.value)
@@ -770,15 +828,28 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       {isAIEditing ? (
                         <>
                           <Wand2 className="mr-2 h-4 w-4 animate-spin" />
-                          Editing with AI...
+                          {editingSessionActive ? 'Refining...' : 'Editing with AI...'}
                         </>
                       ) : (
                         <>
                           <Wand2 className="mr-2 h-4 w-4" />
-                          Edit with AI
+                          {editingSessionActive ? 'Apply Refinement' : 'Edit with AI'}
                         </>
                       )}
                     </Button>
+                    
+                    {/* Editing session help */}
+                    {editingSessionActive && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start space-x-2">
+                          <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm text-blue-800">
+                            <p className="font-medium mb-1">Iterative Editing Mode</p>
+                            <p className="text-xs">Keep adding refinement instructions to perfect your template. Context and previous changes are preserved.</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
