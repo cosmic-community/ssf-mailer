@@ -10,7 +10,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
-import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
 
@@ -34,11 +35,15 @@ export default function CreateTemplateForm() {
   const [isGeneratingSubject, setIsGeneratingSubject] = useState(false)
   const [aiPrompt, setAIPrompt] = useState('')
   const [editPrompt, setEditPrompt] = useState('')
-  const [activeTab, setActiveTab] = useState('preview')
   const [streamingContent, setStreamingContent] = useState('')
   const [aiStatus, setAiStatus] = useState('')
   const [aiProgress, setAiProgress] = useState(0)
   const [hasGeneratedContent, setHasGeneratedContent] = useState(false)
+  
+  // Modal states
+  const [showAIModal, setShowAIModal] = useState(false)
+  const [modalType, setModalType] = useState<'generate' | 'edit'>('generate')
+  const [modalActiveTab, setModalActiveTab] = useState('preview')
   
   // Context items state
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
@@ -304,6 +309,11 @@ export default function CreateTemplateForm() {
                   setHasGeneratedContent(true)
                   addToast('AI content generated successfully!', 'success')
                   
+                  // Close modal after successful generation
+                  setTimeout(() => {
+                    setShowAIModal(false)
+                  }, 1500)
+                  
                   // Auto-resize content textarea after update
                   setTimeout(() => {
                     if (contentRef.current) {
@@ -458,6 +468,11 @@ export default function CreateTemplateForm() {
                   setAiProgress(100)
                   addToast('AI content editing completed successfully!', 'success')
                   
+                  // Close modal after successful editing
+                  setTimeout(() => {
+                    setShowAIModal(false)
+                  }, 1500)
+                  
                   // Auto-resize content textarea after update
                   setTimeout(() => {
                     if (contentRef.current) {
@@ -499,6 +514,13 @@ export default function CreateTemplateForm() {
     }, 100)
   }
 
+  // Handle opening the AI modal
+  const openAIModal = (type: 'generate' | 'edit') => {
+    setModalType(type)
+    setModalActiveTab('preview')
+    setShowAIModal(true)
+  }
+
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -520,13 +542,16 @@ export default function CreateTemplateForm() {
           </div>
         )}
 
-        {/* 2-Column Layout */}
+        {/* 2-Column Layout - Switched: Template Details on Left, Preview on Right */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           
-          {/* Left Column: Template Info Section */}
+          {/* Left Column: Template Details Section */}
           <div className="space-y-6">
             <Card>
-              <CardContent className="p-6 space-y-4">
+              <CardHeader>
+                <CardTitle>Template Details</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
                 {/* Template Name */}
                 <div className="space-y-2">
                   <Label htmlFor="name">Template Name *</Label>
@@ -578,6 +603,7 @@ export default function CreateTemplateForm() {
                       type="button"
                       onClick={handleGenerateSubject}
                       disabled={isGeneratingSubject || !formData.content.trim()}
+                      size="sm"
                       className="bg-amber-600 hover:bg-amber-700 text-white px-3"
                       title="Generate subject from email content"
                     >
@@ -614,12 +640,13 @@ export default function CreateTemplateForm() {
                 </div>
 
                 {/* Form Actions */}
-                <div className="flex space-x-4 pt-2">
+                <div className="flex space-x-4 pt-4">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => router.back()}
                     disabled={isLoading}
+                    className="flex-1"
                   >
                     Cancel
                   </Button>
@@ -627,7 +654,7 @@ export default function CreateTemplateForm() {
                     type="button"
                     onClick={handleSubmit}
                     disabled={isLoading || !formData.name.trim() || !formData.subject.trim() || !formData.content.trim()}
-                    className="bg-slate-800 hover:bg-slate-900 text-white"
+                    className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
                   >
                     {isLoading ? 'Creating...' : 'Create Template'}
                   </Button>
@@ -636,420 +663,520 @@ export default function CreateTemplateForm() {
             </Card>
           </div>
 
-          {/* Right Column: AI Generator and Preview/Edit */}
+          {/* Right Column: Template Preview/Content Section */}
           <div className="space-y-6">
-            {/* AI Content Generator - Only show when no content has been generated */}
-            {!hasGeneratedContent && (
-              <Card className="border-blue-200 bg-blue-50/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2 text-blue-800">
-                    <Sparkles className="h-5 w-5" />
-                    <span>AI Content Generator</span>
-                  </CardTitle>
-                  <p className="text-blue-700 text-sm">
-                    Describe what you want to create with Cosmic AI
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Textarea
-                      ref={aiPromptRef}
-                      placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
-                      value={aiPrompt}
-                      onChange={(e) => {
-                        setAIPrompt(e.target.value)
-                        autoResize(e.target)
-                      }}
-                      onKeyDown={(e) => handleKeyDown(e, 'generate')}
-                      onFocus={() => handleAISectionFocus(aiPromptRef)}
-                      className="min-h-[80px] resize-none"
-                      disabled={isAIGenerating}
-                    />
-                    <p className="text-xs text-blue-600">
-                      💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-200 rounded">Cmd+Enter</kbd> to generate
-                    </p>
-                  </div>
-
-                  {/* Context Items */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium text-blue-800">Context (Optional)</Label>
-                      <Button
-                        type="button"
-                        onClick={() => setShowContextInput(true)}
-                        disabled={isAIGenerating}
-                        size="sm"
-                        variant="outline"
-                        className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Context
-                      </Button>
-                    </div>
-
-                    {/* Context Input */}
-                    {showContextInput && (
-                      <div className="p-3 border border-blue-200 rounded-lg bg-white">
-                        <div className="flex space-x-2">
-                          <Input
-                            type="url"
-                            value={contextUrl}
-                            onChange={(e) => setContextUrl(e.target.value)}
-                            placeholder="Enter media URL or webpage link..."
-                            onKeyDown={(e) => handleContextUrlKeyDown(e, false)}
-                            className="flex-1"
-                            autoFocus
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => addContextItem(contextUrl, false)}
-                            disabled={!contextUrl.trim()}
-                            size="sm"
-                            className="bg-blue-600 hover:bg-blue-700"
-                          >
-                            Add
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              setShowContextInput(false)
-                              setContextUrl('')
-                            }}
-                            size="sm"
-                            variant="outline"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                        <p className="text-xs text-blue-600 mt-2">
-                          📎 Add images, PDFs, documents, or web pages for AI to analyze
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Context Items List */}
-                    {contextItems.length > 0 && (
-                      <div className="space-y-2">
-                        {contextItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-blue-200 rounded-md">
-                            <div className="flex items-center space-x-2 flex-1 min-w-0">
-                              {getContextIcon(item)}
-                              <span className="text-sm text-blue-700 truncate">
-                                {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
-                              </span>
-                              <span className="text-xs text-blue-500 capitalize">
-                                ({item.type})
-                              </span>
-                            </div>
-                            <Button
-                              type="button"
-                              onClick={() => removeContextItem(item.id, false)}
-                              disabled={isAIGenerating}
-                              size="sm"
-                              variant="ghost"
-                              className="text-blue-400 hover:text-red-600 p-1"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <p className="text-xs text-blue-600">
-                      📎 AI will analyze all context items to create more relevant content
-                    </p>
-                  </div>
-                  
-                  {/* AI Status Display */}
-                  {(isAIGenerating && aiStatus) && (
-                    <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-blue-800">{aiStatus}</span>
-                        <span className="text-xs text-blue-600">{aiProgress}%</span>
-                      </div>
-                      <div className="w-full bg-blue-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                          style={{ width: `${aiProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <Button 
-                    onClick={handleAIGenerate}
-                    disabled={isAIGenerating || !aiPrompt.trim()}
-                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {isAIGenerating ? (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                        Generating with Cosmic AI...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Generate with Cosmic AI
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* AI Content Editor - Only show AFTER content exists AND generation is complete */}
-            {formData.content && hasGeneratedContent && (
-              <Card className="border-purple-200 bg-purple-50/50">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2 text-purple-800">
-                    <Sparkles className="h-5 w-5" />
-                    <span>AI Content Editor</span>
-                  </CardTitle>
-                  <p className="text-purple-700 text-sm">
-                    How should we improve the current content?
-                  </p>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Textarea
-                      ref={editPromptRef}
-                      placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button'"
-                      value={editPrompt}
-                      onChange={(e) => {
-                        setEditPrompt(e.target.value)
-                        autoResize(e.target)
-                      }}
-                      onKeyDown={(e) => handleKeyDown(e, 'edit')}
-                      onFocus={() => handleAISectionFocus(editPromptRef)}
-                      className="min-h-[80px] resize-none"
-                      disabled={isAIEditing}
-                    />
-                    <p className="text-xs text-purple-600">
-                      💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
-                    </p>
-                  </div>
-
-                  {/* Edit Context Items */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
-                      <Button
-                        type="button"
-                        onClick={() => setShowEditContextInput(true)}
-                        disabled={isAIEditing}
-                        size="sm"
-                        variant="outline"
-                        className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                      >
-                        <Plus className="h-4 w-4 mr-1" />
-                        Add Context
-                      </Button>
-                    </div>
-
-                    {/* Edit Context Input */}
-                    {showEditContextInput && (
-                      <div className="p-3 border border-purple-200 rounded-lg bg-white">
-                        <div className="flex space-x-2">
-                          <Input
-                            type="url"
-                            value={editContextUrl}
-                            onChange={(e) => setEditContextUrl(e.target.value)}
-                            placeholder="Enter style reference, brand guide, or example URL..."
-                            onKeyDown={(e) => handleContextUrlKeyDown(e, true)}
-                            className="flex-1"
-                            autoFocus
-                          />
-                          <Button
-                            type="button"
-                            onClick={() => addContextItem(editContextUrl, true)}
-                            disabled={!editContextUrl.trim()}
-                            size="sm"
-                            className="bg-purple-600 hover:bg-purple-700"
-                          >
-                            Add
-                          </Button>
-                          <Button
-                            type="button"
-                            onClick={() => {
-                              setShowEditContextInput(false)
-                              setEditContextUrl('')
-                            }}
-                            size="sm"
-                            variant="outline"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                        <p className="text-xs text-purple-600 mt-2">
-                          📎 Add style guides, brand references, or examples for AI to follow
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Edit Context Items List */}
-                    {editContextItems.length > 0 && (
-                      <div className="space-y-2">
-                        {editContextItems.map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md">
-                            <div className="flex items-center space-x-2 flex-1 min-w-0">
-                              {getContextIcon(item)}
-                              <span className="text-sm text-purple-700 truncate">
-                                {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
-                              </span>
-                              <span className="text-xs text-purple-500 capitalize">
-                                ({item.type})
-                              </span>
-                            </div>
-                            <Button
-                              type="button"
-                              onClick={() => removeContextItem(item.id, true)}
-                              disabled={isAIEditing}
-                              size="sm"
-                              variant="ghost"
-                              className="text-purple-400 hover:text-red-600 p-1"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <p className="text-xs text-purple-600">
-                      📎 AI will use context items as reference for improvements
-                    </p>
-                  </div>
-                  
-                  {/* AI Edit Status Display */}
-                  {(isAIEditing && aiStatus) && (
-                    <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm text-purple-800">{aiStatus}</span>
-                        <span className="text-xs text-purple-600">{aiProgress}%</span>
-                      </div>
-                      <div className="w-full bg-purple-200 rounded-full h-2">
-                        <div 
-                          className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
-                          style={{ width: `${aiProgress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                  
-                  <Button 
-                    onClick={handleAIEdit}
-                    disabled={isAIEditing || !editPrompt.trim()}
-                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    {isAIEditing ? (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                        Editing with AI...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Edit with AI
-                      </>
-                    )}
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Preview / Edit Tabs */}
             <Card>
-              <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle>Template Content</CardTitle>
+                  <div className="flex space-x-2">
+                    {!hasGeneratedContent ? (
+                      <Button
+                        type="button"
+                        onClick={() => openAIModal('generate')}
+                        size="sm"
+                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        Generate with AI
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        onClick={() => openAIModal('edit')}
+                        size="sm"
+                        className="bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        <Wand2 className="h-4 w-4 mr-2" />
+                        Edit with AI
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+
+              <CardContent className="px-6 pb-6">
+                <div className="space-y-4">
+                  <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          <strong>Subject:</strong> {formData.subject || 'No subject'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formData.template_type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 max-h-96 overflow-y-auto">
+                      {formData.content ? (
+                        <>
+                          <div 
+                            className="prose max-w-none text-sm"
+                            dangerouslySetInnerHTML={{ 
+                              __html: formData.content
+                            }} 
+                          />
+                          {/* Preview unsubscribe footer */}
+                          <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                            <p>
+                              You received this email because you subscribed to our mailing list.
+                              <br />
+                              <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
+                            </p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              ↑ This unsubscribe link will be added automatically to all campaign emails
+                            </p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center py-12 text-gray-500">
+                          <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                          <p className="font-medium mb-2">No content yet</p>
+                          <p className="text-sm mb-4">Use the AI generator to create content or edit manually</p>
+                          <Button
+                            type="button"
+                            onClick={() => openAIModal('generate')}
+                            size="sm"
+                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                          >
+                            <Sparkles className="h-4 w-4 mr-2" />
+                            Generate with AI
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Modal */}
+      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
+        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center space-x-2">
+              <Sparkles className="h-5 w-5 text-blue-600" />
+              <span>
+                {modalType === 'generate' ? 'AI Content Generator' : 'AI Content Editor'}
+              </span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left Side: AI Interface - No tabs, just content */}
+            <div className="w-1/2 p-6 overflow-y-auto border-r">
+              {modalType === 'generate' ? (
+                /* AI Generator Interface */
+                <div className="space-y-6">
+                  <Card className="border-blue-200 bg-blue-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2 text-blue-800">
+                        <Sparkles className="h-5 w-5" />
+                        <span>Generate Content</span>
+                      </CardTitle>
+                      <p className="text-blue-700 text-sm">
+                        Describe what you want to create with Cosmic AI
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Textarea
+                          ref={aiPromptRef}
+                          placeholder="e.g., 'Create a welcome email for new customers joining our fitness app'"
+                          value={aiPrompt}
+                          onChange={(e) => {
+                            setAIPrompt(e.target.value)
+                            autoResize(e.target)
+                          }}
+                          onKeyDown={(e) => handleKeyDown(e, 'generate')}
+                          onFocus={() => handleAISectionFocus(aiPromptRef)}
+                          className="min-h-[80px] resize-none"
+                          disabled={isAIGenerating}
+                        />
+                        <p className="text-xs text-blue-600">
+                          💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-blue-200 rounded">Cmd+Enter</kbd> to generate
+                        </p>
+                      </div>
+
+                      {/* Context Items */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium text-blue-800">Context (Optional)</Label>
+                          <Button
+                            type="button"
+                            onClick={() => setShowContextInput(true)}
+                            disabled={isAIGenerating}
+                            size="sm"
+                            variant="outline"
+                            className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Context
+                          </Button>
+                        </div>
+
+                        {/* Context Input */}
+                        {showContextInput && (
+                          <div className="p-3 border border-blue-200 rounded-lg bg-white">
+                            <div className="flex space-x-2">
+                              <Input
+                                type="url"
+                                value={contextUrl}
+                                onChange={(e) => setContextUrl(e.target.value)}
+                                placeholder="Enter media URL or webpage link..."
+                                onKeyDown={(e) => handleContextUrlKeyDown(e, false)}
+                                className="flex-1"
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => addContextItem(contextUrl, false)}
+                                disabled={!contextUrl.trim()}
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-700"
+                              >
+                                Add
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  setShowContextInput(false)
+                                  setContextUrl('')
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            <p className="text-xs text-blue-600 mt-2">
+                              📎 Add images, PDFs, documents, or web pages for AI to analyze
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Context Items List */}
+                        {contextItems.length > 0 && (
+                          <div className="space-y-2">
+                            {contextItems.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-blue-200 rounded-md">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                  {getContextIcon(item)}
+                                  <span className="text-sm text-blue-700 truncate">
+                                    {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
+                                  </span>
+                                  <span className="text-xs text-blue-500 capitalize">
+                                    ({item.type})
+                                  </span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={() => removeContextItem(item.id, false)}
+                                  disabled={isAIGenerating}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-blue-400 hover:text-red-600 p-1"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* AI Status Display */}
+                      {(isAIGenerating && aiStatus) && (
+                        <div className="p-3 bg-blue-100 border border-blue-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-blue-800">{aiStatus}</span>
+                            <span className="text-xs text-blue-600">{aiProgress}%</span>
+                          </div>
+                          <div className="w-full bg-blue-200 rounded-full h-2">
+                            <div 
+                              className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${aiProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button 
+                        onClick={handleAIGenerate}
+                        disabled={isAIGenerating || !aiPrompt.trim()}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        {isAIGenerating ? (
+                          <>
+                            <Sparkles className="mr-2 h-4 w-4 animate-spin" />
+                            Generating with Cosmic AI...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="mr-2 h-4 w-4" />
+                            Generate with Cosmic AI
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : (
+                /* AI Editor Interface */
+                <div className="space-y-6">
+                  <Card className="border-purple-200 bg-purple-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2 text-purple-800">
+                        <Wand2 className="h-5 w-5" />
+                        <span>Edit Content</span>
+                      </CardTitle>
+                      <p className="text-purple-700 text-sm">
+                        How should we improve the current content?
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Textarea
+                          ref={editPromptRef}
+                          placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button'"
+                          value={editPrompt}
+                          onChange={(e) => {
+                            setEditPrompt(e.target.value)
+                            autoResize(e.target)
+                          }}
+                          onKeyDown={(e) => handleKeyDown(e, 'edit')}
+                          onFocus={() => handleAISectionFocus(editPromptRef)}
+                          className="min-h-[80px] resize-none"
+                          disabled={isAIEditing}
+                        />
+                        <p className="text-xs text-purple-600">
+                          💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                        </p>
+                      </div>
+
+                      {/* Edit Context Items */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
+                          <Button
+                            type="button"
+                            onClick={() => setShowEditContextInput(true)}
+                            disabled={isAIEditing}
+                            size="sm"
+                            variant="outline"
+                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Context
+                          </Button>
+                        </div>
+
+                        {/* Edit Context Input */}
+                        {showEditContextInput && (
+                          <div className="p-3 border border-purple-200 rounded-lg bg-white">
+                            <div className="flex space-x-2">
+                              <Input
+                                type="url"
+                                value={editContextUrl}
+                                onChange={(e) => setEditContextUrl(e.target.value)}
+                                placeholder="Enter style reference, brand guide, or example URL..."
+                                onKeyDown={(e) => handleContextUrlKeyDown(e, true)}
+                                className="flex-1"
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => addContextItem(editContextUrl, true)}
+                                disabled={!editContextUrl.trim()}
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700"
+                              >
+                                Add
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  setShowEditContextInput(false)
+                                  setEditContextUrl('')
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            <p className="text-xs text-purple-600 mt-2">
+                              📎 Add style guides, brand references, or examples for AI to follow
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Edit Context Items List */}
+                        {editContextItems.length > 0 && (
+                          <div className="space-y-2">
+                            {editContextItems.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                  {getContextIcon(item)}
+                                  <span className="text-sm text-purple-700 truncate">
+                                    {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
+                                  </span>
+                                  <span className="text-xs text-purple-500 capitalize">
+                                    ({item.type})
+                                  </span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={() => removeContextItem(item.id, true)}
+                                  disabled={isAIEditing}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-purple-400 hover:text-red-600 p-1"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* AI Edit Status Display */}
+                      {(isAIEditing && aiStatus) && (
+                        <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-purple-800">{aiStatus}</span>
+                            <span className="text-xs text-purple-600">{aiProgress}%</span>
+                          </div>
+                          <div className="w-full bg-purple-200 rounded-full h-2">
+                            <div 
+                              className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${aiProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button 
+                        onClick={handleAIEdit}
+                        disabled={isAIEditing || !editPrompt.trim()}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        {isAIEditing ? (
+                          <>
+                            <Wand2 className="mr-2 h-4 w-4 animate-spin" />
+                            Editing with AI...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Edit with AI
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side: Preview/Edit Tabs */}
+            <div className="w-1/2 p-6 overflow-y-auto">
+              <Tabs value={modalActiveTab} onValueChange={setModalActiveTab} className="w-full h-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="preview">Preview</TabsTrigger>
                   <TabsTrigger value="edit">Edit</TabsTrigger>
                 </TabsList>
                 
-                <TabsContent value="preview" className="mt-6 p-6">
-                  <div className="space-y-6">
-                    <div className="border-b pb-4">
-                      <h3 className="text-lg font-semibold text-gray-900 mb-2">Email Preview</h3>
+                <TabsContent value="preview" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Email Preview</CardTitle>
                       <p className="text-sm text-gray-600">
-                        This is how your email will appear to recipients (unsubscribe link will be added automatically)
+                        Real-time preview of your email template
                       </p>
-                    </div>
-                    
-                    <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
-                      <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                        <div className="flex items-center justify-between">
-                          <div className="text-sm text-gray-600">
-                            <strong>Subject:</strong> {formData.subject || 'No subject'}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formData.template_type}
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-600">
+                              <strong>Subject:</strong> {formData.subject || 'No subject'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formData.template_type}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="p-6 max-h-96 overflow-y-auto">
-                        {formData.content ? (
-                          <>
-                            <div 
-                              className="prose max-w-none"
-                              dangerouslySetInnerHTML={{ 
-                                __html: formData.content
-                              }} 
-                            />
-                            {/* Preview unsubscribe footer */}
-                            <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-500">
-                              <p>
-                                You received this email because you subscribed to our mailing list.
-                                <br />
-                                <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
-                              </p>
-                              <p className="text-xs text-gray-400 mt-1">
-                                ↑ This unsubscribe link will be added automatically to all campaign emails
-                              </p>
+                        <div className="p-4 max-h-96 overflow-y-auto">
+                          {formData.content ? (
+                            <>
+                              <div 
+                                className="prose max-w-none text-sm"
+                                dangerouslySetInnerHTML={{ 
+                                  __html: formData.content
+                                }} 
+                              />
+                              {/* Preview unsubscribe footer */}
+                              <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                                <p>
+                                  You received this email because you subscribed to our mailing list.
+                                  <br />
+                                  <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
+                                </p>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="text-center py-12 text-gray-500">
+                              <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                              <p className="font-medium mb-2">No content yet</p>
+                              <p className="text-sm">Use the AI tools to generate content</p>
                             </div>
-                          </>
-                        ) : (
-                          <div className="text-center py-12 text-gray-500">
-                            <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                            <p>No content yet</p>
-                            <p className="text-sm">Use the AI generator to create content</p>
-                          </div>
-                        )}
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
 
-                <TabsContent value="edit" className="mt-6 p-6">
-                  <div className="space-y-6">
-                    {/* Email Content */}
-                    <div className="space-y-2">
-                      <Label htmlFor="content">Email Content *</Label>
-                      <Textarea
-                        ref={contentRef}
-                        id="content"
-                        value={formData.content}
-                        onChange={(e) => {
-                          handleInputChange('content', e.target.value)
-                          autoResize(e.target)
-                        }}
-                        placeholder="Enter email content (HTML supported) or use AI to generate"
-                        rows={8}
-                        disabled={isLoading}
-                        required
-                        className="font-mono text-sm"
-                      />
-                      <p className="text-sm text-gray-500">
-                        You can use HTML tags and merge fields like {'{{first_name}}'} for personalization.
-                        An unsubscribe link will be automatically added to all campaign emails.
+                <TabsContent value="edit" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Edit Content</CardTitle>
+                      <p className="text-sm text-gray-600">
+                        Direct HTML editing with live preview
                       </p>
-                    </div>
-                  </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="modal-content">Email Content</Label>
+                          <Textarea
+                            ref={contentRef}
+                            id="modal-content"
+                            value={formData.content}
+                            onChange={(e) => {
+                              handleInputChange('content', e.target.value)
+                              autoResize(e.target)
+                            }}
+                            placeholder="Enter email content (HTML supported)"
+                            rows={12}
+                            className="font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </TabsContent>
               </Tabs>
-            </Card>
+            </div>
           </div>
-        </div>
-      </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
