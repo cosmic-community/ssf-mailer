@@ -691,15 +691,15 @@ export default function CreateTemplateForm() {
                         Edit with AI
                       </Button>
                     )}
-                    // <Button
-                    //   type="button"
-                    //   onClick={() => openAIModal('edit')}
-                    //   size="sm"
-                    //   variant="outline"
-                    // >
-                    //   <Edit className="h-4 w-4 mr-2" />
-                    //   Edit
-                    // </Button>
+                    <Button
+                      type="button"
+                      onClick={() => openAIModal('edit')}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <Edit className="h-4 w-4 mr-2" />
+                      Edit
+                    </Button>
                   </div>
                 </div>
               </CardHeader>
