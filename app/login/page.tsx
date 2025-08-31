@@ -62,7 +62,7 @@ export default function LoginPage() {
         {/* Two-Column Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Left Card: Complete Email Marketing Solution */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-[450px] mx-auto">
             <div className="text-center mb-6">
               <div className="mx-auto h-16 w-16 bg-slate-100 rounded-xl flex items-center justify-center mb-4">
                 <svg className="w-9 h-9 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -147,7 +147,7 @@ export default function LoginPage() {
           </div>
 
           {/* Right Card: Access Required */}
-          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8">
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-200 p-8 max-w-[450px] mx-auto">
             <div className="text-center mb-6">
               <div className="mx-auto h-16 w-16 bg-slate-100 rounded-xl flex items-center justify-center mb-4">
                 <svg className="w-9 h-9 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
