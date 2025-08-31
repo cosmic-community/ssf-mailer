@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2 } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface ContextItem {
@@ -42,6 +43,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   
+  // Modal states
+  const [showAIModal, setShowAIModal] = useState(false)
+  const [modalActiveTab, setModalActiveTab] = useState('ai')
+  
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [showContextInput, setShowContextInput] = useState(false)
@@ -49,6 +54,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
+  const contentRef = useRef<HTMLTextAreaElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -73,10 +79,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
-  // Set up auto-resize for textarea
+  // Set up auto-resize for textareas
   useEffect(() => {
-    if (aiPromptRef.current) {
-      const textarea = aiPromptRef.current
+    const textareas = [aiPromptRef.current, contentRef.current].filter(Boolean) as HTMLTextAreaElement[]
+    
+    textareas.forEach(textarea => {
       const handleInput = () => autoResize(textarea)
       textarea.addEventListener('input', handleInput)
       
@@ -84,7 +91,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       autoResize(textarea)
       
       return () => textarea.removeEventListener('input', handleInput)
-    }
+    })
   }, [])
 
   // Auto-focus AI prompt when AI section is shown
@@ -269,6 +276,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
                   showToast()
+                  
+                  // Close modal after successful editing
+                  setTimeout(() => {
+                    setShowAIModal(false)
+                  }, 1500)
                 } else if (data.type === 'error') {
                   throw new Error(data.error)
                 }
@@ -417,10 +429,116 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       {/* 2-Column Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Left Column: Template Info Section */}
+        {/* Left Column: Preview/Edit Section */}
         <div className="space-y-6">
           <Card>
-            <CardContent className="p-6 space-y-4">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <CardTitle>Template Content</CardTitle>
+                <div className="flex space-x-2">
+                  <Button
+                    type="button"
+                    onClick={() => setShowAIModal(true)}
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    <Wand2 className="h-4 w-4 mr-2" />
+                    Edit with AI
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setActiveTab(activeTab === 'preview' ? 'edit' : 'preview')}
+                    size="sm"
+                    variant="outline"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    {activeTab === 'preview' ? 'Edit' : 'Preview'}
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className="grid w-full grid-cols-2 mx-6 mb-6">
+                <TabsTrigger value="preview">Preview</TabsTrigger>
+                <TabsTrigger value="edit">Edit</TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="preview" className="mx-6 pb-6">
+                <div className="space-y-4">
+                  <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                    <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-gray-600">
+                          <strong>Subject:</strong> {formData.subject || 'No subject'}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formData.template_type}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="p-4 max-h-96 overflow-y-auto">
+                      <div 
+                        className="prose max-w-none text-sm"
+                        dangerouslySetInnerHTML={{ 
+                          __html: formData.content || '<p className="text-gray-500">No content</p>' 
+                        }} 
+                      />
+                      {/* Preview unsubscribe footer */}
+                      {formData.content && (
+                        <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                          <p>
+                            You received this email because you subscribed to our mailing list.
+                            <br />
+                            <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
+                          </p>
+                          <p className="text-xs text-gray-400 mt-1">
+                            ↑ This unsubscribe link will be added automatically to all campaign emails
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </TabsContent>
+
+              <TabsContent value="edit" className="mx-6 pb-6">
+                <div className="space-y-4">
+                  {/* Email Content */}
+                  <div className="space-y-2">
+                    <Label htmlFor="content">Email Content *</Label>
+                    <Textarea
+                      ref={contentRef}
+                      id="content"
+                      value={formData.content}
+                      onChange={(e) => {
+                        handleInputChange('content', e.target.value)
+                        autoResize(e.target)
+                      }}
+                      placeholder="Enter email content (HTML supported)"
+                      rows={12}
+                      disabled={isPending}
+                      required
+                      className="font-mono text-sm"
+                    />
+                    <p className="text-sm text-gray-500">
+                      You can use HTML tags and merge fields like {'{{first_name}}'} for personalization.
+                      An unsubscribe link will be automatically added to all campaign emails.
+                    </p>
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </Card>
+        </div>
+
+        {/* Right Column: Template Info Section */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Template Details</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               {/* Template Name */}
               <div className="space-y-2">
                 <Label htmlFor="name">Template Name *</Label>
@@ -487,12 +605,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </div>
 
               {/* Form Actions */}
-              <div className="flex space-x-4 pt-2">
+              <div className="flex space-x-4 pt-4">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => router.back()}
                   disabled={isPending}
+                  className="flex-1"
                 >
                   Cancel
                 </Button>
@@ -500,243 +619,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   type="button"
                   onClick={handleSubmit}
                   disabled={isPending}
-                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                  className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
                 >
                   {isPending ? 'Updating...' : 'Update Template'}
                 </Button>
               </div>
             </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: AI Editor and Preview/Edit */}
-        <div className="space-y-6">
-          {/* AI Content Editor */}
-          <Card className="border-purple-200 bg-purple-50/50">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2 text-purple-800">
-                <Sparkles className="h-5 w-5" />
-                <span>AI Content Editor</span>
-              </CardTitle>
-              <p className="text-purple-700 text-sm">
-                How should we improve the current content?
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Textarea
-                  ref={aiPromptRef}
-                  placeholder="Describe how you'd like to modify the template (e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual')"
-                  value={aiPrompt}
-                  onChange={(e) => {
-                    setAiPrompt(e.target.value)
-                    autoResize(e.target)
-                  }}
-                  onKeyDown={handleKeyDown}
-                  onFocus={handleAISectionFocus}
-                  className="min-h-[100px] resize-none"
-                  disabled={isAIEditing}
-                />
-                <p className="text-xs text-purple-600">
-                  💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
-                </p>
-              </div>
-
-              {/* Context Items */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
-                  <Button
-                    type="button"
-                    onClick={() => setShowContextInput(true)}
-                    disabled={isAIEditing}
-                    size="sm"
-                    variant="outline"
-                    className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                  >
-                    <Plus className="h-4 w-4 mr-1" />
-                    Add Context
-                  </Button>
-                </div>
-
-                {/* Context Input */}
-                {showContextInput && (
-                  <div className="p-3 border border-purple-200 rounded-lg bg-white">
-                    <div className="flex space-x-2">
-                      <Input
-                        type="url"
-                        value={contextUrl}
-                        onChange={(e) => setContextUrl(e.target.value)}
-                        placeholder="Enter style reference, brand guide, or example URL..."
-                        onKeyDown={handleContextUrlKeyDown}
-                        className="flex-1"
-                        autoFocus
-                      />
-                      <Button
-                        type="button"
-                        onClick={() => addContextItem(contextUrl)}
-                        disabled={!contextUrl.trim()}
-                        size="sm"
-                        className="bg-purple-600 hover:bg-purple-700"
-                      >
-                        Add
-                      </Button>
-                      <Button
-                        type="button"
-                        onClick={() => {
-                          setShowContextInput(false)
-                          setContextUrl('')
-                        }}
-                        size="sm"
-                        variant="outline"
-                      >
-                        Cancel
-                      </Button>
-                    </div>
-                    <p className="text-xs text-purple-600 mt-2">
-                      📎 Add style guides, brand references, or web pages for AI to follow
-                    </p>
-                  </div>
-                )}
-
-                {/* Context Items List */}
-                {contextItems.length > 0 && (
-                  <div className="space-y-2">
-                    {contextItems.map((item) => (
-                      <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md">
-                        <div className="flex items-center space-x-2 flex-1 min-w-0">
-                          {getContextIcon(item)}
-                          <span className="text-sm text-purple-700 truncate">
-                            {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
-                          </span>
-                          <span className="text-xs text-purple-500 capitalize">
-                            ({item.type})
-                          </span>
-                        </div>
-                        <Button
-                          type="button"
-                          onClick={() => removeContextItem(item.id)}
-                          disabled={isAIEditing}
-                          size="sm"
-                          variant="ghost"
-                          className="text-purple-400 hover:text-red-600 p-1"
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <p className="text-xs text-purple-600">
-                  📎 AI will use context items as reference for improvements
-                </p>
-              </div>
-              
-              {/* AI Edit Status Display */}
-              {(isAIEditing && aiStatus) && (
-                <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm text-purple-800">{aiStatus}</span>
-                    <span className="text-xs text-purple-600">{aiProgress}%</span>
-                  </div>
-                  <div className="w-full bg-purple-200 rounded-full h-2">
-                    <div 
-                      className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
-                      style={{ width: `${aiProgress}%` }}
-                    ></div>
-                  </div>
-                </div>
-              )}
-              
-              <Button 
-                onClick={handleAIEdit}
-                disabled={isAIEditing || !aiPrompt.trim()}
-                className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                {isAIEditing ? (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4 animate-spin" />
-                    Editing with AI...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Edit with AI
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Preview / Edit Tabs */}
-          <Card>
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="preview">Preview</TabsTrigger>
-                <TabsTrigger value="edit">Edit</TabsTrigger>
-              </TabsList>
-              
-              <TabsContent value="preview" className="mt-6 p-6">
-                <div className="space-y-6">
-                  <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
-                    <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-gray-600">
-                          <strong>Subject:</strong> {formData.subject || 'No subject'}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formData.template_type}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-6 max-h-96 overflow-y-auto">
-                      <div 
-                        className="prose max-w-none"
-                        dangerouslySetInnerHTML={{ 
-                          __html: formData.content || '<p className="text-gray-500">No content</p>' 
-                        }} 
-                      />
-                      {/* Preview unsubscribe footer */}
-                      {formData.content && (
-                        <div className="mt-8 pt-4 border-t border-gray-200 text-center text-xs text-gray-500">
-                          <p>
-                            You received this email because you subscribed to our mailing list.
-                            <br />
-                            <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            ↑ This unsubscribe link will be added automatically to all campaign emails
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </TabsContent>
-
-              <TabsContent value="edit" className="mt-6 p-6">
-                <div className="space-y-6">
-                  {/* Email Content */}
-                  <div className="space-y-2">
-                    <Label htmlFor="content">Email Content *</Label>
-                    <Textarea
-                      id="content"
-                      value={formData.content}
-                      onChange={(e) => handleInputChange('content', e.target.value)}
-                      placeholder="Enter email content (HTML supported)"
-                      rows={8}
-                      disabled={isPending}
-                      required
-                    />
-                    <p className="text-sm text-gray-500">
-                      You can use HTML tags and merge fields like {'{{first_name}}'} for personalization.
-                      An unsubscribe link will be automatically added to all campaign emails.
-                    </p>
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
           </Card>
         </div>
       </div>
@@ -766,6 +654,301 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* AI Modal */}
+      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
+        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
+          <DialogHeader className="px-6 py-4 border-b">
+            <DialogTitle className="flex items-center space-x-2">
+              <Wand2 className="h-5 w-5 text-purple-600" />
+              <span>AI Content Editor</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="flex flex-1 overflow-hidden">
+            {/* Left Side: AI Interface */}
+            <div className="w-1/2 p-6 overflow-y-auto border-r">
+              <Tabs value={modalActiveTab} onValueChange={setModalActiveTab} className="w-full h-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="ai">AI Editor</TabsTrigger>
+                  <TabsTrigger value="preview">Live Preview</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="ai" className="mt-6 space-y-6">
+                  <Card className="border-purple-200 bg-purple-50/50">
+                    <CardHeader>
+                      <CardTitle className="flex items-center space-x-2 text-purple-800">
+                        <Wand2 className="h-5 w-5" />
+                        <span>Edit Content</span>
+                      </CardTitle>
+                      <p className="text-purple-700 text-sm">
+                        How should we improve the current content?
+                      </p>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="space-y-2">
+                        <Textarea
+                          ref={aiPromptRef}
+                          placeholder="Describe how you'd like to modify the template (e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual')"
+                          value={aiPrompt}
+                          onChange={(e) => {
+                            setAiPrompt(e.target.value)
+                            autoResize(e.target)
+                          }}
+                          onKeyDown={handleKeyDown}
+                          onFocus={handleAISectionFocus}
+                          className="min-h-[100px] resize-none"
+                          disabled={isAIEditing}
+                        />
+                        <p className="text-xs text-purple-600">
+                          💡 Tip: Press <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">Cmd+Enter</kbd> to edit
+                        </p>
+                      </div>
+
+                      {/* Context Items */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-medium text-purple-800">Context (Optional)</Label>
+                          <Button
+                            type="button"
+                            onClick={() => setShowContextInput(true)}
+                            disabled={isAIEditing}
+                            size="sm"
+                            variant="outline"
+                            className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Context
+                          </Button>
+                        </div>
+
+                        {/* Context Input */}
+                        {showContextInput && (
+                          <div className="p-3 border border-purple-200 rounded-lg bg-white">
+                            <div className="flex space-x-2">
+                              <Input
+                                type="url"
+                                value={contextUrl}
+                                onChange={(e) => setContextUrl(e.target.value)}
+                                placeholder="Enter style reference, brand guide, or example URL..."
+                                onKeyDown={handleContextUrlKeyDown}
+                                className="flex-1"
+                                autoFocus
+                              />
+                              <Button
+                                type="button"
+                                onClick={() => addContextItem(contextUrl)}
+                                disabled={!contextUrl.trim()}
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700"
+                              >
+                                Add
+                              </Button>
+                              <Button
+                                type="button"
+                                onClick={() => {
+                                  setShowContextInput(false)
+                                  setContextUrl('')
+                                }}
+                                size="sm"
+                                variant="outline"
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                            <p className="text-xs text-purple-600 mt-2">
+                              📎 Add style guides, brand references, or web pages for AI to follow
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Context Items List */}
+                        {contextItems.length > 0 && (
+                          <div className="space-y-2">
+                            {contextItems.map((item) => (
+                              <div key={item.id} className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md">
+                                <div className="flex items-center space-x-2 flex-1 min-w-0">
+                                  {getContextIcon(item)}
+                                  <span className="text-sm text-purple-700 truncate">
+                                    {item.title || new URL(item.url).pathname.split('/').pop() || item.url}
+                                  </span>
+                                  <span className="text-xs text-purple-500 capitalize">
+                                    ({item.type})
+                                  </span>
+                                </div>
+                                <Button
+                                  type="button"
+                                  onClick={() => removeContextItem(item.id)}
+                                  disabled={isAIEditing}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="text-purple-400 hover:text-red-600 p-1"
+                                >
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        <p className="text-xs text-purple-600">
+                          📎 AI will use context items as reference for improvements
+                        </p>
+                      </div>
+                      
+                      {/* AI Edit Status Display */}
+                      {(isAIEditing && aiStatus) && (
+                        <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm text-purple-800">{aiStatus}</span>
+                            <span className="text-xs text-purple-600">{aiProgress}%</span>
+                          </div>
+                          <div className="w-full bg-purple-200 rounded-full h-2">
+                            <div 
+                              className="bg-purple-600 h-2 rounded-full transition-all duration-300" 
+                              style={{ width: `${aiProgress}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <Button 
+                        onClick={handleAIEdit}
+                        disabled={isAIEditing || !aiPrompt.trim()}
+                        className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                      >
+                        {isAIEditing ? (
+                          <>
+                            <Wand2 className="mr-2 h-4 w-4 animate-spin" />
+                            Editing with AI...
+                          </>
+                        ) : (
+                          <>
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Edit with AI
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </TabsContent>
+
+                <TabsContent value="preview" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Live Preview</CardTitle>
+                      <p className="text-sm text-gray-600">
+                        Real-time preview of your changes
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-600">
+                              <strong>Subject:</strong> {formData.subject || 'No subject'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formData.template_type}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-4 max-h-96 overflow-y-auto">
+                          <div 
+                            className="prose max-w-none text-sm"
+                            dangerouslySetInnerHTML={{ 
+                              __html: formData.content || '<p className="text-gray-500">No content</p>' 
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    </CardContent>
+                  </TabsContent>
+                </TabsContent>
+              </Tabs>
+            </div>
+
+            {/* Right Side: Preview/Edit Tabs */}
+            <div className="w-1/2 p-6 overflow-y-auto">
+              <Tabs value="preview" className="w-full h-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="preview">Preview</TabsTrigger>
+                  <TabsTrigger value="edit">Edit</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="preview" className="mt-6">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Email Preview</CardTitle>
+                      <p className="text-sm text-gray-600">
+                        How your email will appear to recipients
+                      </p>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="bg-white border border-gray-300 rounded-lg shadow-sm">
+                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <div className="text-sm text-gray-600">
+                              <strong>Subject:</strong> {formData.subject || 'No subject'}
+                            </div>
+                            <div className="text-xs text-gray-500">
+                              {formData.template_type}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-4 max-h-96 overflow-y-auto">
+                          <div 
+                            className="prose max-w-none text-sm"
+                            dangerouslySetInnerHTML={{ 
+                              __html: formData.content || '<p className="text-gray-500">No content</p>' 
+                            }} 
+                          />
+                          {/* Preview unsubscribe footer */}
+                          {formData.content && (
+                            <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                              <p>
+                                You received this email because you subscribed to our mailing list.
+                                <br />
+                                <span className="underline cursor-pointer">Unsubscribe</span> from future emails.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </TabsContent>
+
+                  <TabsContent value="edit" className="mt-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle>Edit Content</CardTitle>
+                        <p className="text-sm text-gray-600">
+                          Direct HTML editing with live preview
+                        </p>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-4">
+                          <div className="space-y-2">
+                            <Label htmlFor="modal-content">Email Content</Label>
+                            <Textarea
+                              id="modal-content"
+                              value={formData.content}
+                              onChange={(e) => handleInputChange('content', e.target.value)}
+                              placeholder="Enter email content (HTML supported)"
+                              rows={12}
+                              className="font-mono text-sm"
+                            />
+                          </div>
+                        </div>
+                      </CardContent>
+                    </TabsContent>
+                  </TabsContent>
+                </TabsContent>
+              </Tabs>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
