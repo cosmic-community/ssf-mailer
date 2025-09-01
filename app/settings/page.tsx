@@ -1,6 +1,9 @@
 import { getSettings } from '@/lib/cosmic'
 import SettingsForm from '@/components/SettingsForm'
 
+// Force dynamic rendering - prevents static generation and caching
+export const dynamic = 'force-dynamic'
+
 export default async function SettingsPage() {
   let settings = null
   

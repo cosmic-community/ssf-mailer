@@ -557,6 +557,21 @@ export default function CreateTemplateForm() {
     addToast('Reset to generation mode', 'success')
   }
 
+  // Handle modal close - close modal without saving
+  const handleModalCancel = () => {
+    setShowAIModal(false)
+  }
+
+  // Handle modal save - ONLY close modal and update content, do NOT save to database
+  const handleModalSave = () => {
+    // Just close the modal - the template content has already been updated in formData
+    // This allows the user to continue editing or manually save the template later
+    setShowAIModal(false)
+    
+    // Show a message indicating the content has been updated but not saved
+    setSuccess('Template content updated! Click "Create Template" to save your changes.')
+  }
+
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -741,16 +756,6 @@ export default function CreateTemplateForm() {
                     )}
                   </div>
                 </div>
-                
-                {/* AI workflow status indicator */}
-                {hasGeneratedContent && (
-                  <div className="flex items-center space-x-2 px-3 py-2 bg-blue-50 border border-blue-200 rounded-lg">
-                    <CheckCircle className="h-4 w-4 text-blue-600" />
-                    <span className="text-sm text-blue-800">Content generated</span>
-                    <ArrowRight className="h-4 w-4 text-blue-400" />
-                    <span className="text-sm text-purple-700">Ready to edit</span>
-                  </div>
-                )}
               </CardHeader>
 
               <CardContent className="px-6 pb-6">
@@ -814,8 +819,8 @@ export default function CreateTemplateForm() {
 
       {/* AI Modal */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
-        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
-          <DialogHeader className="px-6 py-4 border-b">
+        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <DialogTitle className="flex items-center justify-between">
               <div className="flex items-center space-x-2">
                 {modalType === 'generate' ? (
@@ -828,7 +833,7 @@ export default function CreateTemplateForm() {
                 </span>
               </div>
               
-              {/* Mode switcher */}
+              {/* Mode switcher - only show switch to edit when content is generated */}
               <div className="flex items-center space-x-2">
                 {hasGeneratedContent && modalType === 'generate' && (
                   <Button
@@ -839,17 +844,6 @@ export default function CreateTemplateForm() {
                   >
                     Switch to Edit Mode
                     <ArrowRight className="h-4 w-4 ml-1" />
-                  </Button>
-                )}
-                {modalType === 'edit' && (
-                  <Button
-                    onClick={() => setModalType('generate')}
-                    size="sm"
-                    variant="outline"
-                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                  >
-                    <ArrowRight className="h-4 w-4 mr-1 rotate-180" />
-                    Back to Generate
                   </Button>
                 )}
               </div>
@@ -1045,7 +1039,7 @@ export default function CreateTemplateForm() {
                       <div className="space-y-2">
                         <Textarea
                           ref={editPromptRef}
-                          placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button', 'Change the tone to be more casual'"
+                          placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
                           value={editPrompt}
                           onChange={(e) => {
                             setEditPrompt(e.target.value)
@@ -1292,6 +1286,43 @@ export default function CreateTemplateForm() {
                   </Card>
                 </TabsContent>
               </Tabs>
+            </div>
+          </div>
+
+          {/* Fixed Footer - Updated to remove Back to Generate button */}
+          <div className="border-t bg-white px-6 py-4 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {/* Left side: Cancel button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleModalCancel}
+                disabled={isAIGenerating || isAIEditing}
+              >
+                Cancel
+              </Button>
+
+              {/* Right side: Reset and Save buttons */}
+              <div className="flex items-center space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={resetToGenerate}
+                  disabled={isAIGenerating || isAIEditing || isLoading}
+                  className="flex items-center space-x-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Reset</span>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleModalSave}
+                  disabled={isAIGenerating || isAIEditing}
+                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  Save
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
