@@ -5,6 +5,7 @@ import { getMarketingCampaign, getEmailTemplates, getEmailContacts } from '@/lib
 import EditCampaignForm from '@/components/EditCampaignForm'
 import SendCampaignButton from '@/components/SendCampaignButton'
 import DeleteCampaignButton from '@/components/DeleteCampaignButton'
+import TestEmailModal from '@/components/TestEmailModal'
 import { MarketingCampaign, EmailTemplate, EmailContact } from '@/types'
 
 // Force dynamic rendering
@@ -88,6 +89,12 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   const recipientCount = (campaign.metadata?.target_contacts?.length || 0) + 
                         (campaign.metadata?.target_tags?.length || 0)
 
+  // Check if campaign has a template for test email functionality
+  const hasTemplate = !!(
+    campaign.metadata?.template_id ||
+    (campaign.metadata?.template && typeof campaign.metadata.template === 'object')
+  )
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -124,6 +131,12 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
                     campaignName={campaign.metadata?.name || 'Campaign'}
                     isDraft={isDraft}
                   />
+                  {hasTemplate && (
+                    <TestEmailModal
+                      campaignId={campaign.id}
+                      campaignName={campaign.metadata?.name || 'Campaign'}
+                    />
+                  )}
                   <SendCampaignButton 
                     campaignId={campaign.id}
                     campaignName={campaign.metadata?.name || 'Campaign'}
