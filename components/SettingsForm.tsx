@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Settings, UpdateSettingsData } from '@/types'
-import { AlertCircle, CheckCircle, Mail, Building2, Palette, Brain, Shield, BarChart3 } from 'lucide-react'
+import { AlertCircle, CheckCircle, Mail, Building2, Palette, Brain, Shield, BarChart3, TestTube } from 'lucide-react'
 
 interface SettingsFormProps {
   initialSettings: Settings | null
@@ -55,6 +55,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     terms_of_service_url: initialSettings?.metadata.terms_of_service_url || '',
     google_analytics_id: initialSettings?.metadata.google_analytics_id || '',
     email_signature: initialSettings?.metadata.email_signature || '',
+    test_emails: initialSettings?.metadata.test_emails || [''],
   })
 
   const handleInputChange = (field: keyof UpdateSettingsData, value: any) => {
@@ -64,6 +65,35 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     }))
     setError('')
     setSuccess('')
+  }
+
+  // Test email management functions
+  const addTestEmail = () => {
+    if (formData.test_emails && formData.test_emails.length < 5) {
+      setFormData(prev => ({
+        ...prev,
+        test_emails: [...(prev.test_emails || []), '']
+      }))
+    }
+  }
+
+  const removeTestEmail = (index: number) => {
+    const testEmails = formData.test_emails || []
+    if (testEmails.length > 1) {
+      setFormData(prev => ({
+        ...prev,
+        test_emails: testEmails.filter((_, i) => i !== index)
+      }))
+    }
+  }
+
+  const updateTestEmail = (index: number, value: string) => {
+    const testEmails = [...(formData.test_emails || [])]
+    testEmails[index] = value
+    setFormData(prev => ({
+      ...prev,
+      test_emails: testEmails
+    }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -87,14 +117,32 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
       return
     }
 
+    // Validate test emails
+    if (formData.test_emails) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+      const validTestEmails = formData.test_emails.filter(email => email.trim() !== '')
+      const invalidTestEmails = validTestEmails.filter(email => !emailRegex.test(email))
+      
+      if (invalidTestEmails.length > 0) {
+        setError(`Invalid test email addresses: ${invalidTestEmails.join(', ')}`)
+        return
+      }
+    }
+
     startTransition(async () => {
       try {
+        // Filter out empty test emails before sending
+        const validTestEmails = formData.test_emails?.filter(email => email.trim() !== '') || []
+
         const response = await fetch('/api/settings', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            ...formData,
+            test_emails: validTestEmails
+          }),
         })
 
         const result = await response.json()
@@ -137,10 +185,14 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <Tabs defaultValue="email" className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-7">
             <TabsTrigger value="email" className="flex items-center space-x-2">
               <Mail className="h-4 w-4" />
               <span>Email</span>
+            </TabsTrigger>
+            <TabsTrigger value="testing" className="flex items-center space-x-2">
+              <TestTube className="h-4 w-4" />
+              <span>Testing</span>
             </TabsTrigger>
             <TabsTrigger value="company" className="flex items-center space-x-2">
               <Building2 className="h-4 w-4" />
@@ -256,6 +308,83 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
                   <p className="text-xs text-gray-500">
                     Optional signature to append to all emails (supports HTML)
                   </p>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Testing Settings */}
+          <TabsContent value="testing" className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <TestTube className="h-5 w-5" />
+                  <span>Test Email Addresses</span>
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Configure email addresses for testing campaigns before sending
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  <Label>Test Email Addresses</Label>
+                  
+                  {formData.test_emails?.map((email, index) => (
+                    <div key={index} className="flex space-x-2">
+                      <Input
+                        type="email"
+                        placeholder="test@example.com"
+                        value={email}
+                        onChange={(e) => updateTestEmail(index, e.target.value)}
+                        disabled={isPending}
+                        className="flex-1"
+                      />
+                      {(formData.test_emails?.length || 0) > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeTestEmail(index)}
+                          disabled={isPending}
+                        >
+                          ×
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={addTestEmail}
+                    disabled={isPending || (formData.test_emails?.length || 0) >= 5}
+                    className="w-full"
+                  >
+                    + Add Test Email Address
+                  </Button>
+
+                  <p className="text-xs text-gray-500">
+                    These email addresses will be available for testing campaigns in draft mode. Maximum 5 addresses.
+                  </p>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="flex items-start space-x-2">
+                      <TestTube className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium text-blue-800">
+                          How Test Emails Work:
+                        </p>
+                        <ul className="text-sm text-blue-700 mt-1 space-y-1">
+                          <li>• Only available for campaigns in Draft status</li>
+                          <li>• Subject line includes [TEST] prefix</li>
+                          <li>• Template variables are replaced with sample data</li>
+                          <li>• Test banner is added to identify test emails</li>
+                          <li>• Saved addresses are automatically loaded for future tests</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
