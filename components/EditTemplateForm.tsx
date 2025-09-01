@@ -699,7 +699,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </Card>
       </div>
 
-      {/* AI Modal with Fixed Footer */}
+      {/* AI Modal with Fixed Footer - Updated to remove Back to Generate button */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
         <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
@@ -975,7 +975,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </div>
           </div>
 
-          {/* Fixed Footer */}
+          {/* Fixed Footer - Updated to remove Back to Generate button */}
           <div className="border-t bg-white px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               {/* Left side: Cancel button */}

@@ -833,7 +833,7 @@ export default function CreateTemplateForm() {
                 </span>
               </div>
               
-              {/* Mode switcher */}
+              {/* Mode switcher - only show switch to edit when content is generated */}
               <div className="flex items-center space-x-2">
                 {hasGeneratedContent && modalType === 'generate' && (
                   <Button
@@ -844,17 +844,6 @@ export default function CreateTemplateForm() {
                   >
                     Switch to Edit Mode
                     <ArrowRight className="h-4 w-4 ml-1" />
-                  </Button>
-                )}
-                {modalType === 'edit' && (
-                  <Button
-                    onClick={() => setModalType('generate')}
-                    size="sm"
-                    variant="outline"
-                    className="text-blue-600 border-blue-300 hover:bg-blue-50"
-                  >
-                    <ArrowRight className="h-4 w-4 mr-1 rotate-180" />
-                    Back to Generate
                   </Button>
                 )}
               </div>
@@ -1300,7 +1289,7 @@ export default function CreateTemplateForm() {
             </div>
           </div>
 
-          {/* Fixed Footer - Updated to match editor modal */}
+          {/* Fixed Footer - Updated to remove Back to Generate button */}
           <div className="border-t bg-white px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               {/* Left side: Cancel button */}
