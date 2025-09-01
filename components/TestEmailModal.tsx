@@ -3,19 +3,15 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Settings } from '@/types'
 
 interface TestEmailModalProps {
-  isOpen: boolean
-  onClose: () => void
   campaignId: string
   campaignName: string
 }
 
 export default function TestEmailModal({ 
-  isOpen, 
-  onClose, 
   campaignId, 
   campaignName 
 }: TestEmailModalProps) {
@@ -24,6 +20,7 @@ export default function TestEmailModal({
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [settings, setSettings] = useState<Settings | null>(null)
+  const [isOpen, setIsOpen] = useState(false)
 
   // Load settings and test emails when modal opens
   useEffect(() => {
@@ -137,7 +134,7 @@ export default function TestEmailModal({
       
       // Auto-close after 3 seconds on success
       setTimeout(() => {
-        onClose()
+        setIsOpen(false)
       }, 3000)
 
     } catch (error: any) {
@@ -151,11 +148,16 @@ export default function TestEmailModal({
     setError('')
     setSuccess('')
     setIsSending(false)
-    onClose()
+    setIsOpen(false)
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="btn-outline">
+          🧪 Send Test Email
+        </Button>
+      </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Send Test Email</DialogTitle>
