@@ -1045,7 +1045,7 @@ export default function CreateTemplateForm() {
                       <div className="space-y-2">
                         <Textarea
                           ref={editPromptRef}
-                          placeholder="e.g., 'Make it cosmic blue like the Cosmic CMS website', 'Add a call-to-action button', 'Change the tone to be more casual'"
+                          placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
                           value={editPrompt}
                           onChange={(e) => {
                             setEditPrompt(e.target.value)

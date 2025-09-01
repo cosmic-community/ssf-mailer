@@ -696,7 +696,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                         ref={aiPromptRef}
                         placeholder={editingSessionActive
                           ? "e.g., 'Make the call-to-action button larger', 'Add social media links at the bottom'"
-                          : "e.g., 'Make cosmic blue, like the cosmic cms website', 'Add a call-to-action button', 'Change the tone to be more casual'"
+                          : "e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
                         }
                         value={aiPrompt}
                         onChange={(e) => {
