@@ -863,7 +863,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     >
                       {isAIEditing ? (
                         <>
-                          <Wand2 className="mr-2 h-4 w-4 animate-spin" />
                           {editingSessionActive ? 'Refining...' : 'Editing with AI...'}
                         </>
                       ) : (

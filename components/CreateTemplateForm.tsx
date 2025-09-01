@@ -658,11 +658,7 @@ export default function CreateTemplateForm() {
                       className="bg-amber-600 hover:bg-amber-700 text-white px-3"
                       title="Generate subject from email content"
                     >
-                      {isGeneratingSubject ? (
-                        <Sparkles className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-4 w-4" />
-                      )}
+                      <Sparkles className="h-4 w-4" />
                     </Button>
                   </div>
                   {!formData.content.trim() && (
@@ -1009,7 +1005,6 @@ export default function CreateTemplateForm() {
                       >
                         {isAIGenerating ? (
                           <>
-                            <Sparkles className="mr-2 h-4 w-4 animate-spin" />
                             Generating with Cosmic AI...
                           </>
                         ) : (
@@ -1181,7 +1176,6 @@ export default function CreateTemplateForm() {
                       >
                         {isAIEditing ? (
                           <>
-                            <Wand2 className="mr-2 h-4 w-4 animate-spin" />
                             Editing with AI...
                           </>
                         ) : (
