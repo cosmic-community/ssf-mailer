@@ -15,7 +15,7 @@ export default function TestEmailModal({
   campaignId, 
   campaignName 
 }: TestEmailModalProps) {
-  const [testEmails, setTestEmails] = useState<string[]>([''])
+  const [testEmailsInput, setTestEmailsInput] = useState<string>('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -35,7 +35,8 @@ export default function TestEmailModal({
       if (response.ok) {
         const data = await response.json()
         if (data.settings?.metadata?.test_emails?.length > 0) {
-          setTestEmails(data.settings.metadata.test_emails)
+          // Join existing test emails with commas
+          setTestEmailsInput(data.settings.metadata.test_emails.join(', '))
         }
         setSettings(data.settings)
       }
@@ -71,20 +72,12 @@ export default function TestEmailModal({
     }
   }
 
-  const addEmailField = () => {
-    setTestEmails([...testEmails, ''])
-  }
-
-  const removeEmailField = (index: number) => {
-    if (testEmails.length > 1) {
-      setTestEmails(testEmails.filter((_, i) => i !== index))
-    }
-  }
-
-  const updateEmail = (index: number, value: string) => {
-    const newEmails = [...testEmails]
-    newEmails[index] = value
-    setTestEmails(newEmails)
+  const parseEmailsFromInput = (input: string): string[] => {
+    // Split by comma and clean up each email
+    return input
+      .split(',')
+      .map(email => email.trim())
+      .filter(email => email !== '')
   }
 
   const handleSendTest = async () => {
@@ -93,8 +86,8 @@ export default function TestEmailModal({
     setIsSending(true)
 
     try {
-      // Filter out empty emails
-      const validEmails = testEmails.filter(email => email.trim() !== '')
+      // Parse emails from comma-separated input
+      const validEmails = parseEmailsFromInput(testEmailsInput)
       
       if (validEmails.length === 0) {
         setError('Please enter at least one test email address')
@@ -184,39 +177,19 @@ export default function TestEmailModal({
               Test Email Addresses
             </label>
             
-            {testEmails.map((email, index) => (
-              <div key={index} className="flex space-x-2">
-                <Input
-                  type="email"
-                  placeholder="Enter email address"
-                  value={email}
-                  onChange={(e) => updateEmail(index, e.target.value)}
-                  disabled={isSending}
-                />
-                {testEmails.length > 1 && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => removeEmailField(index)}
-                    disabled={isSending}
-                  >
-                    ×
-                  </Button>
-                )}
-              </div>
-            ))}
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={addEmailField}
-              disabled={isSending || testEmails.length >= 5}
-              className="w-full"
-            >
-              + Add Another Email
-            </Button>
+            <div>
+              <Input
+                type="text"
+                placeholder="Enter email addresses separated by commas (e.g., user1@example.com, user2@example.com)"
+                value={testEmailsInput}
+                onChange={(e) => setTestEmailsInput(e.target.value)}
+                disabled={isSending}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                Separate multiple email addresses with commas
+              </p>
+            </div>
 
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
               <div className="flex items-start space-x-2">
@@ -249,7 +222,7 @@ export default function TestEmailModal({
           </Button>
           <Button
             onClick={handleSendTest}
-            disabled={isSending || testEmails.every(email => email.trim() === '')}
+            disabled={isSending || testEmailsInput.trim() === ''}
             className="btn-primary"
           >
             {isSending ? 'Sending...' : 'Send Test Email'}
