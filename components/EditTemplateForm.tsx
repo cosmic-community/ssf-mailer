@@ -65,6 +65,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     active: template.metadata.active
   })
 
+  // Store original template data for reset functionality
+  const [originalFormData] = useState({
+    name: template.metadata.name,
+    subject: template.metadata.subject,
+    content: template.metadata.content,
+    template_type: template.metadata.template_type.value as TemplateType,
+    active: template.metadata.active
+  })
+
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
     textarea.style.height = 'auto'
@@ -110,6 +119,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }))
     setError('')
     setSuccess('')
+  }
+
+  // Reset form to original values
+  const handleReset = () => {
+    setFormData(originalFormData)
+    setError('')
+    setSuccess('')
+    
+    // Auto-resize content textarea after reset
+    setTimeout(() => {
+      if (contentRef.current) {
+        autoResize(contentRef.current)
+      }
+    }, 100)
   }
 
   const showToast = () => {
@@ -331,6 +354,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setShowAIModal(false)
   }
 
+  // Handle modal close - close modal without saving
+  const handleModalCancel = () => {
+    setShowAIModal(false)
+    // Optionally end the editing session or keep it active for later
+  }
+
+  // Handle modal save - save changes and close modal
+  const handleModalSave = async () => {
+    // Trigger the main form submission
+    await handleSubmit(new Event('submit') as any)
+    setShowAIModal(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -541,6 +577,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 </Button>
                 <Button
                   type="button"
+                  onClick={handleReset}
+                  variant="outline"
+                  disabled={isPending}
+                  className="flex items-center space-x-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Reset</span>
+                </Button>
+                <Button
+                  type="button"
                   onClick={handleSubmit}
                   disabled={isPending}
                   className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
@@ -649,27 +695,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </Card>
       </div>
 
-      {/* AI Modal */}
+      {/* AI Modal with Fixed Footer */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
-        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0">
-          <DialogHeader className="px-6 py-4 border-b">
-            <DialogTitle className="flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Wand2 className="h-5 w-5 text-purple-600" />
-                <span>{editingSessionActive ? 'Continue AI Editing' : 'AI Content Editor'}</span>
-              </div>
-              
-              {/* Session controls */}
-              {editingSessionActive && (
-                <Button
-                  onClick={endEditingSession}
-                  size="sm"
-                  variant="outline"
-                  className="text-gray-600 border-gray-300 hover:bg-gray-50"
-                >
-                  End Session
-                </Button>
-              )}
+        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
+            <DialogTitle className="flex items-center space-x-2">
+              <Wand2 className="h-5 w-5 text-purple-600" />
+              <span>{editingSessionActive ? 'Continue AI Editing' : 'AI Content Editor'}</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -936,6 +968,43 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   </Card>
                 </TabsContent>
               </Tabs>
+            </div>
+          </div>
+
+          {/* Fixed Footer */}
+          <div className="border-t bg-white px-6 py-4 flex-shrink-0">
+            <div className="flex items-center justify-between">
+              {/* Left side: Cancel button */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleModalCancel}
+                disabled={isAIEditing}
+              >
+                Cancel
+              </Button>
+
+              {/* Right side: Reset and Save buttons */}
+              <div className="flex items-center space-x-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleReset}
+                  disabled={isAIEditing || isPending}
+                  className="flex items-center space-x-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  <span>Reset</span>
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleModalSave}
+                  disabled={isAIEditing || isPending}
+                  className="bg-slate-800 hover:bg-slate-900 text-white"
+                >
+                  {isPending ? 'Saving...' : 'Save'}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
