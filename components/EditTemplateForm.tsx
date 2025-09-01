@@ -616,20 +616,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     className="bg-purple-600 hover:bg-purple-700 text-white"
                   >
                     <Wand2 className="h-4 w-4 mr-2" />
-                    {editingSessionActive ? 'Continue Editing' : 'Edit with AI'}
+                    Edit with AI
                   </Button>
                 </div>
               </div>
-              
-              {/* AI editing session indicator */}
-              {editingSessionActive && (
-                <div className="flex items-center space-x-2 px-3 py-2 bg-purple-50 border border-purple-200 rounded-lg">
-                  <Wand2 className="h-4 w-4 text-purple-600" />
-                  <span className="text-sm text-purple-800">AI editing session active</span>
-                  <ArrowRight className="h-4 w-4 text-purple-400" />
-                  <span className="text-sm text-purple-700">Continue refining</span>
-                </div>
-              )}
             </CardHeader>
 
             <CardContent className="px-6 pb-6">
@@ -705,7 +695,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
             <DialogTitle className="flex items-center space-x-2">
               <Wand2 className="h-5 w-5 text-purple-600" />
-              <span>{editingSessionActive ? 'Continue AI Editing' : 'AI Content Editor'}</span>
+              <span>AI Content Editor</span>
             </DialogTitle>
           </DialogHeader>
 
@@ -717,23 +707,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <CardHeader>
                     <CardTitle className="flex items-center space-x-2 text-purple-800">
                       <Wand2 className="h-5 w-5" />
-                      <span>{editingSessionActive ? 'Refine Further' : 'Edit Content'}</span>
+                      <span>Edit Content</span>
                     </CardTitle>
                     <p className="text-purple-700 text-sm">
-                      {editingSessionActive 
-                        ? 'Add more refinement instructions to continue improving the template'
-                        : 'How should we improve the current content?'
-                      }
+                      How should we improve the current content?
                     </p>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-2">
                       <Textarea
                         ref={aiPromptRef}
-                        placeholder={editingSessionActive
-                          ? "e.g., 'Make the call-to-action button larger', 'Add social media links at the bottom'"
-                          : "e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
-                        }
+                        placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
                         value={aiPrompt}
                         onChange={(e) => {
                           setAiPrompt(e.target.value)
@@ -863,12 +847,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     >
                       {isAIEditing ? (
                         <>
-                          {editingSessionActive ? 'Refining...' : 'Editing with AI...'}
+                          Editing with AI...
                         </>
                       ) : (
                         <>
                           <Wand2 className="mr-2 h-4 w-4" />
-                          {editingSessionActive ? 'Apply Refinement' : 'Edit with AI'}
+                          Edit with AI
                         </>
                       )}
                     </Button>
