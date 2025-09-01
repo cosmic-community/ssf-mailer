@@ -360,11 +360,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     // Optionally end the editing session or keep it active for later
   }
 
-  // Handle modal save - save changes and close modal
-  const handleModalSave = async () => {
-    // Trigger the main form submission
-    await handleSubmit(new Event('submit') as any)
+  // Handle modal save - ONLY close modal and update content, do NOT save to database
+  const handleModalSave = () => {
+    // Just close the modal - the template content has already been updated in formData
+    // This allows the user to continue editing or manually save the template later
     setShowAIModal(false)
+    
+    // Show a message indicating the content has been updated but not saved
+    setSuccess('Template content updated! Click "Update Template" to save your changes.')
+    showToast()
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -999,10 +1003,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 <Button
                   type="button"
                   onClick={handleModalSave}
-                  disabled={isAIEditing || isPending}
+                  disabled={isAIEditing}
                   className="bg-slate-800 hover:bg-slate-900 text-white"
                 >
-                  {isPending ? 'Saving...' : 'Save'}
+                  Save
                 </Button>
               </div>
             </div>
