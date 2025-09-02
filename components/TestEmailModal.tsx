@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Settings } from '@/types'
 
@@ -17,6 +18,7 @@ export default function TestEmailModal({
 }: TestEmailModalProps) {
   const [testEmailsInput, setTestEmailsInput] = useState<string>('')
   const [isSending, setIsSending] = useState(false)
+  const [isLoadingEmails, setIsLoadingEmails] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [settings, setSettings] = useState<Settings | null>(null)
@@ -30,6 +32,7 @@ export default function TestEmailModal({
   }, [isOpen])
 
   const loadSettings = async () => {
+    setIsLoadingEmails(true)
     try {
       const response = await fetch('/api/settings')
       if (response.ok) {
@@ -42,6 +45,8 @@ export default function TestEmailModal({
       }
     } catch (error) {
       console.error('Failed to load settings:', error)
+    } finally {
+      setIsLoadingEmails(false)
     }
   }
 
@@ -177,17 +182,29 @@ export default function TestEmailModal({
               Test Email Addresses
             </label>
             
-            <div>
+            <div className="relative">
               <Input
                 type="text"
-                placeholder="Enter email addresses separated by commas (e.g., user1@example.com, user2@example.com)"
+                placeholder={
+                  isLoadingEmails 
+                    ? "Loading saved test emails..." 
+                    : "Enter email addresses separated by commas (e.g., user1@example.com, user2@example.com)"
+                }
                 value={testEmailsInput}
                 onChange={(e) => setTestEmailsInput(e.target.value)}
-                disabled={isSending}
-                className="w-full"
+                disabled={isSending || isLoadingEmails}
+                className="w-full pr-10"
               />
+              {isLoadingEmails && (
+                <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none">
+                  <LoadingSpinner size="sm" variant="primary" />
+                </div>
+              )}
               <p className="text-xs text-gray-500 mt-1">
-                Separate multiple email addresses with commas
+                {isLoadingEmails 
+                  ? "Loading your previously saved test emails..." 
+                  : "Separate multiple email addresses with commas"
+                }
               </p>
             </div>
 
@@ -222,10 +239,17 @@ export default function TestEmailModal({
           </Button>
           <Button
             onClick={handleSendTest}
-            disabled={isSending || testEmailsInput.trim() === ''}
+            disabled={isSending || isLoadingEmails || testEmailsInput.trim() === ''}
             className="btn-primary"
           >
-            {isSending ? 'Sending...' : 'Send Test Email'}
+            {isSending ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                Sending...
+              </>
+            ) : (
+              'Send Test Email'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
