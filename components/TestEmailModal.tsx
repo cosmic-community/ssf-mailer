@@ -36,6 +36,7 @@ export default function TestEmailModal({
         const data = await response.json()
         if (data.settings?.metadata?.test_emails?.length > 0) {
           // Join existing test emails with commas
+          console.log(data.settings.metadata.test_emails)
           setTestEmailsInput(data.settings.metadata.test_emails.join(', '))
         }
         setSettings(data.settings)
