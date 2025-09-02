@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight, RefreshCw } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 
 interface ContextItem {
@@ -581,16 +581,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 </Button>
                 <Button
                   type="button"
-                  onClick={handleReset}
-                  variant="outline"
-                  disabled={isPending}
-                  className="flex items-center space-x-2"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Reset</span>
-                </Button>
-                <Button
-                  type="button"
                   onClick={handleSubmit}
                   disabled={isPending}
                   className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
@@ -958,7 +948,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </div>
           </div>
 
-          {/* Fixed Footer - Updated to remove Back to Generate button */}
+          {/* Fixed Footer - Updated to remove Reset button */}
           <div className="border-t bg-white px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
               {/* Left side: Cancel button */}
@@ -971,18 +961,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 Cancel
               </Button>
 
-              {/* Right side: Reset and Save buttons */}
+              {/* Right side: Save button only */}
               <div className="flex items-center space-x-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleReset}
-                  disabled={isAIEditing || isPending}
-                  className="flex items-center space-x-2"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  <span>Reset</span>
-                </Button>
                 <Button
                   type="button"
                   onClick={handleModalSave}
