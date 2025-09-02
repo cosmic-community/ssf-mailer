@@ -5,22 +5,22 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, AlertCircle, Upload } from 'lucide-react'
+import { CheckCircle, AlertCircle, Upload, Info } from 'lucide-react'
 
 interface UploadResult {
   success: boolean
-  imported: number
-  errors: number
-  details: {
-    successful: Array<{
-      row: number
-      name: string
-      email: string
-      success: boolean
-      id?: string
-    }>
-    failed: string[]
+  message: string
+  results: {
+    total_processed: number
+    successful: number
+    duplicates: number
+    validation_errors: number
+    creation_errors: number
   }
+  contacts: any[]
+  duplicates?: string[]
+  validation_errors?: string[]
+  creation_errors?: string[]
 }
 
 export default function CSVUploadForm() {
@@ -69,12 +69,7 @@ export default function CSVUploadForm() {
         throw new Error(result.error || 'Upload failed')
       }
 
-      // Safely handle the response with proper type checking
-      if (result && typeof result === 'object' && 'success' in result) {
-        setUploadResult(result as UploadResult)
-      } else {
-        throw new Error('Invalid response format')
-      }
+      setUploadResult(result)
 
     } catch (err) {
       console.error('Upload error:', err)
@@ -125,19 +120,56 @@ export default function CSVUploadForm() {
   }
 
   return (
-    <div className="card max-w-2xl">
+    <div className="card max-w-4xl">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Contacts from CSV</h2>
       
-      {/* Instructions */}
-      <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-        <h3 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements</h3>
-        <ul className="text-sm text-blue-700 space-y-1">
-          <li>• Required columns: <code className="bg-blue-100 px-1 rounded">first_name</code>, <code className="bg-blue-100 px-1 rounded">email</code></li>
-          <li>• Optional columns: <code className="bg-blue-100 px-1 rounded">last_name</code>, <code className="bg-blue-100 px-1 rounded">tags</code>, <code className="bg-blue-100 px-1 rounded">status</code>, <code className="bg-blue-100 px-1 rounded">subscribe_date</code>, <code className="bg-blue-100 px-1 rounded">notes</code></li>
-          <li>• Use semicolons (;) to separate multiple tags</li>
-          <li>• Status values: Active, Unsubscribed, Bounced (defaults to Active)</li>
-          <li>• Date format: YYYY-MM-DD</li>
-        </ul>
+      {/* Enhanced Instructions */}
+      <div className="mb-6 space-y-4">
+        <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <div className="flex items-start space-x-2">
+            <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-blue-800 mb-2">Smart Column Detection</h3>
+              <p className="text-sm text-blue-700 mb-2">
+                Our system automatically detects and maps your CSV columns. You don't need to worry about column order or exact naming.
+              </p>
+              <div className="text-sm text-blue-700">
+                <strong>Required columns (we'll find these automatically):</strong>
+                <ul className="ml-4 mt-1 space-y-1">
+                  <li>• <strong>Email:</strong> email, emailaddress, mail, e-mail</li>
+                  <li>• <strong>First Name:</strong> first_name, firstname, fname, name</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+            <h3 className="text-sm font-medium text-green-800 mb-2">Optional Fields (auto-detected)</h3>
+            <ul className="text-sm text-green-700 space-y-1">
+              <li>• <strong>Last Name:</strong> last_name, lastname, surname</li>
+              <li>• <strong>Status:</strong> status, state, subscription</li>
+              <li>• <strong>Tags/Interests:</strong> tags, categories, groups, interests</li>
+              <li>• <strong>Subscribe Date:</strong> subscribe_date, join_date, optin_time</li>
+              <li>• <strong>Notes:</strong> notes, comments, description</li>
+            </ul>
+          </div>
+          
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+            <h3 className="text-sm font-medium text-gray-800 mb-2">What gets ignored</h3>
+            <p className="text-sm text-gray-600 mb-2">
+              All other columns will be automatically ignored:
+            </p>
+            <ul className="text-xs text-gray-500 space-y-1">
+              <li>• MEMBER_RATING, LEID, EUID</li>
+              <li>• OPTIN_IP, CONFIRM_IP</li>
+              <li>• TIMEZONE, GMTOFF, DSTOFF</li>
+              <li>• CC, REGION, LAST_CHANGED</li>
+              <li>• Any other columns not needed</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
       {/* Upload Form */}
@@ -153,6 +185,9 @@ export default function CSVUploadForm() {
               disabled={isUploading}
               required
             />
+            <p className="text-sm text-gray-500">
+              Any CSV format with email and name columns will work. Maximum file size: 10MB
+            </p>
           </div>
 
           {error && (
@@ -174,11 +209,12 @@ export default function CSVUploadForm() {
             <Button
               type="submit"
               disabled={isUploading}
+              className="min-w-[140px]"
             >
               {isUploading ? (
                 <>
                   <Upload className="mr-2 h-4 w-4 animate-spin" />
-                  Uploading...
+                  Processing...
                 </>
               ) : (
                 <>
@@ -201,36 +237,74 @@ export default function CSVUploadForm() {
             <div>
               <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
               <p className="text-gray-600">
-                {uploadResult.imported} contacts imported successfully
-                {uploadResult.errors > 0 && `, ${uploadResult.errors} errors`}
+                {uploadResult.results.successful} contacts imported successfully
+                {uploadResult.results.validation_errors > 0 && `, ${uploadResult.results.validation_errors} errors`}
               </p>
             </div>
           </div>
 
+          {/* Detailed Results Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded">
+              <div className="text-2xl font-bold text-blue-600">{uploadResult.results.total_processed}</div>
+              <div className="text-sm text-blue-700">Rows Processed</div>
+            </div>
+            <div className="p-4 bg-green-50 border border-green-200 rounded">
+              <div className="text-2xl font-bold text-green-600">{uploadResult.results.successful}</div>
+              <div className="text-sm text-green-700">Successfully Imported</div>
+            </div>
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <div className="text-2xl font-bold text-yellow-600">{uploadResult.results.duplicates}</div>
+              <div className="text-sm text-yellow-700">Duplicates Skipped</div>
+            </div>
+            <div className="p-4 bg-red-50 border border-red-200 rounded">
+              <div className="text-2xl font-bold text-red-600">{uploadResult.results.validation_errors}</div>
+              <div className="text-sm text-red-700">Validation Errors</div>
+            </div>
+          </div>
+
           {/* Success Summary */}
-          {uploadResult.imported > 0 && (
+          {uploadResult.results.successful > 0 && (
             <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.imported})</h4>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {uploadResult.details.successful.map((contact, index) => (
-                  <div key={index} className="text-sm text-green-700">
-                    Row {contact.row}: {contact.name} ({contact.email})
-                  </div>
-                ))}
+              <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful})</h4>
+              <p className="text-sm text-green-700">
+                {uploadResult.results.successful} contacts have been added to your list and are ready to receive campaigns.
+              </p>
+            </div>
+          )}
+
+          {/* Duplicates Summary */}
+          {uploadResult.results.duplicates > 0 && uploadResult.duplicates && (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({uploadResult.results.duplicates})</h4>
+              <div className="max-h-32 overflow-y-auto">
+                <p className="text-sm text-yellow-700">
+                  These email addresses already exist: 
+                </p>
+                <div className="mt-1 text-xs text-yellow-600">
+                  {uploadResult.duplicates.slice(0, 10).join(', ')}
+                  {uploadResult.duplicates.length > 10 && ` and ${uploadResult.duplicates.length - 10} more`}
+                </div>
               </div>
             </div>
           )}
 
           {/* Error Summary */}
-          {uploadResult.errors > 0 && uploadResult.details.failed.length > 0 && (
+          {uploadResult.results.validation_errors > 0 && uploadResult.validation_errors && (
             <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <h4 className="font-medium text-red-800 mb-2">Errors ({uploadResult.errors})</h4>
-              <div className="max-h-32 overflow-y-auto space-y-1">
-                {uploadResult.details.failed.map((error, index) => (
+              <h4 className="font-medium text-red-800 mb-2">Validation Errors ({uploadResult.results.validation_errors})</h4>
+              <div className="max-h-40 overflow-y-auto space-y-1">
+                {uploadResult.validation_errors.slice(0, 5).map((error, index) => (
                   <div key={index} className="text-sm text-red-700">
                     {error}
                   </div>
                 ))}
+                {uploadResult.validation_errors.length > 5 && (
+                  <div className="text-sm text-red-600 mt-2 p-2 bg-red-100 rounded">
+                    ... and {uploadResult.validation_errors.length - 5} more errors. 
+                    Please check your CSV format and try again.
+                  </div>
+                )}
               </div>
             </div>
           )}
