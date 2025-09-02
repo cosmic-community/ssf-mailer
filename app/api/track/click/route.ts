@@ -2,110 +2,90 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
 
 export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams
+  const campaignId = searchParams.get('c')
+  const contactId = searchParams.get('u')
+  const linkUrl = searchParams.get('url')
+  
   try {
-    const { searchParams } = new URL(request.url)
-    const campaignId = searchParams.get('c')
-    const contactId = searchParams.get('u')
-    const targetUrl = searchParams.get('url')
-    const timestamp = searchParams.get('t')
+    // Track the click if campaign and contact IDs are provided
+    if (campaignId && contactId) {
+      try {
+        // Get the campaign to update click stats
+        const { object: campaign } = await cosmic.objects
+          .findOne({ type: 'marketing-campaigns', id: campaignId })
+          .props(['id', 'metadata'])
+          .depth(1)
 
-    console.log('=== CLICK TRACKING REQUEST ===')
-    console.log('Campaign ID:', campaignId)
-    console.log('Contact ID:', contactId)
-    console.log('Target URL:', targetUrl)
-    console.log('Timestamp:', timestamp)
-
-    if (!targetUrl) {
-      console.error('❌ No target URL provided for click tracking')
-      return NextResponse.redirect('/')
-    }
-
-    if (!campaignId) {
-      console.log('⚠️  No campaign ID provided, redirecting without tracking')
-      return NextResponse.redirect(targetUrl)
-    }
-
-    try {
-      console.log('Processing click tracking for campaign:', campaignId)
-
-      // Get the current campaign to retrieve existing stats
-      const { object: campaign } = await cosmic.objects
-        .findOne({ type: 'marketing-campaigns', id: campaignId })
-        .props(['id', 'title', 'metadata'])
-        .depth(1)
-
-      if (!campaign) {
-        console.error('❌ Campaign not found:', campaignId)
-        return NextResponse.redirect(targetUrl)
-      }
-
-      console.log('✅ Campaign found for click tracking:', campaign.title)
-      console.log('Current stats before click update:', JSON.stringify(campaign.metadata?.stats, null, 2))
-
-      // Get current stats or initialize with defaults
-      const currentStats = campaign.metadata?.stats || {
-        sent: 0,
-        delivered: 0,
-        opened: 0,
-        clicked: 0,
-        bounced: 0,
-        unsubscribed: 0,
-        open_rate: '0%',
-        click_rate: '0%'
-      }
-
-      // Increment the clicked count
-      const newClickedCount = (currentStats.clicked || 0) + 1
-      const sentCount = currentStats.sent || 1 // Prevent division by zero
-      
-      // Calculate new click rate
-      const newClickRate = sentCount > 0 
-        ? Math.round((newClickedCount / sentCount) * 100)
-        : 0
-
-      const updatedStats = {
-        ...currentStats,
-        clicked: newClickedCount,
-        click_rate: `${newClickRate}%`
-      }
-
-      console.log('📊 Updated stats to save:', JSON.stringify(updatedStats, null, 2))
-
-      // Update only the stats in the campaign metadata
-      const updateResult = await cosmic.objects.updateOne(campaignId, {
-        metadata: {
-          stats: updatedStats
+        if (campaign && campaign.metadata?.stats) {
+          const currentStats = campaign.metadata.stats
+          const newClickCount = (currentStats.clicked || 0) + 1
+          const sentCount = currentStats.sent || 0
+          
+          // Update click stats
+          await cosmic.objects.updateOne(campaignId, {
+            metadata: {
+              stats: {
+                ...currentStats,
+                clicked: newClickCount,
+                click_rate: sentCount > 0 ? `${Math.round((newClickCount / sentCount) * 100)}%` : '0%'
+              }
+            }
+          })
         }
-      })
-
-      if (updateResult?.object) {
-        console.log('✅ Click tracking updated successfully!')
-        console.log('New clicked count:', newClickedCount)
-        console.log('New click rate:', `${newClickRate}%`)
-      } else {
-        console.error('❌ Failed to update campaign stats - no object returned')
-      }
-
-    } catch (trackingError) {
-      console.error('❌ Error in click tracking processing:', trackingError)
-      if (trackingError && typeof trackingError === 'object') {
-        console.error('Tracking error details:', JSON.stringify(trackingError, null, 2))
+        
+        console.log(`Click tracked: Campaign ${campaignId}, Contact ${contactId}`)
+      } catch (trackingError) {
+        // Log tracking errors but don't prevent redirect
+        console.error('Error tracking click:', trackingError)
       }
     }
-
-    console.log('=== END CLICK TRACKING ===')
-    console.log('Redirecting to:', targetUrl)
-
-    // Always redirect to the original URL, even if tracking fails
-    return NextResponse.redirect(targetUrl)
+    
+    // Redirect to the target URL if provided
+    if (linkUrl) {
+      try {
+        const decodedUrl = decodeURIComponent(linkUrl)
+        
+        // Validate URL format
+        const url = new URL(decodedUrl)
+        
+        // Allow http and https protocols
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          return NextResponse.redirect(decodedUrl)
+        } else {
+          throw new Error('Invalid URL protocol')
+        }
+      } catch (urlError) {
+        console.error('Error processing redirect URL:', urlError)
+        // Return a fallback response for invalid URLs
+        return new NextResponse('Invalid redirect URL', { status: 400 })
+      }
+    }
+    
+    // If no URL provided, return a simple response
+    return new NextResponse('Click tracked', { status: 200 })
+    
   } catch (error) {
-    console.error('❌ Critical error in click tracking:', error)
-    if (error && typeof error === 'object') {
+    // Fix TS2339: Add proper error type checking
+    console.error('Error in click tracking:', error)
+    if (error instanceof Error) {
       console.error('Error stack:', error.stack)
     }
     
-    // Redirect to the original URL even if tracking fails
-    const targetUrl = new URL(request.url).searchParams.get('url')
-    return NextResponse.redirect(targetUrl || '/')
+    // Try to redirect to the URL even if tracking fails
+    if (linkUrl) {
+      try {
+        const decodedUrl = decodeURIComponent(linkUrl)
+        const url = new URL(decodedUrl)
+        
+        if (url.protocol === 'http:' || url.protocol === 'https:') {
+          return NextResponse.redirect(decodedUrl)
+        }
+      } catch (redirectError) {
+        console.error('Error in fallback redirect:', redirectError)
+      }
+    }
+    
+    return new NextResponse('Error processing request', { status: 500 })
   }
 }
