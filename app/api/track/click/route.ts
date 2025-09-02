@@ -2,90 +2,116 @@ import { NextRequest, NextResponse } from 'next/server'
 import { cosmic } from '@/lib/cosmic'
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const campaignId = searchParams.get('c')
-  const contactId = searchParams.get('u')
-  const linkUrl = searchParams.get('url')
-  
   try {
-    // Track the click if campaign and contact IDs are provided
-    if (campaignId && contactId) {
-      try {
-        // Get the campaign to update click stats
-        const { object: campaign } = await cosmic.objects
-          .findOne({ type: 'marketing-campaigns', id: campaignId })
-          .props(['id', 'metadata'])
-          .depth(1)
+    const { searchParams } = new URL(request.url)
+    const campaignId = searchParams.get('c')
+    const contactId = searchParams.get('contact')
+    const url = searchParams.get('url')
 
-        if (campaign && campaign.metadata?.stats) {
-          const currentStats = campaign.metadata.stats
-          const newClickCount = (currentStats.clicked || 0) + 1
-          const sentCount = currentStats.sent || 0
-          
-          // Update click stats
-          await cosmic.objects.updateOne(campaignId, {
-            metadata: {
-              stats: {
-                ...currentStats,
-                clicked: newClickCount,
-                click_rate: sentCount > 0 ? `${Math.round((newClickCount / sentCount) * 100)}%` : '0%'
-              }
+    if (!campaignId || !url) {
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
+    }
+
+    try {
+      // Get the current campaign to update click stats
+      const { object: campaign } = await cosmic.objects.findOne({
+        type: 'marketing-campaigns',
+        id: campaignId
+      }).props(['id', 'metadata'])
+
+      if (campaign?.metadata?.stats) {
+        const currentStats = campaign.metadata.stats
+        const newClickCount = (currentStats.clicked || 0) + 1
+        const totalSent = currentStats.sent || 1
+        const newClickRate = `${Math.round((newClickCount / totalSent) * 100)}%`
+
+        // Update campaign stats with new click data
+        await cosmic.objects.updateOne(campaignId, {
+          metadata: {
+            stats: {
+              ...currentStats,
+              clicked: newClickCount,
+              click_rate: newClickRate
             }
-          })
-        }
-        
-        console.log(`Click tracked: Campaign ${campaignId}, Contact ${contactId}`)
-      } catch (trackingError) {
-        // Log tracking errors but don't prevent redirect
-        console.error('Error tracking click:', trackingError)
+          }
+        })
       }
+    } catch (statsError) {
+      // Log stats update error but don't fail the redirect
+      console.error('Error updating click stats:', statsError)
     }
-    
-    // Redirect to the target URL if provided
-    if (linkUrl) {
-      try {
-        const decodedUrl = decodeURIComponent(linkUrl)
-        
-        // Validate URL format
-        const url = new URL(decodedUrl)
-        
-        // Allow http and https protocols
-        if (url.protocol === 'http:' || url.protocol === 'https:') {
-          return NextResponse.redirect(decodedUrl)
-        } else {
-          throw new Error('Invalid URL protocol')
+
+    // Create tracking event (optional - for detailed analytics)
+    try {
+      await cosmic.objects.insertOne({
+        type: 'email-tracking-events',
+        title: `Click Event - ${new Date().toISOString()}`,
+        status: 'published',
+        metadata: {
+          event_type: 'click',
+          campaign_id: campaignId,
+          contact_id: contactId,
+          url: url,
+          timestamp: new Date().toISOString(),
+          user_agent: request.headers.get('user-agent') || '',
+          ip_address: request.headers.get('x-forwarded-for') || 
+                     request.headers.get('x-real-ip') || 
+                     'unknown'
         }
-      } catch (urlError) {
-        console.error('Error processing redirect URL:', urlError)
-        // Return a fallback response for invalid URLs
-        return new NextResponse('Invalid redirect URL', { status: 400 })
-      }
+      })
+    } catch (trackingError) {
+      // Log tracking error but don't fail the redirect
+      console.error('Error creating tracking event:', trackingError)
     }
-    
-    // If no URL provided, return a simple response
-    return new NextResponse('Click tracked', { status: 200 })
-    
+
+    // Redirect to the actual URL
+    return NextResponse.redirect(decodeURIComponent(url))
+
   } catch (error) {
-    // Fix TS2339: Add proper error type checking
     console.error('Error in click tracking:', error)
-    if (error instanceof Error) {
-      console.error('Error stack:', error.stack)
-    }
     
-    // Try to redirect to the URL even if tracking fails
-    if (linkUrl) {
-      try {
-        const decodedUrl = decodeURIComponent(linkUrl)
-        const url = new URL(decodedUrl)
-        
-        if (url.protocol === 'http:' || url.protocol === 'https:') {
-          return NextResponse.redirect(decodedUrl)
-        }
-      } catch (redirectError) {
-        console.error('Error in fallback redirect:', redirectError)
+    // Provide a safe fallback - extract the URL parameter and redirect if possible
+    try {
+      const { searchParams } = new URL(request.url)
+      const fallbackUrl = searchParams.get('url')
+      
+      if (fallbackUrl) {
+        return NextResponse.redirect(decodeURIComponent(fallbackUrl))
       }
+    } catch (fallbackError) {
+      console.error('Fallback redirect failed:', fallbackError)
     }
-    
-    return new NextResponse('Error processing request', { status: 500 })
+
+    // If we can't redirect, show an error page
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Link Error</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+              max-width: 600px; 
+              margin: 100px auto; 
+              padding: 20px;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Unable to Process Link</h1>
+          <p>We encountered an error while processing your request. Please try again later.</p>
+          <p><a href="https://cosmicjs.com">Return to Home</a></p>
+        </body>
+      </html>
+      `,
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      }
+    )
   }
 }
