@@ -51,7 +51,7 @@ function createColumnMap(headers: string[]): Record<string, number> {
   Object.entries(fieldMappings).forEach(([field, variations]) => {
     for (let i = 0; i < normalizedHeaders.length; i++) {
       const normalized = normalizedHeaders[i]
-      if (variations.includes(normalized) || normalized.includes(field.replace('_', ''))) {
+      if (normalized && variations.includes(normalized) || (normalized && normalized.includes(field.replace('_', '')))) {
         columnMap[field] = i
         break
       }
@@ -206,20 +206,20 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
       
       // Extract data using column mapping
       try {
-        // Required fields
+        // Required fields - Add null checks for undefined values
         const emailValue = row[columnMap.email]?.replace(/^["']|["']$/g, '').trim() || ''
         const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, '').trim() || ''
         
         contact.email = emailValue.toLowerCase()
         contact.first_name = firstNameValue
         
-        // Optional fields
-        if (columnMap.last_name !== undefined) {
+        // Optional fields - Add null checks for potentially undefined column indices
+        if (columnMap.last_name !== undefined && row[columnMap.last_name] !== undefined) {
           const lastNameValue = row[columnMap.last_name]?.replace(/^["']|["']$/g, '').trim() || ''
           contact.last_name = lastNameValue
         }
         
-        if (columnMap.status !== undefined) {
+        if (columnMap.status !== undefined && row[columnMap.status] !== undefined) {
           const statusValue = row[columnMap.status]?.replace(/^["']|["']$/g, '').trim() || ''
           const normalizedStatus = statusValue.toLowerCase()
           if (['active', 'unsubscribed', 'bounced'].includes(normalizedStatus)) {
@@ -231,7 +231,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
           contact.status = 'Active'
         }
         
-        if (columnMap.tags !== undefined) {
+        if (columnMap.tags !== undefined && row[columnMap.tags] !== undefined) {
           const tagsValue = row[columnMap.tags]?.replace(/^["']|["']$/g, '').trim() || ''
           if (tagsValue) {
             // Handle various tag separators (comma, semicolon, pipe)
@@ -243,12 +243,12 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
           contact.tags = []
         }
         
-        if (columnMap.notes !== undefined) {
+        if (columnMap.notes !== undefined && row[columnMap.notes] !== undefined) {
           const notesValue = row[columnMap.notes]?.replace(/^["']|["']$/g, '').trim() || ''
           contact.notes = notesValue
         }
         
-        if (columnMap.subscribe_date !== undefined) {
+        if (columnMap.subscribe_date !== undefined && row[columnMap.subscribe_date] !== undefined) {
           const dateValue = row[columnMap.subscribe_date]?.replace(/^["']|["']$/g, '').trim() || ''
           // Try to parse various date formats
           if (dateValue) {
