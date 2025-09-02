@@ -544,7 +544,8 @@ export async function updateSettings(data: Partial<Settings['metadata']>): Promi
           privacy_policy_url: data.privacy_policy_url || '',
           terms_of_service_url: data.terms_of_service_url || '',
           google_analytics_id: data.google_analytics_id || '',
-          email_signature: data.email_signature || ''
+          email_signature: data.email_signature || '',
+          test_emails: data.test_emails || []
         }
       }
 
