@@ -1,112 +1,104 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getEmailCampaign, updateCampaignStatus } from '@/lib/cosmic'
+import { cosmic } from '@/lib/cosmic'
+
+// 1x1 transparent pixel image data
+const TRACKING_PIXEL = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==',
+  'base64'
+)
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const campaignId = searchParams.get('c')
-    const contactId = searchParams.get('u')
-    const url = searchParams.get('url')
-    const timestamp = searchParams.get('t')
+    const contactId = searchParams.get('contact')
 
-    console.log('Open tracking request:', {
-      campaignId,
-      contactId,
-      url,
-      timestamp
-    })
-
-    // Generate tracking pixel data (1x1 transparent GIF)
-    const pixelData = Buffer.from(
-      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-      'base64'
-    )
-
-    // If campaignId is provided, track the open event
-    if (campaignId) {
-      try {
-        // Find the campaign to get current stats
-        const campaign = await getEmailCampaign(campaignId)
-        
-        if (campaign) {
-          console.log('Campaign found for open tracking:', campaignId)
-          console.log('Current stats before open update:', campaign.metadata.stats)
-          
-          // Get current stats or initialize with defaults
-          const currentStats = campaign.metadata.stats || {
-            sent: 0,
-            delivered: 0,
-            opened: 0,
-            clicked: 0,
-            bounced: 0,
-            unsubscribed: 0,
-            open_rate: '0%',
-            click_rate: '0%'
-          }
-
-          // Increment opened count
-          const newOpened = (currentStats.opened || 0) + 1
-          const sent = currentStats.sent || 1 // Prevent division by zero
-
-          // Calculate new open rate
-          const newOpenRate = sent > 0 ? Math.round((newOpened / sent) * 100) : 0
-
-          // Update stats with new open data
-          const updatedStats = {
-            ...currentStats,
-            opened: newOpened,
-            open_rate: `${newOpenRate}%`
-          }
-
-          console.log('New stats after click update:', updatedStats)
-
-          // Update campaign stats in Cosmic
-          const updatedCampaign = await updateCampaignStatus(
-            campaignId,
-            campaign.metadata.status.value as 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused',
-            updatedStats
-          )
-
-          if (updatedCampaign) {
-            console.log('Campaign stats updated successfully for open tracking')
-          } else {
-            console.error('Failed to update campaign stats for open tracking')
-          }
-        } else {
-          console.log('Campaign not found for open tracking:', campaignId)
+    if (!campaignId) {
+      return new NextResponse(TRACKING_PIXEL, {
+        status: 200,
+        headers: {
+          'Content-Type': 'image/png',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         }
-      } catch (error) {
-        console.error('Error tracking open event:', error)
-        // Don't fail the pixel request if tracking fails
-      }
+      })
     }
 
-    // Always return the tracking pixel
-    return new NextResponse(pixelData, {
+    try {
+      // Get the current campaign to update open stats
+      const { object: campaign } = await cosmic.objects.findOne({
+        type: 'marketing-campaigns',
+        id: campaignId
+      }).props(['id', 'metadata'])
+
+      if (campaign?.metadata?.stats) {
+        const currentStats = campaign.metadata.stats
+        const newOpenCount = (currentStats.opened || 0) + 1
+        const totalSent = currentStats.sent || 1
+        const newOpenRate = `${Math.round((newOpenCount / totalSent) * 100)}%`
+
+        // Update campaign stats with new open data
+        await cosmic.objects.updateOne(campaignId, {
+          metadata: {
+            stats: {
+              ...currentStats,
+              opened: newOpenCount,
+              open_rate: newOpenRate
+            }
+          }
+        })
+      }
+    } catch (statsError) {
+      // Log stats update error but still return the pixel
+      console.error('Error updating open stats:', statsError)
+    }
+
+    // Create tracking event (optional - for detailed analytics)
+    try {
+      await cosmic.objects.insertOne({
+        type: 'email-tracking-events',
+        title: `Open Event - ${new Date().toISOString()}`,
+        status: 'published',
+        metadata: {
+          event_type: 'open',
+          campaign_id: campaignId,
+          contact_id: contactId,
+          timestamp: new Date().toISOString(),
+          user_agent: request.headers.get('user-agent') || '',
+          ip_address: request.headers.get('x-forwarded-for') || 
+                     request.headers.get('x-real-ip') || 
+                     'unknown'
+        }
+      })
+    } catch (trackingError) {
+      // Log tracking error but still return the pixel
+      console.error('Error creating tracking event:', trackingError)
+    }
+
+    // Return the tracking pixel
+    return new NextResponse(TRACKING_PIXEL, {
       status: 200,
       headers: {
-        'Content-Type': 'image/gif',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
-        'Expires': '0',
-        'Pragma': 'no-cache'
-      },
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     })
 
   } catch (error) {
-    console.error('Open tracking error:', error)
+    // Log the error but always return the tracking pixel to avoid broken images
+    console.error('Error in open tracking:', error)
     
-    // Still return tracking pixel even if there's an error
-    const pixelData = Buffer.from(
-      'R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-      'base64'
-    )
-    
-    return new NextResponse(pixelData, {
+    return new NextResponse(TRACKING_PIXEL, {
       status: 200,
       headers: {
-        'Content-Type': 'image/gif',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, private'
-      },
+        'Content-Type': 'image/png',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     })
   }
 }
