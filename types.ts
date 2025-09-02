@@ -117,7 +117,7 @@ export interface EmailCampaign extends CosmicObject {
 // Add Campaign type alias for backward compatibility
 export type Campaign = MarketingCampaign;
 
-// Settings interface - Updated to include test_emails
+// Settings interface - Updated to use comma-separated string for test_emails
 export interface Settings extends CosmicObject {
   type: 'settings';
   metadata: {
@@ -146,7 +146,7 @@ export interface Settings extends CosmicObject {
     unsubscribe_url?: string;
     tracking_enabled?: boolean;
     resend_api_key?: string;
-    test_emails?: string[]; // New field for storing test email addresses
+    test_emails?: string; // Changed from string[] to string for comma-separated format
   };
 }
 
@@ -201,7 +201,7 @@ export interface UpdateSettingsData {
   terms_of_service_url?: string;
   google_analytics_id?: string;
   email_signature?: string;
-  test_emails?: string[]; // New field for test email addresses
+  test_emails?: string; // Changed from string[] to string for comma-separated format
 }
 
 // Type guards
