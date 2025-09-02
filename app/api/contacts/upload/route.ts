@@ -29,6 +29,76 @@ interface UploadResult {
   creation_errors?: string[];
 }
 
+// Enhanced column mapping function for flexible CSV parsing
+function createColumnMap(headers: string[]): Record<string, number> {
+  const columnMap: Record<string, number> = {}
+  
+  // Normalize headers for comparison (lowercase, remove spaces/underscores)
+  const normalizedHeaders = headers.map(h => h.toLowerCase().replace(/[_\s-]/g, ''))
+  
+  // Define possible column name variations for each field
+  const fieldMappings = {
+    first_name: ['firstname', 'fname', 'name', 'givenname', 'forename'],
+    last_name: ['lastname', 'lname', 'surname', 'familyname'],
+    email: ['email', 'emailaddress', 'mail', 'e-mail'],
+    status: ['status', 'state', 'subscription', 'active'],
+    tags: ['tags', 'categories', 'groups', 'interests', 'labels'],
+    notes: ['notes', 'comments', 'description', 'memo'],
+    subscribe_date: ['subscribedate', 'joindate', 'signupdate', 'createddate', 'optintime', 'confirmtime']
+  }
+  
+  // Find matching columns for each field
+  Object.entries(fieldMappings).forEach(([field, variations]) => {
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      const normalized = normalizedHeaders[i]
+      if (normalized && variations.includes(normalized) || (normalized && normalized.includes(field.replace('_', '')))) {
+        columnMap[field] = i
+        break
+      }
+    }
+  })
+  
+  return columnMap
+}
+
+// Enhanced CSV parsing with better quote handling
+function parseCSVLine(line: string): string[] {
+  const result: string[] = []
+  let current = ''
+  let inQuotes = false
+  let i = 0
+  
+  while (i < line.length) {
+    const char = line[i]
+    const nextChar = line[i + 1]
+    
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        // Escaped quote
+        current += '"'
+        i += 2
+      } else {
+        // Toggle quote state
+        inQuotes = !inQuotes
+        i++
+      }
+    } else if (char === ',' && !inQuotes) {
+      // End of field
+      result.push(current.trim())
+      current = ''
+      i++
+    } else {
+      current += char
+      i++
+    }
+  }
+  
+  // Add the last field
+  result.push(current.trim())
+  
+  return result
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse<UploadResult | { error: string; errors?: string[]; total_errors?: number }>> {
   try {
     const formData = await request.formData()
@@ -68,7 +138,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
       )
     }
 
-    // Parse CSV header
+    // Parse CSV header with better quote handling
     const headerLine = lines[0]
     if (!headerLine) {
       return NextResponse.json(
@@ -77,15 +147,22 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
       )
     }
 
-    const header = headerLine.split(',').map(h => h.trim().toLowerCase())
+    const headers = parseCSVLine(headerLine).map(h => h.replace(/^["']|["']$/g, '').trim())
     
-    // Validate required columns
-    const requiredColumns = ['first_name', 'email']
-    const missingColumns = requiredColumns.filter(col => !header.includes(col))
+    // Create flexible column mapping
+    const columnMap = createColumnMap(headers)
     
-    if (missingColumns.length > 0) {
+    // Check if we found the required columns
+    if (columnMap.email === undefined) {
       return NextResponse.json(
-        { error: `Missing required columns: ${missingColumns.join(', ')}` },
+        { error: 'Email column not found. Please ensure your CSV has an email column (variations: email, emailaddress, mail, e-mail)' },
+        { status: 400 }
+      )
+    }
+    
+    if (columnMap.first_name === undefined) {
+      return NextResponse.json(
+        { error: 'First name column not found. Please ensure your CSV has a first name column (variations: first_name, firstname, fname, name)' },
         { status: 400 }
       )
     }
@@ -113,68 +190,85 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
     // Process each data row
     for (let i = 1; i < lines.length; i++) {
       const currentLine = lines[i]
-      if (!currentLine) {
-        errors.push(`Row ${i + 1}: Empty row`)
-        continue
+      if (!currentLine || currentLine.trim() === '') {
+        continue // Skip empty lines
       }
 
-      const row = currentLine.split(',').map(cell => cell.trim())
+      let row: string[]
+      try {
+        row = parseCSVLine(currentLine)
+      } catch (parseError) {
+        errors.push(`Row ${i + 1}: Failed to parse CSV line`)
+        continue
+      }
       
-      if (row.length !== header.length) {
-        errors.push(`Row ${i + 1}: Column count mismatch (expected ${header.length}, got ${row.length})`)
-        continue
-      }
-
       const contact: Partial<ContactData> = {}
       
-      // Map CSV columns to contact fields
-      header.forEach((column, index) => {
-        const value = row[index]
+      // Extract data using column mapping
+      try {
+        // Required fields - Add null checks for undefined values
+        const emailValue = row[columnMap.email]?.replace(/^["']|["']$/g, '').trim() || ''
+        const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, '').trim() || ''
         
-        if (value === undefined) {
-          return // Skip undefined values
+        contact.email = emailValue.toLowerCase()
+        contact.first_name = firstNameValue
+        
+        // Optional fields - Add null checks for potentially undefined column indices
+        if (columnMap.last_name !== undefined && row[columnMap.last_name] !== undefined) {
+          const lastNameValue = row[columnMap.last_name]?.replace(/^["']|["']$/g, '').trim() || ''
+          contact.last_name = lastNameValue
         }
         
-        switch (column) {
-          case 'first_name':
-            contact.first_name = value
-            break
-          case 'last_name':
-            contact.last_name = value || ''
-            break
-          case 'email':
-            contact.email = value ? value.toLowerCase().trim() : ''
-            break
-          case 'status':
-            // Validate status value
-            const normalizedStatus = value.toLowerCase()
-            if (['active', 'unsubscribed', 'bounced'].includes(normalizedStatus)) {
-              contact.status = (normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)) as 'Active' | 'Unsubscribed' | 'Bounced'
-            } else {
-              contact.status = 'Active'
-            }
-            break
-          case 'tags':
-            // Parse tags (comma-separated or semicolon-separated)
-            if (value && value.trim()) {
-              contact.tags = value.split(/[;,]/).map(tag => tag.trim()).filter(tag => tag.length > 0)
-            } else {
-              contact.tags = []
-            }
-            break
-          case 'notes':
-            contact.notes = value || ''
-            break
-          case 'subscribe_date':
-            // Validate date format (YYYY-MM-DD)
-            if (value && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
-              contact.subscribe_date = value
+        if (columnMap.status !== undefined && row[columnMap.status] !== undefined) {
+          const statusValue = row[columnMap.status]?.replace(/^["']|["']$/g, '').trim() || ''
+          const normalizedStatus = statusValue.toLowerCase()
+          if (['active', 'unsubscribed', 'bounced'].includes(normalizedStatus)) {
+            contact.status = (normalizedStatus.charAt(0).toUpperCase() + normalizedStatus.slice(1)) as 'Active' | 'Unsubscribed' | 'Bounced'
+          } else {
+            contact.status = 'Active'
+          }
+        } else {
+          contact.status = 'Active'
+        }
+        
+        if (columnMap.tags !== undefined && row[columnMap.tags] !== undefined) {
+          const tagsValue = row[columnMap.tags]?.replace(/^["']|["']$/g, '').trim() || ''
+          if (tagsValue) {
+            // Handle various tag separators (comma, semicolon, pipe)
+            contact.tags = tagsValue.split(/[;,|]/).map(tag => tag.trim()).filter(tag => tag.length > 0)
+          } else {
+            contact.tags = []
+          }
+        } else {
+          contact.tags = []
+        }
+        
+        if (columnMap.notes !== undefined && row[columnMap.notes] !== undefined) {
+          const notesValue = row[columnMap.notes]?.replace(/^["']|["']$/g, '').trim() || ''
+          contact.notes = notesValue
+        }
+        
+        if (columnMap.subscribe_date !== undefined && row[columnMap.subscribe_date] !== undefined) {
+          const dateValue = row[columnMap.subscribe_date]?.replace(/^["']|["']$/g, '').trim() || ''
+          // Try to parse various date formats
+          if (dateValue) {
+            const parsedDate = new Date(dateValue)
+            if (!isNaN(parsedDate.getTime())) {
+              contact.subscribe_date = parsedDate.toISOString().split('T')[0]
             } else {
               contact.subscribe_date = new Date().toISOString().split('T')[0]
             }
-            break
+          } else {
+            contact.subscribe_date = new Date().toISOString().split('T')[0]
+          }
+        } else {
+          contact.subscribe_date = new Date().toISOString().split('T')[0]
         }
-      })
+
+      } catch (extractError) {
+        errors.push(`Row ${i + 1}: Error extracting data from CSV row`)
+        continue
+      }
 
       // Validate required fields
       if (!contact.first_name || contact.first_name.trim() === '') {
@@ -194,13 +288,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
         continue
       }
 
-      // Check for duplicates - ensure contact.email exists and is a string before checking
+      // Check for duplicates
       if (contact.email && typeof contact.email === 'string' && existingEmails.has(contact.email)) {
         duplicates.push(contact.email)
         continue
       }
 
-      // Set default values and ensure all required fields are present
+      // Create valid contact with all required fields
       const validContact: ContactData = {
         first_name: contact.first_name,
         last_name: contact.last_name || '',
@@ -223,7 +317,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
     if (errors.length > 50) {
       return NextResponse.json(
         { 
-          error: 'Too many validation errors in the CSV file',
+          error: 'Too many validation errors in the CSV file. Please check your data format.',
           errors: errors.slice(0, 10),
           total_errors: errors.length
         },
@@ -249,14 +343,11 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadRes
 
     // Enhanced cache invalidation after successful upload
     if (created.length > 0) {
-      // Revalidate multiple paths and tags to ensure comprehensive cache refresh
       revalidatePath('/contacts')
       revalidatePath('/contacts/page')
       revalidatePath('/(dashboard)/contacts')
       revalidateTag('contacts')
       revalidateTag('email-contacts')
-      
-      // Also revalidate the root dashboard to update stats
       revalidatePath('/')
     }
 

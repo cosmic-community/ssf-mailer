@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog'
-import { CheckCircle, AlertCircle, Upload, Loader2 } from 'lucide-react'
+import { CheckCircle, AlertCircle, Upload, Loader2, Info } from 'lucide-react'
 
 interface UploadResult {
   success: boolean
@@ -118,16 +118,45 @@ export default function CSVUploadModal() {
           <DialogTitle>Upload Contacts from CSV</DialogTitle>
         </DialogHeader>
         
-        {/* Instructions */}
-        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-          <h3 className="text-sm font-medium text-blue-800 mb-2">CSV Format Requirements</h3>
-          <ul className="text-sm text-blue-700 space-y-1">
-            <li>• Required columns: <code className="bg-blue-100 px-1 rounded">first_name</code>, <code className="bg-blue-100 px-1 rounded">email</code></li>
-            <li>• Optional columns: <code className="bg-blue-100 px-1 rounded">last_name</code>, <code className="bg-blue-100 px-1 rounded">tags</code>, <code className="bg-blue-100 px-1 rounded">status</code>, <code className="bg-blue-100 px-1 rounded">subscribe_date</code>, <code className="bg-blue-100 px-1 rounded">notes</code></li>
-            <li>• Use semicolons (;) to separate multiple tags</li>
-            <li>• Status values: Active, Unsubscribed, Bounced (defaults to Active)</li>
-            <li>• Date format: YYYY-MM-DD</li>
-          </ul>
+        {/* Enhanced Instructions */}
+        <div className="mb-6 space-y-4">
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <div className="flex items-start space-x-2">
+              <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h3 className="text-sm font-medium text-blue-800 mb-2">Smart Column Detection</h3>
+                <p className="text-sm text-blue-700 mb-2">
+                  Our system automatically detects and maps your CSV columns. You don't need to worry about column order or exact naming.
+                </p>
+                <div className="text-sm text-blue-700">
+                  <strong>Required columns (we'll find these automatically):</strong>
+                  <ul className="ml-4 mt-1 space-y-1">
+                    <li>• <strong>Email:</strong> email, emailaddress, mail, e-mail</li>
+                    <li>• <strong>First Name:</strong> first_name, firstname, fname, name</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+            <h3 className="text-sm font-medium text-green-800 mb-2">Optional Fields (automatically detected)</h3>
+            <ul className="text-sm text-green-700 space-y-1">
+              <li>• <strong>Last Name:</strong> last_name, lastname, surname</li>
+              <li>• <strong>Status:</strong> status, state, subscription (Active/Unsubscribed/Bounced)</li>
+              <li>• <strong>Tags/Interests:</strong> tags, categories, groups, interests</li>
+              <li>• <strong>Subscribe Date:</strong> subscribe_date, join_date, optin_time</li>
+              <li>• <strong>Notes:</strong> notes, comments, description</li>
+            </ul>
+          </div>
+          
+          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+            <h3 className="text-sm font-medium text-gray-800 mb-2">What gets ignored</h3>
+            <p className="text-sm text-gray-600">
+              All other columns (like MEMBER_RATING, LEID, TIMEZONE, etc.) will be automatically ignored. 
+              Only the data we need will be imported.
+            </p>
+          </div>
         </div>
 
         {/* Upload Form */}
@@ -143,6 +172,9 @@ export default function CSVUploadModal() {
                 disabled={isUploading}
                 required
               />
+              <p className="text-xs text-gray-500">
+                Any CSV format with email and name columns will work
+              </p>
             </div>
 
             {error && (
@@ -170,7 +202,7 @@ export default function CSVUploadModal() {
                 {isUploading ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
+                    Processing...
                   </>
                 ) : (
                   <>
@@ -199,12 +231,24 @@ export default function CSVUploadModal() {
               </div>
             </div>
 
+            {/* Detailed Results */}
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div className="p-3 bg-green-50 border border-green-200 rounded">
+                <div className="text-2xl font-bold text-green-600">{uploadResult.results.successful}</div>
+                <div className="text-sm text-green-700">Imported</div>
+              </div>
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                <div className="text-2xl font-bold text-yellow-600">{uploadResult.results.duplicates}</div>
+                <div className="text-sm text-yellow-700">Duplicates Skipped</div>
+              </div>
+            </div>
+
             {/* Success Summary */}
             {uploadResult.results.successful > 0 && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
                 <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful})</h4>
                 <p className="text-sm text-green-700">
-                  {uploadResult.results.successful} contacts have been added to your list.
+                  {uploadResult.results.successful} contacts have been added to your list and are ready to receive campaigns.
                 </p>
               </div>
             )}
@@ -215,7 +259,8 @@ export default function CSVUploadModal() {
                 <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({uploadResult.results.duplicates})</h4>
                 <div className="max-h-24 overflow-y-auto">
                   <p className="text-sm text-yellow-700">
-                    These email addresses already exist: {uploadResult.duplicates.join(', ')}
+                    These email addresses already exist: {uploadResult.duplicates.slice(0, 5).join(', ')}
+                    {uploadResult.duplicates.length > 5 && ` and ${uploadResult.duplicates.length - 5} more`}
                   </p>
                 </div>
               </div>
@@ -226,14 +271,14 @@ export default function CSVUploadModal() {
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
                 <h4 className="font-medium text-red-800 mb-2">Validation Errors ({uploadResult.results.validation_errors})</h4>
                 <div className="max-h-32 overflow-y-auto space-y-1">
-                  {uploadResult.validation_errors.slice(0, 5).map((error, index) => (
+                  {uploadResult.validation_errors.slice(0, 3).map((error, index) => (
                     <div key={index} className="text-sm text-red-700">
                       {error}
                     </div>
                   ))}
-                  {uploadResult.validation_errors.length > 5 && (
+                  {uploadResult.validation_errors.length > 3 && (
                     <div className="text-sm text-red-600">
-                      ... and {uploadResult.validation_errors.length - 5} more errors
+                      ... and {uploadResult.validation_errors.length - 3} more errors
                     </div>
                   )}
                 </div>
