@@ -11,7 +11,9 @@ export function middleware(request: NextRequest) {
     pathname.startsWith('/static') ||
     pathname === '/favicon.ico' ||
     pathname === '/dashboard-console-capture.js' ||
-    pathname.startsWith('/api/auth')
+    pathname.startsWith('/api/auth') ||
+    pathname.startsWith('/api/unsubscribe') ||
+    pathname.startsWith('/api/track')
   ) {
     return NextResponse.next()
   }

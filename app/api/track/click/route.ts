@@ -5,80 +5,113 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const campaignId = searchParams.get('c')
-    const contactId = searchParams.get('u')
+    const contactId = searchParams.get('contact')
     const url = searchParams.get('url')
 
-    if (!campaignId || !contactId || !url) {
-      return NextResponse.json(
-        { error: 'Missing required parameters' },
-        { status: 400 }
-      )
+    if (!campaignId || !url) {
+      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
 
-    const decodedUrl = decodeURIComponent(url)
-    
-    // Validate URL to prevent open redirects
     try {
-      new URL(decodedUrl) // This will throw if URL is invalid
-    } catch {
-      return NextResponse.json(
-        { error: 'Invalid URL' },
-        { status: 400 }
-      )
-    }
+      // Get the current campaign to update click stats
+      const { object: campaign } = await cosmic.objects.findOne({
+        type: 'marketing-campaigns',
+        id: campaignId
+      }).props(['id', 'metadata'])
 
-    // Check if this is an unsubscribe link - if so, don't track the click
-    const isUnsubscribeLink = decodedUrl.includes('/unsubscribe') || 
-                             decodedUrl.includes('/api/unsubscribe')
+      if (campaign?.metadata?.stats) {
+        const currentStats = campaign.metadata.stats
+        const newClickCount = (currentStats.clicked || 0) + 1
+        const totalSent = currentStats.sent || 1
+        const newClickRate = `${Math.round((newClickCount / totalSent) * 100)}%`
 
-    if (!isUnsubscribeLink) {
-      // Only record the click event if it's not an unsubscribe link
-      try {
-        const campaign = await cosmic.objects.findOne({ 
-          id: campaignId, 
-          type: 'marketing-campaigns' 
-        }).props(['id', 'metadata']).depth(1)
-
-        if (campaign.object) {
-          const currentStats = campaign.object.metadata?.stats || {
-            sent: 0,
-            delivered: 0,
-            opened: 0,
-            clicked: 0,
-            bounced: 0,
-            unsubscribed: 0,
-            open_rate: '0%',
-            click_rate: '0%'
-          }
-
-          const newClicked = (currentStats.clicked || 0) + 1
-          const newStats = {
-            ...currentStats,
-            clicked: newClicked,
-            click_rate: currentStats.sent > 0 ? 
-              `${Math.round((newClicked / currentStats.sent) * 100)}%` : '0%'
-          }
-
-          // Update campaign stats - only include the stats field
-          await cosmic.objects.updateOne(campaignId, {
-            metadata: {
-              stats: newStats
+        // Update campaign stats with new click data
+        await cosmic.objects.updateOne(campaignId, {
+          metadata: {
+            stats: {
+              ...currentStats,
+              clicked: newClickCount,
+              click_rate: newClickRate
             }
-          })
-        }
-      } catch (error) {
-        console.error('Error recording click event:', error)
-        // Continue with redirect even if tracking fails
+          }
+        })
       }
+    } catch (statsError) {
+      // Log stats update error but don't fail the redirect
+      console.error('Error updating click stats:', statsError)
     }
 
-    // Always redirect to the target URL (whether tracked or not)
-    return NextResponse.redirect(decodedUrl)
+    // Create tracking event (optional - for detailed analytics)
+    try {
+      await cosmic.objects.insertOne({
+        type: 'email-tracking-events',
+        title: `Click Event - ${new Date().toISOString()}`,
+        status: 'published',
+        metadata: {
+          event_type: 'click',
+          campaign_id: campaignId,
+          contact_id: contactId,
+          url: url,
+          timestamp: new Date().toISOString(),
+          user_agent: request.headers.get('user-agent') || '',
+          ip_address: request.headers.get('x-forwarded-for') || 
+                     request.headers.get('x-real-ip') || 
+                     'unknown'
+        }
+      })
+    } catch (trackingError) {
+      // Log tracking error but don't fail the redirect
+      console.error('Error creating tracking event:', trackingError)
+    }
+
+    // Redirect to the actual URL
+    return NextResponse.redirect(decodeURIComponent(url))
+
   } catch (error) {
-    console.error('Click tracking error:', error)
-    return NextResponse.json(
-      { error: 'Tracking failed' },
-      { status: 500 }
+    console.error('Error in click tracking:', error)
+    
+    // Provide a safe fallback - extract the URL parameter and redirect if possible
+    try {
+      const { searchParams } = new URL(request.url)
+      const fallbackUrl = searchParams.get('url')
+      
+      if (fallbackUrl) {
+        return NextResponse.redirect(decodeURIComponent(fallbackUrl))
+      }
+    } catch (fallbackError) {
+      console.error('Fallback redirect failed:', fallbackError)
+    }
+
+    // If we can't redirect, show an error page
+    return new NextResponse(
+      `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Link Error</title>
+          <style>
+            body { 
+              font-family: -apple-system, BlinkMacSystemFont, sans-serif; 
+              max-width: 600px; 
+              margin: 100px auto; 
+              padding: 20px;
+              text-align: center;
+            }
+          </style>
+        </head>
+        <body>
+          <h1>Unable to Process Link</h1>
+          <p>We encountered an error while processing your request. Please try again later.</p>
+          <p><a href="https://cosmicjs.com">Return to Home</a></p>
+        </body>
+      </html>
+      `,
+      { 
+        status: 500,
+        headers: {
+          'Content-Type': 'text/html',
+        },
+      }
     )
   }
 }
