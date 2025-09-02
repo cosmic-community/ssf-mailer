@@ -14,8 +14,9 @@ export default function RootLayout({
   const pathname = usePathname()
   const [bucketSlug, setBucketSlug] = useState<string>('')
 
-  // Don't show layout on login page
+  // Don't show layout on login page and subscribe page
   const isLoginPage = pathname === '/login'
+  const isSubscribePage = pathname === '/subscribe'
 
   useEffect(() => {
     // Fetch bucket slug for client-side components
@@ -36,7 +37,7 @@ export default function RootLayout({
         <meta name="description" content="Comprehensive email marketing platform for managing contacts, templates, and campaigns" />
       </head>
       <body className="bg-slate-50 min-h-screen">
-        {isLoginPage ? (
+        {isLoginPage || isSubscribePage ? (
           children
         ) : (
           <Layout>
