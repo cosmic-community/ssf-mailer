@@ -5,81 +5,107 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const campaignId = searchParams.get('c')
-    const contactId = searchParams.get('contact')
-    const url = searchParams.get('url')
+    const contactId = searchParams.get('u')
+    const targetUrl = searchParams.get('url')
+    const timestamp = searchParams.get('t')
 
-    console.log('Click tracking request:', { campaignId, contactId, url })
+    console.log('=== CLICK TRACKING REQUEST ===')
+    console.log('Campaign ID:', campaignId)
+    console.log('Contact ID:', contactId)
+    console.log('Target URL:', targetUrl)
+    console.log('Timestamp:', timestamp)
 
-    if (!url) {
+    if (!targetUrl) {
+      console.error('❌ No target URL provided for click tracking')
       return NextResponse.redirect('/')
     }
 
     if (!campaignId) {
-      console.log('No campaign ID provided for click tracking')
-      return NextResponse.redirect(url)
+      console.log('⚠️  No campaign ID provided, redirecting without tracking')
+      return NextResponse.redirect(targetUrl)
     }
 
-    // Get the current campaign to retrieve existing stats
-    const { object: campaign } = await cosmic.objects
-      .findOne({ type: 'marketing-campaigns', id: campaignId })
-      .props(['id', 'metadata'])
-      .depth(1)
+    try {
+      console.log('Processing click tracking for campaign:', campaignId)
 
-    if (!campaign) {
-      console.log('Campaign not found:', campaignId)
-      return NextResponse.redirect(url)
-    }
+      // Get the current campaign to retrieve existing stats
+      const { object: campaign } = await cosmic.objects
+        .findOne({ type: 'marketing-campaigns', id: campaignId })
+        .props(['id', 'title', 'metadata'])
+        .depth(1)
 
-    console.log('Campaign found for click tracking:', campaign.id, campaign.metadata?.name)
-
-    // Get current stats or initialize with defaults
-    const currentStats = campaign.metadata?.stats || {
-      sent: 0,
-      delivered: 0,
-      opened: 0,
-      clicked: 0,
-      bounced: 0,
-      unsubscribed: 0,
-      open_rate: '0%',
-      click_rate: '0%'
-    }
-
-    console.log('Current stats before click update:', currentStats)
-
-    // Increment the clicked count
-    const newClickedCount = (currentStats.clicked || 0) + 1
-    const sentCount = currentStats.sent || 0
-    
-    // Calculate new click rate
-    const newClickRate = sentCount > 0 
-      ? `${Math.round((newClickedCount / sentCount) * 100)}%`
-      : '0%'
-
-    const updatedStats = {
-      ...currentStats,
-      clicked: newClickedCount,
-      click_rate: newClickRate
-    }
-
-    console.log('Updated stats to save:', updatedStats)
-
-    // Update only the stats in the campaign metadata
-    await cosmic.objects.updateOne(campaignId, {
-      metadata: {
-        stats: updatedStats
+      if (!campaign) {
+        console.error('❌ Campaign not found:', campaignId)
+        return NextResponse.redirect(targetUrl)
       }
-    })
 
-    console.log('Click tracking updated successfully for campaign:', campaignId)
-    console.log('New clicked count:', newClickedCount, 'New click rate:', newClickRate)
+      console.log('✅ Campaign found for click tracking:', campaign.title)
+      console.log('Current stats before click update:', JSON.stringify(campaign.metadata?.stats, null, 2))
 
-    // Redirect to the original URL
-    return NextResponse.redirect(url)
+      // Get current stats or initialize with defaults
+      const currentStats = campaign.metadata?.stats || {
+        sent: 0,
+        delivered: 0,
+        opened: 0,
+        clicked: 0,
+        bounced: 0,
+        unsubscribed: 0,
+        open_rate: '0%',
+        click_rate: '0%'
+      }
+
+      // Increment the clicked count
+      const newClickedCount = (currentStats.clicked || 0) + 1
+      const sentCount = currentStats.sent || 1 // Prevent division by zero
+      
+      // Calculate new click rate
+      const newClickRate = sentCount > 0 
+        ? Math.round((newClickedCount / sentCount) * 100)
+        : 0
+
+      const updatedStats = {
+        ...currentStats,
+        clicked: newClickedCount,
+        click_rate: `${newClickRate}%`
+      }
+
+      console.log('📊 Updated stats to save:', JSON.stringify(updatedStats, null, 2))
+
+      // Update only the stats in the campaign metadata
+      const updateResult = await cosmic.objects.updateOne(campaignId, {
+        metadata: {
+          stats: updatedStats
+        }
+      })
+
+      if (updateResult?.object) {
+        console.log('✅ Click tracking updated successfully!')
+        console.log('New clicked count:', newClickedCount)
+        console.log('New click rate:', `${newClickRate}%`)
+      } else {
+        console.error('❌ Failed to update campaign stats - no object returned')
+      }
+
+    } catch (trackingError) {
+      console.error('❌ Error in click tracking processing:', trackingError)
+      if (trackingError && typeof trackingError === 'object') {
+        console.error('Tracking error details:', JSON.stringify(trackingError, null, 2))
+      }
+    }
+
+    console.log('=== END CLICK TRACKING ===')
+    console.log('Redirecting to:', targetUrl)
+
+    // Always redirect to the original URL, even if tracking fails
+    return NextResponse.redirect(targetUrl)
   } catch (error) {
-    console.error('Error in click tracking:', error)
+    console.error('❌ Critical error in click tracking:', error)
+    if (error && typeof error === 'object') {
+      console.error('Error stack:', error.stack)
+    }
     
     // Redirect to the original URL even if tracking fails
-    const url = new URL(request.url).searchParams.get('url')
-    return NextResponse.redirect(url || '/')
+    const targetUrl = new URL(request.url).searchParams.get('url')
+    return NextResponse.redirect(targetUrl || '/')
   }
 }

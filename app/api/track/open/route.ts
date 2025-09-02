@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getEmailCampaign, updateCampaignStatus } from '@/lib/cosmic'
+import { cosmic } from '@/lib/cosmic'
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const campaignId = searchParams.get('c')
     const contactId = searchParams.get('u')
-    const url = searchParams.get('url')
+    const method = searchParams.get('m') // tracking method (img, bg, alt, etc.)
     const timestamp = searchParams.get('t')
 
-    console.log('Open tracking request:', {
-      campaignId,
-      contactId,
-      url,
-      timestamp
-    })
+    console.log('=== OPEN TRACKING REQUEST ===')
+    console.log('Campaign ID:', campaignId)
+    console.log('Contact ID:', contactId)
+    console.log('Method:', method)
+    console.log('Timestamp:', timestamp)
+    console.log('Full URL:', request.url)
 
     // Generate tracking pixel data (1x1 transparent GIF)
     const pixelData = Buffer.from(
@@ -25,15 +25,21 @@ export async function GET(request: NextRequest) {
     // If campaignId is provided, track the open event
     if (campaignId) {
       try {
+        console.log('Processing open tracking for campaign:', campaignId)
+        
         // Find the campaign to get current stats
-        const campaign = await getEmailCampaign(campaignId)
+        const { object: campaign } = await cosmic.objects
+          .findOne({ type: 'marketing-campaigns', id: campaignId })
+          .props(['id', 'title', 'metadata'])
+          .depth(1)
         
         if (campaign) {
-          console.log('Campaign found for open tracking:', campaignId)
-          console.log('Current stats before open update:', campaign.metadata.stats)
+          console.log('✅ Campaign found:', campaign.title)
+          console.log('Current campaign status:', campaign.metadata?.status?.value)
+          console.log('Current stats before update:', JSON.stringify(campaign.metadata?.stats, null, 2))
           
           // Get current stats or initialize with defaults
-          const currentStats = campaign.metadata.stats || {
+          const currentStats = campaign.metadata?.stats || {
             sent: 0,
             delivered: 0,
             opened: 0,
@@ -58,42 +64,55 @@ export async function GET(request: NextRequest) {
             open_rate: `${newOpenRate}%`
           }
 
-          console.log('New stats after click update:', updatedStats)
+          console.log('📊 Updated stats to save:', JSON.stringify(updatedStats, null, 2))
 
-          // Update campaign stats in Cosmic
-          const updatedCampaign = await updateCampaignStatus(
-            campaignId,
-            campaign.metadata.status.value as 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused',
-            updatedStats
-          )
+          // Update campaign stats in Cosmic - only update the stats field
+          const updateResult = await cosmic.objects.updateOne(campaignId, {
+            metadata: {
+              stats: updatedStats
+            }
+          })
 
-          if (updatedCampaign) {
-            console.log('Campaign stats updated successfully for open tracking')
+          if (updateResult?.object) {
+            console.log('✅ Campaign stats updated successfully!')
+            console.log('New opened count:', newOpened)
+            console.log('New open rate:', `${newOpenRate}%`)
           } else {
-            console.error('Failed to update campaign stats for open tracking')
+            console.error('❌ Failed to update campaign stats - no object returned')
           }
         } else {
-          console.log('Campaign not found for open tracking:', campaignId)
+          console.error('❌ Campaign not found for ID:', campaignId)
         }
       } catch (error) {
-        console.error('Error tracking open event:', error)
+        console.error('❌ Error tracking open event:', error)
+        if (error && typeof error === 'object') {
+          console.error('Error details:', JSON.stringify(error, null, 2))
+        }
         // Don't fail the pixel request if tracking fails
       }
+    } else {
+      console.log('⚠️  No campaign ID provided, skipping tracking')
     }
 
-    // Always return the tracking pixel
+    console.log('=== END OPEN TRACKING ===')
+
+    // Always return the tracking pixel with proper headers
     return new NextResponse(pixelData, {
       status: 200,
       headers: {
         'Content-Type': 'image/gif',
         'Cache-Control': 'no-store, no-cache, must-revalidate, private',
         'Expires': '0',
-        'Pragma': 'no-cache'
+        'Pragma': 'no-cache',
+        'Content-Length': pixelData.length.toString()
       },
     })
 
   } catch (error) {
-    console.error('Open tracking error:', error)
+    console.error('❌ Critical error in open tracking:', error)
+    if (error && typeof error === 'object') {
+      console.error('Error stack:', error.stack)
+    }
     
     // Still return tracking pixel even if there's an error
     const pixelData = Buffer.from(
@@ -105,7 +124,8 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers: {
         'Content-Type': 'image/gif',
-        'Cache-Control': 'no-store, no-cache, must-revalidate, private'
+        'Cache-Control': 'no-store, no-cache, must-revalidate, private',
+        'Content-Length': pixelData.length.toString()
       },
     })
   }
