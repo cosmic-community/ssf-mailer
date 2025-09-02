@@ -196,7 +196,7 @@ export default function TestEmailModal({
                 className="w-full pr-10"
               />
               {isLoadingEmails && (
-                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                <div className="absolute top-1/2 right-3 -translate-y-1/2 pointer-events-none">
                   <LoadingSpinner size="sm" variant="primary" />
                 </div>
               )}
