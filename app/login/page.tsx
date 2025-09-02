@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 
@@ -230,6 +231,14 @@ export default function LoginPage() {
           <p className="text-gray-500 text-sm">
             Powered by <span className="font-medium text-gray-700">Cosmic CMS</span> & <span className="font-medium text-gray-700">Resend</span>
           </p>
+          <div className="mt-2">
+            <Link 
+              href="/subscribe" 
+              className="text-slate-600 hover:text-slate-800 text-sm underline transition-colors duration-200"
+            >
+              Subscribe to updates
+            </Link>
+          </div>
         </div>
       </div>
     </div>
