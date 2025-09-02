@@ -27,6 +27,7 @@ export async function GET() {
             terms_of_service_url: '',
             google_analytics_id: '',
             email_signature: '',
+            test_emails: ''
           }
         }
       })
@@ -80,6 +81,22 @@ export async function POST(request: NextRequest) {
       )
     }
     
+    // Validate test emails if provided - parse comma-separated string
+    if (data.test_emails && data.test_emails.trim()) {
+      const testEmailArray = data.test_emails
+        .split(',')
+        .map(email => email.trim())
+        .filter(email => email.length > 0)
+      
+      const invalidTestEmails = testEmailArray.filter(email => !emailRegex.test(email))
+      if (invalidTestEmails.length > 0) {
+        return NextResponse.json(
+          { error: `Invalid test email addresses: ${invalidTestEmails.join(', ')}` },
+          { status: 400 }
+        )
+      }
+    }
+    
     // Validate URL format if provided
     const urlRegex = /^https?:\/\/.+/
     if (data.website_url && !urlRegex.test(data.website_url)) {
@@ -126,7 +143,9 @@ export async function POST(request: NextRequest) {
       ai_tone: data.ai_tone ? {
         key: data.ai_tone.toLowerCase(),
         value: data.ai_tone
-      } : undefined
+      } : undefined,
+      // Keep test_emails as string (comma-separated format)
+      test_emails: data.test_emails || ''
     }
     
     // Create or update settings
