@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Settings } from '@/types'
 
@@ -192,11 +193,11 @@ export default function TestEmailModal({
                 value={testEmailsInput}
                 onChange={(e) => setTestEmailsInput(e.target.value)}
                 disabled={isSending || isLoadingEmails}
-                className="w-full"
+                className="w-full pr-10"
               />
               {isLoadingEmails && (
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                  <LoadingSpinner size="sm" variant="primary" />
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-1">
@@ -241,7 +242,14 @@ export default function TestEmailModal({
             disabled={isSending || isLoadingEmails || testEmailsInput.trim() === ''}
             className="btn-primary"
           >
-            {isSending ? 'Sending...' : 'Send Test Email'}
+            {isSending ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                Sending...
+              </>
+            ) : (
+              'Send Test Email'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>
