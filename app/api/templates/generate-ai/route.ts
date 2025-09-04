@@ -85,6 +85,20 @@ async function processMediaFile(url: string) {
   }
 }
 
+// Helper function to extract first media URL from context items
+function getFirstMediaUrl(contextItems: any[]): string | undefined {
+  for (const item of contextItems) {
+    if (item.type === 'file') {
+      return item.url
+    }
+    // For webpages, check if any images were found during processing
+    if (item.type === 'webpage' && item.images && item.images.length > 0) {
+      return item.images[0]
+    }
+  }
+  return undefined
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { prompt, type, context_items } = await request.json()
@@ -218,12 +232,22 @@ export async function POST(request: NextRequest) {
               encoder.encode('data: {"type":"status","message":"Processing with Cosmic AI...","progress":50}\n\n')
             )
 
-            // Generate content with Cosmic AI streaming
-            const aiResponse = await cosmic.ai.generateText({
+            // Extract first media URL from context items for AI analysis
+            const firstMediaUrl = getFirstMediaUrl(context_items || [])
+
+            // Generate content with Cosmic AI streaming - include media_url if available
+            const aiRequestOptions: any = {
               prompt: aiPrompt,
               max_tokens: 60000,
               stream: true
-            })
+            }
+
+            // Add media_url if we have a media file in context
+            if (firstMediaUrl) {
+              aiRequestOptions.media_url = firstMediaUrl
+            }
+
+            const aiResponse = await cosmic.ai.generateText(aiRequestOptions)
 
             // Check if aiResponse is a streaming response by checking for the 'on' method
             const isStreamingResponse = aiResponse && 
