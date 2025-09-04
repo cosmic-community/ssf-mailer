@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef, useEffect } from 'react'
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -41,26 +41,28 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [aiProgress, setAiProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [editingSessionActive, setEditingSessionActive] = useState(false) // Track if actively editing
+  const [editingSessionActive, setEditingSessionActive] = useState(false)
   const { addToast } = useToast()
   
   // Modal states
   const [showAIModal, setShowAIModal] = useState(false)
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
-  // Fixed inline editing states
+  // Fixed inline editing states - improved with stable IDs and better state management
   const [isInlineEditing, setIsInlineEditing] = useState(false)
   const [editingElementId, setEditingElementId] = useState<string | null>(null)
+  const [editingContext, setEditingContext] = useState<'main' | 'modal'>('main') // Track editing context
   
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [showContextInput, setShowContextInput] = useState(false)
   const [contextUrl, setContextUrl] = useState('')
 
-  // Refs for autofocus and auto-resize
+  // Refs for autofocus and auto-resize - separate refs for main and modal
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
-  const previewRef = useRef<HTMLDivElement>(null)
+  const mainPreviewRef = useRef<HTMLDivElement>(null)
+  const modalPreviewRef = useRef<HTMLDivElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -110,15 +112,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
     }
 
-    // Add beforeunload listener for browser tab close/refresh
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // Store original router methods
     const originalPush = router.push
     const originalBack = router.back
     const originalReplace = router.replace
 
-    // Override router methods to check for unsaved changes
     router.push = (...args) => {
       if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
@@ -145,7 +144,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
-      // Restore original router methods
       router.push = originalPush
       router.back = originalBack
       router.replace = originalReplace
@@ -173,10 +171,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     textareas.forEach(textarea => {
       const handleInput = () => autoResize(textarea)
       textarea.addEventListener('input', handleInput)
-      
-      // Initial resize
       autoResize(textarea)
-      
       return () => textarea.removeEventListener('input', handleInput)
     })
   }, [])
@@ -190,10 +185,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Fixed inline editing implementation
-  const handleInlineEdit = (event: React.MouseEvent) => {
-    // Prevent editing if already in edit mode
-    if (isInlineEditing) return
+  // Enhanced inline editing implementation with better state management
+  const handleInlineEdit = useCallback((event: React.MouseEvent, context: 'main' | 'modal' = 'main') => {
+    // Prevent editing if already in edit mode or AI is processing
+    if (isInlineEditing || isAIEditing) return
     
     event.preventDefault()
     event.stopPropagation()
@@ -212,10 +207,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
     
-    // Find the closest editable text element - improved selector
+    // Find the closest editable text element
     let editableElement = target.closest('p, h1, h2, h3, h4, h5, h6, span, div, td, th, li, a') as HTMLElement
     
-    // If we clicked directly on a text node parent, use that
     if (!editableElement && target.nodeType === Node.ELEMENT_NODE) {
       const tagName = target.tagName.toLowerCase()
       if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'td', 'th', 'li', 'a'].includes(tagName)) {
@@ -223,7 +217,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
     }
     
-    // If still no element, look for parent with text content
     if (!editableElement) {
       let parent = target.parentElement
       while (parent) {
@@ -240,17 +233,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     
     if (!editableElement || !editableElement.textContent) return
     
+    // Set editing context and start inline edit
+    setEditingContext(context)
     startInlineEdit(editableElement)
-  }
+  }, [isInlineEditing, isAIEditing])
 
-  const startInlineEdit = (element: HTMLElement) => {
+  const startInlineEdit = useCallback((element: HTMLElement) => {
     if (isInlineEditing) return
     
     setIsInlineEditing(true)
     const editId = `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     setEditingElementId(editId)
     
-    // Store the original element for reference
     element.setAttribute('data-edit-id', editId)
     element.setAttribute('data-original-content', element.textContent || '')
     
@@ -261,19 +255,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     } else {
       startTextEdit(element, editId)
     }
-  }
+  }, [isInlineEditing])
 
-  const startTextEdit = (element: HTMLElement, editId: string) => {
+  const startTextEdit = useCallback((element: HTMLElement, editId: string) => {
     const currentText = element.textContent || ''
     const computedStyle = window.getComputedStyle(element)
     
-    // Create input with similar styling
     const input = document.createElement('input')
     input.type = 'text'
     input.value = currentText
     input.className = 'inline-edit-input'
     
-    // Apply styling to match original element
     input.style.cssText = `
       background: white;
       border: 2px solid #3b82f6;
@@ -289,14 +281,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
     `
     
-    // Replace element with input
     const parent = element.parentNode
     if (parent) {
       const nextSibling = element.nextSibling
       parent.removeChild(element)
       parent.insertBefore(input, nextSibling)
       
-      // Focus and select text
       input.focus()
       input.select()
       
@@ -305,20 +295,24 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         
         if (save && newText !== currentText && newText.length > 0) {
           element.textContent = newText
+          // Update content immediately and persist state
           updateContentInDOM()
         }
         
-        // Replace input back with element
         if (parent && input.parentNode === parent) {
           parent.removeChild(input)
           parent.insertBefore(element, nextSibling)
         }
         
-        // Clean up attributes
         element.removeAttribute('data-edit-id')
         element.removeAttribute('data-original-content')
-        setIsInlineEditing(false)
-        setEditingElementId(null)
+        
+        // Use setTimeout to ensure state updates are properly applied
+        setTimeout(() => {
+          setIsInlineEditing(false)
+          setEditingElementId(null)
+          setEditingContext('main')
+        }, 50)
       }
       
       const handleKeydown = (e: KeyboardEvent) => {
@@ -331,20 +325,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
       
       const handleBlur = () => {
-        // Small delay to allow for other interactions
         setTimeout(() => finishEdit(true), 100)
       }
       
       input.addEventListener('keydown', handleKeydown)
       input.addEventListener('blur', handleBlur)
     }
-  }
+  }, [])
 
-  const startLinkEdit = (linkElement: HTMLAnchorElement, editId: string) => {
+  const startLinkEdit = useCallback((linkElement: HTMLAnchorElement, editId: string) => {
     const currentText = linkElement.textContent || ''
     const currentHref = linkElement.href || ''
     
-    // Create inline link editor container
     const container = document.createElement('div')
     container.className = 'inline-edit-link-container'
     container.style.cssText = `
@@ -377,12 +369,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       </div>
     `
     
-    // Position the container near the link
     const rect = linkElement.getBoundingClientRect()
     container.style.top = `${rect.bottom + window.scrollY + 5}px`
     container.style.left = `${rect.left + window.scrollX}px`
     
-    // Add to document body
     document.body.appendChild(container)
     
     const textInput = container.querySelector('.link-text-input') as HTMLInputElement
@@ -408,18 +398,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         }
       }
       
-      // Remove container
       if (document.body.contains(container)) {
         document.body.removeChild(container)
       }
       
       linkElement.removeAttribute('data-edit-id')
       linkElement.removeAttribute('data-original-content')
-      setIsInlineEditing(false)
-      setEditingElementId(null)
+      
+      setTimeout(() => {
+        setIsInlineEditing(false)
+        setEditingElementId(null)
+        setEditingContext('main')
+      }, 50)
     }
     
-    // Event handlers
     if (saveBtn) saveBtn.addEventListener('click', () => finishEdit(true))
     if (cancelBtn) cancelBtn.addEventListener('click', () => finishEdit(false))
     if (openBtn) {
@@ -430,7 +422,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       })
     }
     
-    // Keyboard shortcuts
     const handleKeydown = (e: KeyboardEvent) => {
       e.stopPropagation()
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -443,7 +434,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     if (textInput) textInput.addEventListener('keydown', handleKeydown)
     if (urlInput) urlInput.addEventListener('keydown', handleKeydown)
     
-    // Click outside to save
     const handleClickOutside = (e: MouseEvent) => {
       if (!container.contains(e.target as Node)) {
         finishEdit(true)
@@ -451,25 +441,23 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
     }
     
-    // Add click outside listener after a small delay
     setTimeout(() => {
       document.addEventListener('click', handleClickOutside)
     }, 100)
-  }
+  }, [])
 
-  // Fixed content update function
-  const updateContentInDOM = () => {
-    const previewContainer = previewRef.current
+  // Fixed content update function with proper state preservation
+  const updateContentInDOM = useCallback(() => {
+    const previewContainer = editingContext === 'modal' ? modalPreviewRef.current : mainPreviewRef.current
     if (!previewContainer) return
     
-    // Get the updated HTML from the preview container
     const updatedHTML = previewContainer.innerHTML
     
     setFormData(prev => ({
       ...prev,
       content: updatedHTML
     }))
-  }
+  }, [editingContext])
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -480,13 +468,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setSuccess('')
   }
 
-  // Reset form to original values
   const handleReset = () => {
     setFormData(originalFormData)
     setError('')
     setSuccess('')
     
-    // Auto-resize content textarea after reset
     setTimeout(() => {
       if (contentRef.current) {
         autoResize(contentRef.current)
@@ -494,9 +480,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Detect content type from URL
   const detectContentType = (url: string): 'file' | 'webpage' => {
-    // Check if it's a direct file URL
     const fileExtensions = [
       'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg',
       'pdf', 'doc', 'docx', 'txt', 'rtf', 'md',
@@ -508,16 +492,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return 'file'
     }
     
-    // Check if it's a Cosmic CDN URL or other direct file URLs
     if (url.includes('cdn.cosmicjs.com') || url.includes('/uploads/') || url.includes('/files/')) {
       return 'file'
     }
     
-    // Otherwise, treat as webpage
     return 'webpage'
   }
 
-  // Get appropriate icon for content type
   const getContextIcon = (item: ContextItem) => {
     if (item.type === 'webpage') {
       return <Globe className="h-4 w-4" />
@@ -534,7 +515,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     return <File className="h-4 w-4" />
   }
 
-  // Add context item
   const addContextItem = (url: string) => {
     if (!url.trim()) return
     
@@ -550,12 +530,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setShowContextInput(false)
   }
 
-  // Remove context item
   const removeContextItem = (id: string) => {
     setContextItems(prev => prev.filter(item => item.id !== id))
   }
 
-  // Handle context URL input
   const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -572,7 +550,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
-    // Fixed: Add proper null check for template.id
     if (!template.id) {
       setError('Template ID is missing')
       return
@@ -586,10 +563,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setAiStatus('Starting AI editing...')
     setAiProgress(0)
     
+    // Cancel any ongoing inline editing
+    if (isInlineEditing) {
+      setIsInlineEditing(false)
+      setEditingElementId(null)
+    }
+    
     try {
-      // Create the request body with guaranteed string templateId
       const requestBody = {
-        templateId: template.id, // Now safely guaranteed to be a string
+        templateId: template.id,
         currentContent: formData.content,
         currentSubject: formData.subject,
         prompt: aiPrompt,
@@ -641,6 +623,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     content: accumulatedContent
                   }))
                 } else if (data.type === 'complete') {
+                  // Ensure inline editing state is properly reset after AI completion
+                  setIsInlineEditing(false)
+                  setEditingElementId(null)
+                  setEditingContext('main')
+                  
                   setFormData(prev => ({
                     ...prev,
                     content: data.data.content,
@@ -651,22 +638,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   setSuccess('Template updated with AI suggestions!')
                   addToast('AI editing completed successfully!', 'success')
                   
-                  // Clear the current prompt but maintain session for continued editing
                   setAiPrompt('')
                   
-                  // Auto-resize content textarea after update
                   setTimeout(() => {
                     if (contentRef.current) {
                       autoResize(contentRef.current)
                     }
                     
-                    // Focus back to edit prompt for continued editing
                     if (aiPromptRef.current) {
                       aiPromptRef.current.focus()
                     }
                   }, 100)
                   
-                  // Show continuation prompt after success
                   setTimeout(() => {
                     setSuccess('Ready for more edits! Add another instruction or save template.')
                   }, 2000)
@@ -698,27 +681,24 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
-  // End editing session
   const endEditingSession = () => {
     setEditingSessionActive(false)
     setAiPrompt('')
     setContextItems([])
     setShowAIModal(false)
+    
+    // Reset inline editing state
+    setIsInlineEditing(false)
+    setEditingElementId(null)
+    setEditingContext('main')
   }
 
-  // Handle modal close - close modal without saving
   const handleModalCancel = () => {
     setShowAIModal(false)
-    // Optionally end the editing session or keep it active for later
   }
 
-  // Handle modal save - ONLY close modal and update content, do NOT save to database
   const handleModalSave = () => {
-    // Just close the modal - the template content has already been updated in formData
-    // This allows the user to continue editing or manually save the template later
     setShowAIModal(false)
-    
-    // Show a message indicating the content has been updated but not saved
     setSuccess('Template content updated! Click "Update Template" to save your changes.')
     addToast('Template content updated! Click "Update Template" to save your changes.', 'success')
   }
@@ -743,7 +723,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
-    // Fixed: Add null check for template.id before making API call
     if (!template.id) {
       setError('Template ID is missing')
       return
@@ -753,7 +732,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     startTransition(async () => {
       try {
-        // template.id is now safely guaranteed to be a string due to the check above
         const response = await fetch(`/api/templates/${template.id}`, {
           method: 'PUT',
           headers: {
@@ -773,8 +751,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || 'Failed to update template')
         }
 
-        // CRITICAL FIX: Reset navigation prevention after successful update
-        // Update the original form data to match current form data
         setOriginalFormData({
           name: formData.name.trim(),
           subject: formData.subject.trim(),
@@ -783,13 +759,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           active: formData.active
         })
 
-        // Clear unsaved changes flag since we're successfully submitting
         setHasUnsavedChanges(false)
 
         setSuccess('Template updated successfully!')
         addToast('Template updated successfully!', 'success')
         
-        // End any active editing session
         setEditingSessionActive(false)
 
       } catch (error) {
@@ -821,9 +795,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         throw new Error(errorData.error || 'Failed to delete template')
       }
 
-      // Redirect to templates list and refresh data
       router.push('/templates')
-      router.refresh() // Ensure fresh data is fetched
+      router.refresh()
     } catch (error) {
       console.error('Delete error:', error)
       setError(error instanceof Error ? error.message : 'Failed to delete template')
@@ -831,7 +804,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
-  // Handle cancel with unsaved changes check
   const handleCancel = () => {
     if (editingSessionActive) {
       endEditingSession()
@@ -1005,15 +977,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   </div>
                   <div className="p-4 max-h-96 overflow-y-auto">
                     <div 
-                      ref={previewRef}
+                      ref={mainPreviewRef}
                       className="prose max-w-none text-sm cursor-pointer hover:bg-blue-50/30 transition-colors"
-                      onClick={handleInlineEdit}
+                      onClick={(e) => handleInlineEdit(e, 'main')}
                       dangerouslySetInnerHTML={{ 
                         __html: formData.content || '<p className="text-gray-500">No content</p>' 
                       }}
                       style={{
-                        pointerEvents: isInlineEditing ? 'none' : 'auto',
-                        userSelect: isInlineEditing ? 'none' : 'text'
+                        pointerEvents: (isInlineEditing && editingContext === 'main') || isAIEditing ? 'none' : 'auto',
+                        userSelect: (isInlineEditing && editingContext === 'main') || isAIEditing ? 'none' : 'text'
                       }}
                     />
                     {/* Preview unsubscribe footer */}
@@ -1038,8 +1010,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <div className="text-sm text-blue-800">
                         <p className="font-medium mb-1">💡 Click to Edit</p>
                         <p className="text-xs">
-                          Click on any text in the preview above to edit it inline. 
-                          {isInlineEditing && <span className="text-blue-700 font-medium"> Currently editing...</span>}
+                          Click on any text in the preview above to edit it inline.
+                          {(isInlineEditing && editingContext === 'main') && <span className="text-blue-700 font-medium"> Currently editing...</span>}
+                          {isAIEditing && <span className="text-purple-700 font-medium"> AI is editing content...</span>}
                         </p>
                       </div>
                     </div>
@@ -1077,7 +1050,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </Card>
       </div>
 
-      {/* AI Modal with Fixed Footer - Updated to remove Back to Generate button */}
+      {/* AI Modal with Fixed Footer */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
         <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
@@ -1292,15 +1265,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                         </div>
                         <div className="p-4 max-h-96 overflow-y-auto">
                           <div 
-                            ref={previewRef}
+                            ref={modalPreviewRef}
                             className="prose max-w-none text-sm cursor-text hover:bg-blue-50/30 transition-colors"
-                            onClick={handleInlineEdit}
+                            onClick={(e) => handleInlineEdit(e, 'modal')}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content || '<p className="text-gray-500">No content</p>' 
                             }}
                             style={{
-                              pointerEvents: isInlineEditing ? 'none' : 'auto',
-                              userSelect: isInlineEditing ? 'none' : 'text'
+                              pointerEvents: (isInlineEditing && editingContext === 'modal') || isAIEditing ? 'none' : 'auto',
+                              userSelect: (isInlineEditing && editingContext === 'modal') || isAIEditing ? 'none' : 'text'
                             }}
                           />
                           {/* Preview unsubscribe footer */}
@@ -1322,8 +1295,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                             <div className="text-sm text-blue-800">
                               <p className="font-medium mb-1">Inline Editing</p>
                               <p className="text-xs">
-                                Click on any text to edit it inline. For links, click to edit both text and URL. 
-                                {isInlineEditing && <span className="text-blue-700 font-medium"> Currently editing...</span>}
+                                Click on any text to edit it inline. For links, click to edit both text and URL.
+                                {(isInlineEditing && editingContext === 'modal') && <span className="text-blue-700 font-medium"> Currently editing...</span>}
+                                {isAIEditing && <span className="text-purple-700 font-medium"> AI is editing content...</span>}
                               </p>
                             </div>
                           </div>
@@ -1366,10 +1340,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </div>
           </div>
 
-          {/* Fixed Footer - Updated to remove Reset button */}
+          {/* Fixed Footer */}
           <div className="border-t bg-white px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
-              {/* Left side: Cancel button */}
               <Button
                 type="button"
                 variant="outline"
@@ -1379,7 +1352,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 Cancel
               </Button>
 
-              {/* Right side: Save button only */}
               <div className="flex items-center space-x-3">
                 <Button
                   type="button"
