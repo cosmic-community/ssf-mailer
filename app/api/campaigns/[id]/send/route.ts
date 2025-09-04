@@ -169,7 +169,7 @@ export async function POST(
 
           personalizedContent += unsubscribeFooter
 
-          // Add enhanced tracking to email content
+          // Add click tracking to email content
           console.log('Adding tracking for contact:', contactId, 'campaign:', id)
           const trackedContent = addTrackingToEmail(
             personalizedContent,
@@ -183,7 +183,7 @@ export async function POST(
             from: `${fromName} <${fromEmail}>`,
             to: [email],
             subject: personalizedSubject, // Use personalized subject from snapshot
-            html: trackedContent, // Use tracked content with enhanced open/click tracking
+            html: trackedContent, // Use tracked content with click tracking
             text: trackedContent.replace(/<[^>]*>/g, ''), // Strip HTML for text version
             reply_to: replyToEmail,
             headers: {

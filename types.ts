@@ -64,7 +64,7 @@ export interface TemplateSnapshot {
   original_template_id: string;
 }
 
-// Campaign statistics interface
+// Campaign statistics interface - added missing opened property
 export interface CampaignStats {
   sent?: number;
   delivered?: number;
