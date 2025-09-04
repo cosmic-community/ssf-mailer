@@ -48,21 +48,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showAIModal, setShowAIModal] = useState(false)
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
-  // Fixed inline editing states with better tracking
-  const [isInlineEditing, setIsInlineEditing] = useState(false)
-  const [editingElementId, setEditingElementId] = useState<string | null>(null)
-  const [editingContext, setEditingContext] = useState<'main' | 'modal'>('main')
+  // Simple editing states - much cleaner approach
+  const [isEditing, setIsEditing] = useState(false)
   
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [showContextInput, setShowContextInput] = useState(false)
   const [contextUrl, setContextUrl] = useState('')
 
-  // Refs for autofocus and auto-resize - separate refs for main and modal
+  // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const mainPreviewRef = useRef<HTMLDivElement>(null)
-  const modalPreviewRef = useRef<HTMLDivElement>(null) // Fixed: Ensure this ref exists
+  const modalPreviewRef = useRef<HTMLDivElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -185,313 +183,64 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Enhanced inline editing implementation with proper context handling
-  const handleInlineEdit = useCallback((event: React.MouseEvent, context: 'main' | 'modal' = 'main') => {
-    // Prevent editing if already in edit mode or AI is processing
-    if (isInlineEditing || isAIEditing) {
-      console.log('Inline editing blocked:', { isInlineEditing, isAIEditing })
-      return
-    }
+  // Simple and effective inline editing implementation
+  const startEditMode = (previewRef: React.RefObject<HTMLDivElement>) => {
+    if (!previewRef.current || isEditing || isAIEditing) return
     
-    event.preventDefault()
-    event.stopPropagation()
+    console.log('Starting edit mode')
+    setIsEditing(true)
     
-    const target = event.target as HTMLElement
-    console.log('Inline edit triggered:', { context, target: target.tagName })
+    const previewDiv = previewRef.current
+    previewDiv.contentEditable = 'true'
+    previewDiv.style.outline = '2px solid #3b82f6'
+    previewDiv.style.outlineOffset = '2px'
+    previewDiv.style.backgroundColor = '#fefefe'
+    previewDiv.focus()
     
-    // Skip if clicking on buttons, inputs, or interactive elements
-    if (
-      target.closest('button') || 
-      target.closest('input') || 
-      target.closest('select') || 
-      target.closest('textarea') ||
-      target.tagName.toLowerCase() === 'button' ||
-      target.tagName.toLowerCase() === 'input'
-    ) {
-      console.log('Skipping inline edit - clicked on interactive element')
-      return
-    }
-    
-    // Find the closest editable text element
-    let editableElement = target.closest('p, h1, h2, h3, h4, h5, h6, span, div, td, th, li, a') as HTMLElement
-    
-    if (!editableElement && target.nodeType === Node.ELEMENT_NODE) {
-      const tagName = target.tagName.toLowerCase()
-      if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'td', 'th', 'li', 'a'].includes(tagName)) {
-        editableElement = target
-      }
-    }
-    
-    if (!editableElement) {
-      let parent = target.parentElement
-      while (parent) {
-        if (parent.textContent && parent.textContent.trim().length > 0) {
-          const tagName = parent.tagName.toLowerCase()
-          if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div', 'td', 'th', 'li', 'a'].includes(tagName)) {
-            editableElement = parent
-            break
-          }
-        }
-        parent = parent.parentElement
-      }
-    }
-    
-    if (!editableElement || !editableElement.textContent) {
-      console.log('No editable element found')
-      return
-    }
-    
-    console.log('Starting inline edit:', { context, element: editableElement.tagName })
-    
-    // Set editing context FIRST before starting edit
-    setEditingContext(context)
-    startInlineEdit(editableElement)
-  }, [isInlineEditing, isAIEditing])
-
-  const startInlineEdit = useCallback((element: HTMLElement) => {
-    if (isInlineEditing) {
-      console.log('Already in inline editing mode')
-      return
-    }
-    
-    console.log('Starting inline edit for element:', element.tagName)
-    
-    setIsInlineEditing(true)
-    const editId = `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    setEditingElementId(editId)
-    
-    element.setAttribute('data-edit-id', editId)
-    element.setAttribute('data-original-content', element.textContent || '')
-    
-    const isLink = element.tagName.toLowerCase() === 'a'
-    
-    if (isLink) {
-      startLinkEdit(element as HTMLAnchorElement, editId)
-    } else {
-      startTextEdit(element, editId)
-    }
-  }, [isInlineEditing])
-
-  const startTextEdit = useCallback((element: HTMLElement, editId: string) => {
-    const currentText = element.textContent || ''
-    const computedStyle = window.getComputedStyle(element)
-    
-    console.log('Starting text edit:', { currentText, editId })
-    
-    const input = document.createElement('input')
-    input.type = 'text'
-    input.value = currentText
-    input.className = 'inline-edit-input'
-    
-    input.style.cssText = `
-      background: white;
-      border: 2px solid #3b82f6;
-      border-radius: 4px;
-      padding: 4px 8px;
-      font-family: ${computedStyle.fontFamily};
-      font-size: ${computedStyle.fontSize};
-      font-weight: ${computedStyle.fontWeight};
-      color: ${computedStyle.color};
-      width: ${Math.max(200, element.offsetWidth)}px;
-      min-width: 200px;
-      outline: none;
-      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-      z-index: 1001;
-    `
-    
-    const parent = element.parentNode
-    if (parent) {
-      const nextSibling = element.nextSibling
-      parent.removeChild(element)
-      parent.insertBefore(input, nextSibling)
+    // Add finish editing handler
+    const finishEditing = () => {
+      if (!previewDiv || !isEditing) return
       
-      input.focus()
-      input.select()
+      console.log('Finishing edit mode')
+      previewDiv.contentEditable = 'false'
+      previewDiv.style.outline = 'none'
+      previewDiv.style.outlineOffset = 'initial'
+      previewDiv.style.backgroundColor = 'transparent'
       
-      const finishEdit = (save: boolean) => {
-        console.log('Finishing text edit:', { save, newValue: input.value })
-        
-        const newText = input.value.trim()
-        
-        if (save && newText !== currentText && newText.length > 0) {
-          element.textContent = newText
-          // Update content immediately and persist state
-          setTimeout(() => updateContentInDOM(), 50)
-        }
-        
-        if (parent && input.parentNode === parent) {
-          parent.removeChild(input)
-          parent.insertBefore(element, nextSibling)
-        }
-        
-        element.removeAttribute('data-edit-id')
-        element.removeAttribute('data-original-content')
-        
-        // Use setTimeout to ensure state updates are properly applied
-        setTimeout(() => {
-          setIsInlineEditing(false)
-          setEditingElementId(null)
-          setEditingContext('main')
-        }, 50)
-      }
-      
-      const handleKeydown = (e: KeyboardEvent) => {
-        e.stopPropagation()
-        if (e.key === 'Enter') {
-          finishEdit(true)
-        } else if (e.key === 'Escape') {
-          finishEdit(false)
-        }
-      }
-      
-      const handleBlur = () => {
-        setTimeout(() => finishEdit(true), 100)
-      }
-      
-      input.addEventListener('keydown', handleKeydown)
-      input.addEventListener('blur', handleBlur)
-    }
-  }, [])
-
-  const startLinkEdit = useCallback((linkElement: HTMLAnchorElement, editId: string) => {
-    const currentText = linkElement.textContent || ''
-    const currentHref = linkElement.href || ''
-    
-    console.log('Starting link edit:', { currentText, currentHref, editId })
-    
-    const container = document.createElement('div')
-    container.className = 'inline-edit-link-container'
-    container.style.cssText = `
-      background: white;
-      border: 2px solid #3b82f6;
-      border-radius: 8px;
-      padding: 12px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      position: fixed;
-      z-index: 1002;
-      min-width: 300px;
-      max-width: 400px;
-    `
-    
-    container.innerHTML = `
-      <div style="display: flex; flex-direction: column; gap: 8px;">
-        <div>
-          <label style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px;">Link Text:</label>
-          <input type="text" class="link-text-input" value="${currentText}" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-        </div>
-        <div>
-          <label style="display: block; font-size: 12px; font-weight: 600; color: #374151; margin-bottom: 4px;">URL:</label>
-          <input type="url" class="link-url-input" value="${currentHref}" style="width: 100%; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 14px;" />
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 8px;">
-          <button class="save-btn" style="background: #3b82f6; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Save</button>
-          <button class="cancel-btn" style="background: #6b7280; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Cancel</button>
-          <button class="open-link-btn" style="background: #059669; color: white; border: none; padding: 6px 12px; border-radius: 4px; font-size: 12px; cursor: pointer;">Open Link</button>
-        </div>
-      </div>
-    `
-    
-    const rect = linkElement.getBoundingClientRect()
-    container.style.top = `${rect.bottom + window.scrollY + 5}px`
-    container.style.left = `${Math.max(10, rect.left + window.scrollX)}px`
-    
-    document.body.appendChild(container)
-    
-    const textInput = container.querySelector('.link-text-input') as HTMLInputElement
-    const urlInput = container.querySelector('.link-url-input') as HTMLInputElement
-    const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement
-    const cancelBtn = container.querySelector('.cancel-btn') as HTMLButtonElement
-    const openBtn = container.querySelector('.open-link-btn') as HTMLButtonElement
-    
-    if (textInput) {
-      textInput.focus()
-      textInput.select()
-    }
-    
-    const finishEdit = (save: boolean) => {
-      console.log('Finishing link edit:', { save })
-      
-      if (save && textInput && urlInput) {
-        const newText = textInput.value.trim()
-        const newUrl = urlInput.value.trim()
-        
-        if (newText !== currentText || newUrl !== currentHref) {
-          linkElement.textContent = newText || currentText
-          linkElement.href = newUrl || currentHref
-          setTimeout(() => updateContentInDOM(), 50)
-        }
-      }
-      
-      if (document.body.contains(container)) {
-        document.body.removeChild(container)
-      }
-      
-      linkElement.removeAttribute('data-edit-id')
-      linkElement.removeAttribute('data-original-content')
-      
-      setTimeout(() => {
-        setIsInlineEditing(false)
-        setEditingElementId(null)
-        setEditingContext('main')
-      }, 50)
-    }
-    
-    if (saveBtn) saveBtn.addEventListener('click', () => finishEdit(true))
-    if (cancelBtn) cancelBtn.addEventListener('click', () => finishEdit(false))
-    if (openBtn) {
-      openBtn.addEventListener('click', () => {
-        if (urlInput && urlInput.value.trim()) {
-          window.open(urlInput.value.trim(), '_blank', 'noopener,noreferrer')
-        }
-      })
-    }
-    
-    const handleKeydown = (e: KeyboardEvent) => {
-      e.stopPropagation()
-      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-        finishEdit(true)
-      } else if (e.key === 'Escape') {
-        finishEdit(false)
-      }
-    }
-    
-    if (textInput) textInput.addEventListener('keydown', handleKeydown)
-    if (urlInput) urlInput.addEventListener('keydown', handleKeydown)
-    
-    const handleClickOutside = (e: MouseEvent) => {
-      if (!container.contains(e.target as Node)) {
-        finishEdit(true)
-        document.removeEventListener('click', handleClickOutside)
-      }
-    }
-    
-    setTimeout(() => {
-      document.addEventListener('click', handleClickOutside)
-    }, 100)
-  }, [])
-
-  // Fixed content update function with proper context awareness
-  const updateContentInDOM = useCallback(() => {
-    const previewContainer = editingContext === 'modal' ? modalPreviewRef.current : mainPreviewRef.current
-    console.log('Updating content in DOM:', { editingContext, hasContainer: !!previewContainer })
-    
-    if (!previewContainer) {
-      console.warn('Preview container not found for context:', editingContext)
-      return
-    }
-    
-    const updatedHTML = previewContainer.innerHTML
-    console.log('Updated HTML length:', updatedHTML.length)
-    
-    setFormData(prev => {
-      const newData = {
+      // Update form data with new content
+      const updatedContent = previewDiv.innerHTML
+      setFormData(prev => ({
         ...prev,
-        content: updatedHTML
+        content: updatedContent
+      }))
+      
+      setIsEditing(false)
+      
+      // Remove event listeners
+      previewDiv.removeEventListener('blur', handleBlur)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+    
+    const handleBlur = (e: FocusEvent) => {
+      // Small delay to allow clicking on buttons without losing focus
+      setTimeout(() => {
+        if (!previewDiv.contains(document.activeElement)) {
+          finishEditing()
+        }
+      }, 200)
+    }
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        finishEditing()
       }
-      console.log('Form data updated, content length:', newData.content.length)
-      return newData
-    })
-  }, [editingContext])
+    }
+    
+    // Add event listeners
+    previewDiv.addEventListener('blur', handleBlur)
+    document.addEventListener('keydown', handleKeyDown)
+  }
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -597,10 +346,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setAiStatus('Starting AI editing...')
     setAiProgress(0)
     
-    // Cancel any ongoing inline editing
-    if (isInlineEditing) {
-      setIsInlineEditing(false)
-      setEditingElementId(null)
+    // Exit editing mode if active
+    if (isEditing) {
+      setIsEditing(false)
+      if (mainPreviewRef.current) {
+        mainPreviewRef.current.contentEditable = 'false'
+        mainPreviewRef.current.style.outline = 'none'
+      }
+      if (modalPreviewRef.current) {
+        modalPreviewRef.current.contentEditable = 'false'
+        modalPreviewRef.current.style.outline = 'none'
+      }
     }
     
     try {
@@ -657,11 +413,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     content: accumulatedContent
                   }))
                 } else if (data.type === 'complete') {
-                  // Ensure inline editing state is properly reset after AI completion
-                  setIsInlineEditing(false)
-                  setEditingElementId(null)
-                  setEditingContext('main')
-                  
                   setFormData(prev => ({
                     ...prev,
                     content: data.data.content,
@@ -721,10 +472,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setContextItems([])
     setShowAIModal(false)
     
-    // Reset inline editing state
-    setIsInlineEditing(false)
-    setEditingElementId(null)
-    setEditingContext('main')
+    // Reset editing state
+    setIsEditing(false)
+    if (mainPreviewRef.current) {
+      mainPreviewRef.current.contentEditable = 'false'
+      mainPreviewRef.current.style.outline = 'none'
+    }
+    if (modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+    }
   }
 
   const handleModalCancel = () => {
@@ -1012,14 +769,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <div className="p-4 max-h-96 overflow-y-auto">
                     <div 
                       ref={mainPreviewRef}
-                      className="prose max-w-none text-sm cursor-pointer hover:bg-blue-50/30 transition-colors"
-                      onClick={(e) => handleInlineEdit(e, 'main')}
+                      className={`prose max-w-none text-sm transition-all duration-200 ${
+                        isEditing 
+                          ? 'cursor-text' 
+                          : 'cursor-pointer hover:bg-blue-50/30'
+                      }`}
+                      onClick={() => !isEditing && !isAIEditing && startEditMode(mainPreviewRef)}
                       dangerouslySetInnerHTML={{ 
                         __html: formData.content || '<p className="text-gray-500">No content</p>' 
                       }}
                       style={{
-                        pointerEvents: (isInlineEditing && editingContext === 'main') || isAIEditing ? 'none' : 'auto',
-                        userSelect: (isInlineEditing && editingContext === 'main') || isAIEditing ? 'none' : 'text'
+                        pointerEvents: isAIEditing ? 'none' : 'auto',
+                        userSelect: isAIEditing ? 'none' : 'text'
                       }}
                     />
                     {/* Preview unsubscribe footer */}
@@ -1042,11 +803,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <div className="flex items-start space-x-2">
                       <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-blue-800">
-                        <p className="font-medium mb-1">💡 Click to Edit</p>
+                        <p className="font-medium mb-1">✨ Simple Editing</p>
                         <p className="text-xs">
-                          Click on any text in the preview above to edit it inline.
-                          {(isInlineEditing && editingContext === 'main') && <span className="text-blue-700 font-medium"> Currently editing...</span>}
-                          {isAIEditing && <span className="text-purple-700 font-medium"> AI is editing content...</span>}
+                          {isEditing ? (
+                            <span className="text-blue-700 font-medium">
+                              Editing mode active - make your changes and press Escape or click outside to finish
+                            </span>
+                          ) : isAIEditing ? (
+                            <span className="text-purple-700 font-medium">
+                              AI is editing content...
+                            </span>
+                          ) : (
+                            <>Click anywhere in the preview above to edit the content directly. It's that simple!</>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -1282,7 +1051,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <CardHeader>
                       <CardTitle>Email Preview</CardTitle>
                       <p className="text-sm text-gray-600">
-                        How your email will appear to recipients - Click to edit text inline
+                        How your email will appear to recipients - Click to edit content directly
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -1300,14 +1069,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                         <div className="p-4 max-h-96 overflow-y-auto">
                           <div 
                             ref={modalPreviewRef}
-                            className="prose max-w-none text-sm cursor-text hover:bg-blue-50/30 transition-colors"
-                            onClick={(e) => handleInlineEdit(e, 'modal')}
+                            className={`prose max-w-none text-sm transition-all duration-200 ${
+                              isEditing 
+                                ? 'cursor-text' 
+                                : 'cursor-pointer hover:bg-blue-50/30'
+                            }`}
+                            onClick={() => !isEditing && !isAIEditing && startEditMode(modalPreviewRef)}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content || '<p className="text-gray-500">No content</p>' 
                             }}
                             style={{
-                              pointerEvents: (isInlineEditing && editingContext === 'modal') || isAIEditing ? 'none' : 'auto',
-                              userSelect: (isInlineEditing && editingContext === 'modal') || isAIEditing ? 'none' : 'text'
+                              pointerEvents: isAIEditing ? 'none' : 'auto',
+                              userSelect: isAIEditing ? 'none' : 'text'
                             }}
                           />
                           {/* Preview unsubscribe footer */}
@@ -1327,11 +1100,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                           <div className="flex items-start space-x-2">
                             <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                             <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">Inline Editing</p>
+                              <p className="font-medium mb-1">Direct Editing</p>
                               <p className="text-xs">
-                                Click on any text to edit it inline. For links, click to edit both text and URL.
-                                {(isInlineEditing && editingContext === 'modal') && <span className="text-blue-700 font-medium"> Currently editing...</span>}
-                                {isAIEditing && <span className="text-purple-700 font-medium"> AI is editing content...</span>}
+                                {isEditing ? (
+                                  <span className="text-blue-700 font-medium">
+                                    Editing mode active - make your changes and press Escape or click outside to finish
+                                  </span>
+                                ) : isAIEditing ? (
+                                  <span className="text-purple-700 font-medium">
+                                    AI is editing content...
+                                  </span>
+                                ) : (
+                                  <>Click anywhere in the preview to edit the content directly. Simple and fast!</>
+                                )}
                               </p>
                             </div>
                           </div>
