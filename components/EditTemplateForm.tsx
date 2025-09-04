@@ -65,7 +65,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     active: template.metadata.active
   })
 
-  // Store original template data for reset functionality
+  // Store original template data for reset functionality and change tracking
   const [originalFormData] = useState({
     name: template.metadata.name,
     subject: template.metadata.subject,
@@ -73,6 +73,78 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     template_type: template.metadata.template_type.value as TemplateType,
     active: template.metadata.active
   })
+
+  // Track if form has unsaved changes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Check if form has changes
+  const hasFormChanges = () => {
+    return (
+      formData.name !== originalFormData.name ||
+      formData.subject !== originalFormData.subject ||
+      formData.content !== originalFormData.content ||
+      formData.template_type !== originalFormData.template_type ||
+      formData.active !== originalFormData.active
+    )
+  }
+
+  // Update unsaved changes state whenever form data changes
+  useEffect(() => {
+    setHasUnsavedChanges(hasFormChanges() && !isSubmitting)
+  }, [formData, isSubmitting])
+
+  // Prevent navigation away with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return 'You have unsaved changes. Are you sure you want to leave?'
+      }
+    }
+
+    // Add beforeunload listener for browser tab close/refresh
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Store original router methods
+    const originalPush = router.push
+    const originalBack = router.back
+    const originalReplace = router.replace
+
+    // Override router methods to check for unsaved changes
+    router.push = (...args) => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return Promise.resolve(true)
+      }
+      return originalPush.apply(router, args)
+    }
+
+    router.back = () => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return
+      }
+      return originalBack.apply(router)
+    }
+
+    router.replace = (...args) => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return Promise.resolve(true)
+      }
+      return originalReplace.apply(router, args)
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Restore original router methods
+      router.push = originalPush
+      router.back = originalBack
+      router.replace = originalReplace
+    }
+  }, [hasUnsavedChanges, isSubmitting, router])
 
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -397,6 +469,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
+    setIsSubmitting(true)
+
     startTransition(async () => {
       try {
         // template.id is now safely guaranteed to be a string due to the check above
@@ -419,6 +493,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || 'Failed to update template')
         }
 
+        // Clear unsaved changes flag since we're successfully submitting
+        setHasUnsavedChanges(false)
+
         setSuccess('Template updated successfully!')
         showToast()
         
@@ -434,6 +511,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       } catch (error) {
         console.error('Update error:', error)
         setError(error instanceof Error ? error.message : 'Failed to update template')
+      } finally {
+        setIsSubmitting(false)
       }
     })
   }
@@ -467,6 +546,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
+  // Handle cancel with unsaved changes check
+  const handleCancel = () => {
+    if (editingSessionActive) {
+      endEditingSession()
+      return
+    }
+    
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+      if (!confirmed) return
+    }
+    router.back()
+  }
+
   return (
     <div className="space-y-6">
       {/* Success Toast */}
@@ -474,6 +567,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         <div className="fixed top-4 right-4 z-50 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center space-x-2 animate-in slide-in-from-top-2">
           <CheckCircle className="h-5 w-5" />
           <span>AI editing completed successfully!</span>
+        </div>
+      )}
+
+      {/* Unsaved Changes Warning */}
+      {hasUnsavedChanges && (
+        <div className="flex items-center space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
+          <AlertCircle className="h-5 w-5 text-amber-600" />
+          <p className="text-amber-700">You have unsaved changes. Make sure to save your template before leaving this page.</p>
         </div>
       )}
 
@@ -573,7 +674,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={editingSessionActive ? endEditingSession : () => router.back()}
+                  onClick={handleCancel}
                   disabled={isPending}
                   className="flex-1"
                 >
