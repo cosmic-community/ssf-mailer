@@ -151,25 +151,16 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Campaign Stats */}
+        {/* Campaign Stats - Removed open stats */}
         {campaign.metadata?.stats && (
           <div className="mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Campaign Performance</h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="card">
                 <div className="text-3xl font-bold text-gray-900">
                   {campaign.metadata.stats.sent || 0}
                 </div>
                 <div className="text-sm text-gray-500 mt-1">Emails Sent</div>
-              </div>
-              <div className="card">
-                <div className="text-3xl font-bold text-gray-900">
-                  {campaign.metadata.stats.opened || 0}
-                </div>
-                <div className="text-sm text-gray-500 mt-1">Opened</div>
-                <div className="text-xs text-gray-400 mt-1">
-                  {campaign.metadata.stats.open_rate || '0%'} open rate
-                </div>
               </div>
               <div className="card">
                 <div className="text-3xl font-bold text-gray-900">

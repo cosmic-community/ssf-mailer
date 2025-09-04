@@ -366,11 +366,9 @@ export async function createEmailCampaign(data: CampaignCreateData): Promise<Mar
         stats: {
           sent: 0,
           delivered: 0,
-          opened: 0,
           clicked: 0,
           bounced: 0,
           unsubscribed: 0,
-          open_rate: '0%',
           click_rate: '0%'
         }
       }
@@ -392,7 +390,6 @@ export async function updateEmailCampaign(
   data: Partial<CampaignCreateData> & { 
     title?: string
     sent_count?: number
-    open_count?: number
     click_count?: number
     sent_date?: string
     stats?: any

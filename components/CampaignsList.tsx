@@ -120,10 +120,10 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                         <div className="text-xs text-gray-500">sent</div>
                       </div>
                       <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
-                          {campaign.metadata.stats.open_rate || '0%'}
+                        <div className="text-2xl font-bold text-blue-600">
+                          {campaign.metadata.stats.click_rate || '0%'}
                         </div>
-                        <div className="text-xs text-gray-500">open rate</div>
+                        <div className="text-xs text-gray-500">click rate</div>
                       </div>
                     </>
                   ) : (

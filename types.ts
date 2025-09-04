@@ -64,15 +64,13 @@ export interface TemplateSnapshot {
   original_template_id: string;
 }
 
-// Campaign statistics interface
+// Campaign statistics interface - removed open tracking fields
 export interface CampaignStats {
   sent?: number;
   delivered?: number;
-  opened?: number;
   clicked?: number;
   bounced?: number;
   unsubscribed?: number;
-  open_rate?: string;
   click_rate?: string;
 }
 
