@@ -46,10 +46,9 @@ export default function CreateTemplateForm() {
   const [modalType, setModalType] = useState<'generate' | 'edit'>('generate')
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
-  // Inline editing states
+  // Fixed inline editing states
   const [isInlineEditing, setIsInlineEditing] = useState(false)
-  const [editingElement, setEditingElement] = useState<string | null>(null)
-  const [originalContent, setOriginalContent] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
   
   // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
@@ -198,7 +197,7 @@ export default function CreateTemplateForm() {
     })
   }, [])
 
-  // Inline editing functions
+  // Fixed inline editing implementation
   const handleInlineEdit = (event: React.MouseEvent) => {
     if (isInlineEditing) return
     
@@ -206,100 +205,120 @@ export default function CreateTemplateForm() {
     event.stopPropagation()
     
     const target = event.target as HTMLElement
-    const elementType = target.tagName.toLowerCase()
     
     // Skip if clicking on buttons or already editing
     if (target.closest('.inline-edit-button') || target.closest('button')) {
       return
     }
     
-    // Handle different element types
-    if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div'].includes(elementType) || target.closest('p, h1, h2, h3, h4, h5, h6')) {
-      const editableElement = target.closest('p, h1, h2, h3, h4, h5, h6') || target
-      startInlineEdit(editableElement as HTMLElement, 'text')
-    } else if (elementType === 'a' || target.closest('a')) {
-      const linkElement = (target.closest('a') || target) as HTMLAnchorElement
-      // Prevent following the link
-      event.preventDefault()
-      startInlineEdit(linkElement, 'link')
+    // Find the closest editable element
+    const editableElement = target.closest('p, h1, h2, h3, h4, h5, h6, span, div[contenteditable], a') as HTMLElement
+    if (!editableElement) return
+    
+    startInlineEdit(editableElement)
+  }
+
+  const startInlineEdit = (element: HTMLElement) => {
+    if (isInlineEditing) return
+    
+    setIsInlineEditing(true)
+    const editId = `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
+    setEditingId(editId)
+    
+    // Store the original element for reference
+    element.setAttribute('data-edit-id', editId)
+    
+    const isLink = element.tagName.toLowerCase() === 'a'
+    
+    if (isLink) {
+      startLinkEdit(element as HTMLAnchorElement, editId)
+    } else {
+      startTextEdit(element, editId)
     }
   }
 
-  const startInlineEdit = (element: HTMLElement, type: 'text' | 'link') => {
-    setIsInlineEditing(true)
-    setEditingElement(type)
-    setOriginalContent(element.outerHTML)
+  const startTextEdit = (element: HTMLElement, editId: string) => {
+    const currentText = element.textContent || ''
+    const input = document.createElement('input')
     
-    if (type === 'text') {
-      // Create inline text editor
-      const currentText = element.textContent || ''
-      const input = document.createElement('input')
-      input.type = 'text'
-      input.value = currentText
-      input.className = 'inline-edit-input bg-white border border-blue-400 rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500'
-      input.style.minWidth = '200px'
-      
-      // Replace element with input
-      element.parentNode?.replaceChild(input, element)
+    input.type = 'text'
+    input.value = currentText
+    input.className = 'inline-edit-input bg-white border-2 border-blue-400 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500'
+    input.style.minWidth = '200px'
+    input.style.width = Math.max(200, element.offsetWidth) + 'px'
+    
+    // Replace element with input
+    const parent = element.parentNode
+    if (parent) {
+      parent.replaceChild(input, element)
       input.focus()
       input.select()
       
       const finishEdit = (save: boolean) => {
-        if (save) {
-          element.textContent = input.value
-          updateContentInFormData(originalContent, element.outerHTML)
+        if (save && input.value.trim() !== currentText) {
+          element.textContent = input.value.trim()
+          updateContentInDOM(editId, element)
         }
-        input.parentNode?.replaceChild(element, input)
+        
+        if (parent && input.parentNode === parent) {
+          parent.replaceChild(element, input)
+        }
+        
+        element.removeAttribute('data-edit-id')
         setIsInlineEditing(false)
-        setEditingElement(null)
-        setOriginalContent('')
+        setEditingId(null)
       }
       
-      input.addEventListener('keydown', (e) => {
+      const handleKeydown = (e: KeyboardEvent) => {
+        e.stopPropagation()
         if (e.key === 'Enter') {
           finishEdit(true)
         } else if (e.key === 'Escape') {
           finishEdit(false)
         }
-      })
+      }
       
-      input.addEventListener('blur', () => {
-        finishEdit(true)
-      })
-      
-    } else if (type === 'link') {
-      const linkEl = element as HTMLAnchorElement
-      const currentText = linkEl.textContent || ''
-      const currentHref = linkEl.href || ''
-      
-      // Create inline link editor
-      const container = document.createElement('div')
-      container.className = 'inline-edit-container bg-white border border-blue-400 rounded p-3 shadow-lg'
-      container.style.minWidth = '300px'
-      container.innerHTML = `
-        <div class="space-y-2">
-          <div>
-            <label class="text-xs font-medium text-gray-700">Text:</label>
-            <input type="text" class="link-text-input w-full border border-gray-300 rounded px-2 py-1 text-sm" value="${currentText}" />
-          </div>
-          <div>
-            <label class="text-xs font-medium text-gray-700">URL:</label>
-            <input type="url" class="link-url-input w-full border border-gray-300 rounded px-2 py-1 text-sm" value="${currentHref}" />
-          </div>
-          <div class="flex space-x-2 pt-2">
-            <button class="save-btn bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700">Save</button>
-            <button class="cancel-btn bg-gray-300 text-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-400">Cancel</button>
-            <button class="open-link-btn bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 flex items-center space-x-1">
-              <span>Open</span>
-              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
-              </svg>
-            </button>
-          </div>
+      input.addEventListener('keydown', handleKeydown)
+      input.addEventListener('blur', () => finishEdit(true))
+    }
+  }
+
+  const startLinkEdit = (linkElement: HTMLAnchorElement, editId: string) => {
+    const currentText = linkElement.textContent || ''
+    const currentHref = linkElement.href || ''
+    
+    // Create inline link editor container
+    const container = document.createElement('div')
+    container.className = 'inline-edit-container bg-white border-2 border-blue-400 rounded p-3 shadow-lg z-50'
+    container.style.minWidth = '320px'
+    container.style.position = 'relative'
+    
+    container.innerHTML = `
+      <div class="space-y-2">
+        <div>
+          <label class="text-xs font-medium text-gray-700 block mb-1">Link Text:</label>
+          <input type="text" class="link-text-input w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value="${currentText}" />
         </div>
-      `
-      
-      element.parentNode?.replaceChild(container, element)
+        <div>
+          <label class="text-xs font-medium text-gray-700 block mb-1">URL:</label>
+          <input type="url" class="link-url-input w-full border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" value="${currentHref}" />
+        </div>
+        <div class="flex space-x-2 pt-2">
+          <button class="save-btn bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">Save</button>
+          <button class="cancel-btn bg-gray-300 text-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">Cancel</button>
+          <button class="open-link-btn bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 flex items-center space-x-1">
+            <span>Open</span>
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+    `
+    
+    const parent = linkElement.parentNode
+    if (parent) {
+      parent.replaceChild(container, linkElement)
       
       const textInput = container.querySelector('.link-text-input') as HTMLInputElement
       const urlInput = container.querySelector('.link-url-input') as HTMLInputElement
@@ -307,31 +326,46 @@ export default function CreateTemplateForm() {
       const cancelBtn = container.querySelector('.cancel-btn') as HTMLButtonElement
       const openBtn = container.querySelector('.open-link-btn') as HTMLButtonElement
       
-      textInput.focus()
-      textInput.select()
-      
-      const finishEdit = (save: boolean) => {
-        if (save) {
-          linkEl.textContent = textInput.value
-          linkEl.href = urlInput.value
-          updateContentInFormData(originalContent, linkEl.outerHTML)
-        }
-        container.parentNode?.replaceChild(element, container)
-        setIsInlineEditing(false)
-        setEditingElement(null)
-        setOriginalContent('')
+      if (textInput) {
+        textInput.focus()
+        textInput.select()
       }
       
-      saveBtn.addEventListener('click', () => finishEdit(true))
-      cancelBtn.addEventListener('click', () => finishEdit(false))
-      openBtn.addEventListener('click', () => {
-        if (urlInput.value) {
-          window.open(urlInput.value, '_blank')
+      const finishEdit = (save: boolean) => {
+        if (save && textInput && urlInput) {
+          const newText = textInput.value.trim()
+          const newUrl = urlInput.value.trim()
+          
+          if (newText !== currentText || newUrl !== currentHref) {
+            linkElement.textContent = newText
+            linkElement.href = newUrl
+            updateContentInDOM(editId, linkElement)
+          }
         }
-      })
+        
+        if (parent && container.parentNode === parent) {
+          parent.replaceChild(linkElement, container)
+        }
+        
+        linkElement.removeAttribute('data-edit-id')
+        setIsInlineEditing(false)
+        setEditingId(null)
+      }
       
-      // Handle keyboard shortcuts
+      // Event handlers
+      if (saveBtn) saveBtn.addEventListener('click', () => finishEdit(true))
+      if (cancelBtn) cancelBtn.addEventListener('click', () => finishEdit(false))
+      if (openBtn) {
+        openBtn.addEventListener('click', () => {
+          if (urlInput && urlInput.value.trim()) {
+            window.open(urlInput.value.trim(), '_blank', 'noopener,noreferrer')
+          }
+        })
+      }
+      
+      // Keyboard shortcuts
       const handleKeydown = (e: KeyboardEvent) => {
+        e.stopPropagation()
         if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
           finishEdit(true)
         } else if (e.key === 'Escape') {
@@ -339,15 +373,34 @@ export default function CreateTemplateForm() {
         }
       }
       
-      textInput.addEventListener('keydown', handleKeydown)
-      urlInput.addEventListener('keydown', handleKeydown)
+      if (textInput) textInput.addEventListener('keydown', handleKeydown)
+      if (urlInput) urlInput.addEventListener('keydown', handleKeydown)
+      
+      // Click outside to save
+      const handleClickOutside = (e: MouseEvent) => {
+        if (!container.contains(e.target as Node)) {
+          finishEdit(true)
+          document.removeEventListener('click', handleClickOutside)
+        }
+      }
+      
+      setTimeout(() => {
+        document.addEventListener('click', handleClickOutside)
+      }, 100)
     }
   }
 
-  const updateContentInFormData = (oldContent: string, newContent: string) => {
+  // Fixed content update function
+  const updateContentInDOM = (editId: string, updatedElement: HTMLElement) => {
+    const previewContainer = previewRef.current
+    if (!previewContainer) return
+    
+    // Get the updated HTML from the preview container
+    const updatedHTML = previewContainer.innerHTML
+    
     setFormData(prev => ({
       ...prev,
-      content: prev.content.replace(oldContent, newContent)
+      content: updatedHTML
     }))
   }
 
