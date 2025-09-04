@@ -59,11 +59,12 @@ export default function CreateTemplateForm() {
   const [editContextUrl, setEditContextUrl] = useState('')
   const [preserveContext, setPreserveContext] = useState(true) // New state for context preservation
   
-  // Refs for autofocus and auto-resize
+  // Refs for autofocus and auto-resize - Fixed: Added missing modalPreviewRef
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const editPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
   const previewRef = useRef<HTMLDivElement>(null)
+  const modalPreviewRef = useRef<HTMLDivElement>(null) // Fixed: Added this missing ref
   
   const [formData, setFormData] = useState({
     name: '',
@@ -197,15 +198,19 @@ export default function CreateTemplateForm() {
     })
   }, [])
 
-  // Fixed inline editing implementation
-  const handleInlineEdit = (event: React.MouseEvent) => {
+  // Fixed inline editing implementation with proper modal support
+  const handleInlineEdit = (event: React.MouseEvent, context: 'main' | 'modal' = 'main') => {
     // Prevent editing if already in edit mode
-    if (isInlineEditing) return
+    if (isInlineEditing) {
+      console.log('Inline editing already active')
+      return
+    }
     
     event.preventDefault()
     event.stopPropagation()
     
     const target = event.target as HTMLElement
+    console.log('Inline edit triggered:', { context, target: target.tagName })
     
     // Skip if clicking on buttons, inputs, or interactive elements
     if (
@@ -216,6 +221,7 @@ export default function CreateTemplateForm() {
       target.tagName.toLowerCase() === 'button' ||
       target.tagName.toLowerCase() === 'input'
     ) {
+      console.log('Skipping inline edit - clicked on interactive element')
       return
     }
     
@@ -245,13 +251,22 @@ export default function CreateTemplateForm() {
       }
     }
     
-    if (!editableElement || !editableElement.textContent) return
+    if (!editableElement || !editableElement.textContent) {
+      console.log('No editable element found')
+      return
+    }
     
-    startInlineEdit(editableElement)
+    console.log('Starting inline edit for:', editableElement.tagName, 'context:', context)
+    startInlineEdit(editableElement, context)
   }
 
-  const startInlineEdit = (element: HTMLElement) => {
-    if (isInlineEditing) return
+  const startInlineEdit = (element: HTMLElement, context: 'main' | 'modal' = 'main') => {
+    if (isInlineEditing) {
+      console.log('Already in inline editing mode')
+      return
+    }
+    
+    console.log('Starting inline edit:', { element: element.tagName, context })
     
     setIsInlineEditing(true)
     const editId = `edit-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -260,19 +275,22 @@ export default function CreateTemplateForm() {
     // Store the original element for reference
     element.setAttribute('data-edit-id', editId)
     element.setAttribute('data-original-content', element.textContent || '')
+    element.setAttribute('data-edit-context', context)
     
     const isLink = element.tagName.toLowerCase() === 'a'
     
     if (isLink) {
-      startLinkEdit(element as HTMLAnchorElement, editId)
+      startLinkEdit(element as HTMLAnchorElement, editId, context)
     } else {
-      startTextEdit(element, editId)
+      startTextEdit(element, editId, context)
     }
   }
 
-  const startTextEdit = (element: HTMLElement, editId: string) => {
+  const startTextEdit = (element: HTMLElement, editId: string, context: 'main' | 'modal' = 'main') => {
     const currentText = element.textContent || ''
     const computedStyle = window.getComputedStyle(element)
+    
+    console.log('Starting text edit:', { currentText, editId, context })
     
     // Create input with similar styling
     const input = document.createElement('input')
@@ -294,6 +312,7 @@ export default function CreateTemplateForm() {
       min-width: 200px;
       outline: none;
       box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+      z-index: ${context === 'modal' ? '1001' : '1000'};
     `
     
     // Replace element with input
@@ -308,11 +327,13 @@ export default function CreateTemplateForm() {
       input.select()
       
       const finishEdit = (save: boolean) => {
+        console.log('Finishing text edit:', { save, newValue: input.value, context })
+        
         const newText = input.value.trim()
         
         if (save && newText !== currentText && newText.length > 0) {
           element.textContent = newText
-          updateContentInDOM()
+          updateContentInDOM(context)
         }
         
         // Replace input back with element
@@ -324,8 +345,12 @@ export default function CreateTemplateForm() {
         // Clean up attributes
         element.removeAttribute('data-edit-id')
         element.removeAttribute('data-original-content')
-        setIsInlineEditing(false)
-        setEditingElementId(null)
+        element.removeAttribute('data-edit-context')
+        
+        setTimeout(() => {
+          setIsInlineEditing(false)
+          setEditingElementId(null)
+        }, 50)
       }
       
       const handleKeydown = (e: KeyboardEvent) => {
@@ -347,9 +372,11 @@ export default function CreateTemplateForm() {
     }
   }
 
-  const startLinkEdit = (linkElement: HTMLAnchorElement, editId: string) => {
+  const startLinkEdit = (linkElement: HTMLAnchorElement, editId: string, context: 'main' | 'modal' = 'main') => {
     const currentText = linkElement.textContent || ''
     const currentHref = linkElement.href || ''
+    
+    console.log('Starting link edit:', { currentText, currentHref, editId, context })
     
     // Create inline link editor container
     const container = document.createElement('div')
@@ -360,8 +387,8 @@ export default function CreateTemplateForm() {
       border-radius: 8px;
       padding: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-      position: absolute;
-      z-index: 1000;
+      position: fixed;
+      z-index: ${context === 'modal' ? '1002' : '1001'};
       min-width: 300px;
       max-width: 400px;
     `
@@ -387,7 +414,7 @@ export default function CreateTemplateForm() {
     // Position the container near the link
     const rect = linkElement.getBoundingClientRect()
     container.style.top = `${rect.bottom + window.scrollY + 5}px`
-    container.style.left = `${rect.left + window.scrollX}px`
+    container.style.left = `${Math.max(10, rect.left + window.scrollX)}px`
     
     // Add to document body
     document.body.appendChild(container)
@@ -404,6 +431,8 @@ export default function CreateTemplateForm() {
     }
     
     const finishEdit = (save: boolean) => {
+      console.log('Finishing link edit:', { save, context })
+      
       if (save && textInput && urlInput) {
         const newText = textInput.value.trim()
         const newUrl = urlInput.value.trim()
@@ -411,7 +440,7 @@ export default function CreateTemplateForm() {
         if (newText !== currentText || newUrl !== currentHref) {
           linkElement.textContent = newText || currentText
           linkElement.href = newUrl || currentHref
-          updateContentInDOM()
+          updateContentInDOM(context)
         }
       }
       
@@ -422,8 +451,12 @@ export default function CreateTemplateForm() {
       
       linkElement.removeAttribute('data-edit-id')
       linkElement.removeAttribute('data-original-content')
-      setIsInlineEditing(false)
-      setEditingElementId(null)
+      linkElement.removeAttribute('data-edit-context')
+      
+      setTimeout(() => {
+        setIsInlineEditing(false)
+        setEditingElementId(null)
+      }, 50)
     }
     
     // Event handlers
@@ -464,18 +497,28 @@ export default function CreateTemplateForm() {
     }, 100)
   }
 
-  // Fixed content update function
-  const updateContentInDOM = () => {
-    const previewContainer = previewRef.current
-    if (!previewContainer) return
+  // Fixed content update function with context awareness
+  const updateContentInDOM = (context: 'main' | 'modal' = 'main') => {
+    const previewContainer = context === 'modal' ? modalPreviewRef.current : previewRef.current
+    console.log('Updating content in DOM:', { context, hasContainer: !!previewContainer })
+    
+    if (!previewContainer) {
+      console.warn('Preview container not found for context:', context)
+      return
+    }
     
     // Get the updated HTML from the preview container
     const updatedHTML = previewContainer.innerHTML
+    console.log('Updated HTML length:', updatedHTML.length)
     
-    setFormData(prev => ({
-      ...prev,
-      content: updatedHTML
-    }))
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        content: updatedHTML
+      }
+      console.log('Form data updated, content length:', newData.content.length)
+      return newData
+    })
   }
 
   const scrollToTop = () => {
@@ -1172,7 +1215,7 @@ export default function CreateTemplateForm() {
                           <div 
                             ref={previewRef}
                             className="prose max-w-none text-sm cursor-text hover:bg-blue-50/30 transition-colors"
-                            onClick={handleInlineEdit}
+                            onClick={(e) => handleInlineEdit(e, 'main')}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content
                             }} 
@@ -1642,9 +1685,9 @@ export default function CreateTemplateForm() {
                           {formData.content ? (
                             <>
                               <div 
-                                ref={previewRef}
+                                ref={modalPreviewRef}
                                 className="prose max-w-none text-sm cursor-text hover:bg-blue-50/30 transition-colors"
-                                onClick={handleInlineEdit}
+                                onClick={(e) => handleInlineEdit(e, 'modal')}
                                 dangerouslySetInnerHTML={{ 
                                   __html: formData.content
                                 }} 
