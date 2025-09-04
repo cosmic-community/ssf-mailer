@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MarketingCampaign, EmailTemplate, EmailContact } from '@/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useToast } from '@/hooks/useToast'
 
 interface EditCampaignFormProps {
   campaign: MarketingCampaign
@@ -15,6 +16,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const { addToast } = useToast()
   
   // Get template ID from campaign metadata - handle both template_id and template object
   const getTemplateId = () => {
@@ -105,11 +107,12 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
         throw new Error('Failed to update campaign')
       }
 
-      // Navigate back and refresh data
-      router.push('/campaigns')
-      router.refresh() // Ensure fresh data is fetched
+      // Show success message instead of redirecting
+      addToast('Campaign updated successfully!', 'success')
+
     } catch (err) {
       setError('Failed to update campaign. Please try again.')
+      addToast('Failed to update campaign. Please try again.', 'error')
       console.error('Campaign update error:', err)
     } finally {
       setIsLoading(false)

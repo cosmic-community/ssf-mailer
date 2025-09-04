@@ -68,6 +68,97 @@ export default function CreateTemplateForm() {
     active: true
   })
 
+  // Track if form has unsaved changes
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Initial form data to compare against for changes
+  const initialFormData = {
+    name: '',
+    subject: '',
+    content: '',
+    template_type: 'Newsletter',
+    active: true
+  }
+
+  // Check if form has changes
+  const hasFormChanges = () => {
+    return (
+      formData.name !== initialFormData.name ||
+      formData.subject !== initialFormData.subject ||
+      formData.content !== initialFormData.content ||
+      formData.template_type !== initialFormData.template_type ||
+      formData.active !== initialFormData.active
+    )
+  }
+
+  // Update unsaved changes state whenever form data changes
+  useEffect(() => {
+    setHasUnsavedChanges(hasFormChanges() && !isSubmitting)
+  }, [formData, isSubmitting])
+
+  // Prevent navigation away with unsaved changes
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault()
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?'
+        return 'You have unsaved changes. Are you sure you want to leave?'
+      }
+    }
+
+    const handleRouteChange = () => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) {
+          // Prevent navigation by throwing an error
+          throw new Error('Navigation cancelled by user')
+        }
+      }
+    }
+
+    // Add beforeunload listener for browser tab close/refresh
+    window.addEventListener('beforeunload', handleBeforeUnload)
+
+    // Store original router methods
+    const originalPush = router.push
+    const originalBack = router.back
+    const originalReplace = router.replace
+
+    // Override router methods to check for unsaved changes
+    router.push = (...args) => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return Promise.resolve(true)
+      }
+      return originalPush.apply(router, args)
+    }
+
+    router.back = () => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return
+      }
+      return originalBack.apply(router)
+    }
+
+    router.replace = (...args) => {
+      if (hasUnsavedChanges && !isSubmitting) {
+        const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+        if (!confirmed) return Promise.resolve(true)
+      }
+      return originalReplace.apply(router, args)
+    }
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
+      // Restore original router methods
+      router.push = originalPush
+      router.back = originalBack
+      router.replace = originalReplace
+    }
+  }, [hasUnsavedChanges, isSubmitting, router])
+
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
     textarea.style.height = 'auto'
@@ -213,6 +304,7 @@ export default function CreateTemplateForm() {
     setError('')
     setSuccess('')
     setIsLoading(true)
+    setIsSubmitting(true)
 
     try {
       const response = await fetch('/api/templates', {
@@ -228,6 +320,9 @@ export default function CreateTemplateForm() {
         throw new Error(errorData.error || 'Failed to create template')
       }
 
+      // Clear unsaved changes flag since we're successfully submitting
+      setHasUnsavedChanges(false)
+
       addToast('Template created successfully!', 'success')
       scrollToTop()
       
@@ -242,6 +337,7 @@ export default function CreateTemplateForm() {
       console.error('Template creation error:', err)
     } finally {
       setIsLoading(false)
+      setIsSubmitting(false)
     }
   }
 
@@ -572,11 +668,28 @@ export default function CreateTemplateForm() {
     setSuccess('Template content updated! Click "Create Template" to save your changes.')
   }
 
+  // Handle cancel with unsaved changes check
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
+      if (!confirmed) return
+    }
+    router.back()
+  }
+
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       
       <div className="space-y-6">
+        {/* Unsaved Changes Warning */}
+        {hasUnsavedChanges && (
+          <div className="flex items-center space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
+            <AlertCircle className="h-5 w-5 text-amber-600" />
+            <p className="text-amber-700">You have unsaved changes. Make sure to save your template before leaving this page.</p>
+          </div>
+        )}
+
         {/* Error Messages */}
         {error && (
           <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
@@ -691,7 +804,7 @@ export default function CreateTemplateForm() {
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() => router.back()}
+                    onClick={handleCancel}
                     disabled={isLoading}
                     className="flex-1"
                   >
