@@ -532,17 +532,21 @@ export default function CreateTemplateForm() {
         throw new Error(errorData.error || 'Failed to create template')
       }
 
-      // Clear unsaved changes flag since we're successfully submitting
+      // CRITICAL FIX: Template creation is now complete, reset navigation prevention
       setHasUnsavedChanges(false)
-
+      
+      // Show success message
+      setSuccess('Template created successfully!')
       addToast('Template created successfully!', 'success')
       scrollToTop()
       
-      // Navigate to templates page after a short delay and refresh data
+      // FIXED: Wait for the creation to complete, then navigate
+      // Use a longer delay to ensure user sees the success message
       setTimeout(() => {
         router.push('/templates')
         router.refresh() // Ensure fresh data is fetched
-      }, 1500)
+      }, 2000) // Increased delay to show success state
+      
     } catch (err: any) {
       addToast(err.message || 'Failed to create template. Please try again.', 'error')
       scrollToTop()
