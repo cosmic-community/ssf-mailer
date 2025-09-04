@@ -67,7 +67,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   })
 
   // Store original template data for reset functionality and change tracking
-  const [originalFormData] = useState({
+  const [originalFormData, setOriginalFormData] = useState({
     name: template.metadata.name,
     subject: template.metadata.subject,
     content: template.metadata.content,
@@ -486,6 +486,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           const errorData = await response.json()
           throw new Error(errorData.error || 'Failed to update template')
         }
+
+        // CRITICAL FIX: Reset navigation prevention after successful update
+        // Update the original form data to match current form data
+        setOriginalFormData({
+          name: formData.name.trim(),
+          subject: formData.subject.trim(),
+          content: formData.content,
+          template_type: formData.template_type,
+          active: formData.active
+        })
 
         // Clear unsaved changes flag since we're successfully submitting
         setHasUnsavedChanges(false)
