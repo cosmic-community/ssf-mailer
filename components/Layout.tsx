@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { 
@@ -23,8 +23,31 @@ interface LayoutProps {
 
 export default function Layout({ children, showNav = true }: LayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
   const router = useRouter()
   const pathname = usePathname()
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const response = await fetch('/api/auth/check', {
+          method: 'GET',
+          credentials: 'include'
+        })
+        setIsAuthenticated(response.ok)
+      } catch (error) {
+        setIsAuthenticated(false)
+      }
+    }
+
+    // Only check auth on client side and if not on login page
+    if (typeof window !== 'undefined' && pathname !== '/login') {
+      checkAuth()
+    } else if (pathname === '/login') {
+      setIsAuthenticated(false)
+    }
+  }, [pathname])
 
   const navigation = [
     { name: 'Dashboard', href: '/', icon: Home },
@@ -61,7 +84,8 @@ export default function Layout({ children, showNav = true }: LayoutProps) {
     setMobileMenuOpen(false)
   }
 
-  if (!showNav) {
+  // Don't show nav if explicitly disabled, user not authenticated, or still checking auth
+  if (!showNav || isAuthenticated === false || isAuthenticated === null) {
     return (
       <div className="min-h-screen bg-gray-50">
         <main className="w-full">

@@ -29,15 +29,16 @@ export default function LoginPage() {
       const data = await response.json()
 
       if (response.ok) {
-        // Redirect to home page on success
+        // Redirect to dashboard on success - don't reset loading state
         router.push('/')
         router.refresh()
+        // Keep loading state active until redirect completes
       } else {
         setError(data.error || 'Invalid access code')
+        setIsLoading(false)
       }
     } catch (error) {
       setError('An error occurred. Please try again.')
-    } finally {
       setIsLoading(false)
     }
   }
