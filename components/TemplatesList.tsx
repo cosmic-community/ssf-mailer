@@ -154,39 +154,34 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
           <Link
             key={template.id}
             href={`/templates/${template.id}/edit`}
-            className="card hover:shadow-lg transition-shadow relative group cursor-pointer block"
+            className="card hover:shadow-lg transition-shadow relative group cursor-pointer block h-full flex flex-col"
           >
-            {/* Template Card Content */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-slate-100 rounded-lg flex items-center justify-center">
-                  <svg className="w-6 h-6 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900">{template.metadata?.name}</h3>
+            {/* Template Card Content - Flex grow to push buttons to bottom */}
+            <div className="flex-grow">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-grow">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-1">{template.metadata?.name}</h3>
                   <p className="text-sm text-gray-500">{template.metadata?.template_type?.value}</p>
                 </div>
+                <span className={`px-2 py-1 text-xs rounded-full font-medium flex-shrink-0 ml-3 ${
+                  template.metadata?.active 
+                    ? 'bg-green-100 text-green-800' 
+                    : 'bg-gray-100 text-gray-800'
+                }`}>
+                  {template.metadata?.active ? 'Active' : 'Inactive'}
+                </span>
               </div>
-              <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                template.metadata?.active 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {template.metadata?.active ? 'Active' : 'Inactive'}
-              </span>
+
+              {template.metadata?.subject && (
+                <div className="mb-4">
+                  <p className="text-sm text-gray-500 mb-1">Subject:</p>
+                  <p className="text-sm text-gray-900 font-medium line-clamp-2">{template.metadata.subject}</p>
+                </div>
+              )}
             </div>
 
-            {template.metadata?.subject && (
-              <div className="mb-4">
-                <p className="text-sm text-gray-500 mb-1">Subject:</p>
-                <p className="text-sm text-gray-900 font-medium">{template.metadata.subject}</p>
-              </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+            {/* Action Buttons - Always at bottom */}
+            <div className="flex items-center justify-between pt-4 border-t border-gray-100 mt-auto">
               <button
                 onClick={(e) => handlePreview(e, template)}
                 className="flex items-center space-x-1 px-3 py-1.5 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
@@ -233,11 +228,12 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
         />
       )}
 
-      {/* Preview Modal */}
+      {/* Preview Modal - Fixed overlay positioning */}
       {previewTemplate && (
         <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          className="fixed inset-0 top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
           onClick={handleModalBackdropClick}
+          style={{ margin: 0 }}
         >
           <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] flex flex-col">
             <div className="p-6 border-b border-gray-200 flex justify-between items-center">
