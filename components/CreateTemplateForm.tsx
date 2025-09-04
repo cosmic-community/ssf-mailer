@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2, ArrowRight, RefreshCw } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2, ArrowRight, RefreshCw, ExternalLink } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
 
@@ -46,6 +46,11 @@ export default function CreateTemplateForm() {
   const [modalType, setModalType] = useState<'generate' | 'edit'>('generate')
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
+  // Inline editing states
+  const [isInlineEditing, setIsInlineEditing] = useState(false)
+  const [editingElement, setEditingElement] = useState<string | null>(null)
+  const [originalContent, setOriginalContent] = useState('')
+  
   // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [editContextItems, setEditContextItems] = useState<ContextItem[]>([])
@@ -59,6 +64,7 @@ export default function CreateTemplateForm() {
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const editPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -191,6 +197,159 @@ export default function CreateTemplateForm() {
       return () => textarea.removeEventListener('input', handleInput)
     })
   }, [])
+
+  // Inline editing functions
+  const handleInlineEdit = (event: React.MouseEvent) => {
+    if (isInlineEditing) return
+    
+    event.preventDefault()
+    event.stopPropagation()
+    
+    const target = event.target as HTMLElement
+    const elementType = target.tagName.toLowerCase()
+    
+    // Skip if clicking on buttons or already editing
+    if (target.closest('.inline-edit-button') || target.closest('button')) {
+      return
+    }
+    
+    // Handle different element types
+    if (['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'span', 'div'].includes(elementType) || target.closest('p, h1, h2, h3, h4, h5, h6')) {
+      const editableElement = target.closest('p, h1, h2, h3, h4, h5, h6') || target
+      startInlineEdit(editableElement as HTMLElement, 'text')
+    } else if (elementType === 'a' || target.closest('a')) {
+      const linkElement = (target.closest('a') || target) as HTMLAnchorElement
+      // Prevent following the link
+      event.preventDefault()
+      startInlineEdit(linkElement, 'link')
+    }
+  }
+
+  const startInlineEdit = (element: HTMLElement, type: 'text' | 'link') => {
+    setIsInlineEditing(true)
+    setEditingElement(type)
+    setOriginalContent(element.outerHTML)
+    
+    if (type === 'text') {
+      // Create inline text editor
+      const currentText = element.textContent || ''
+      const input = document.createElement('input')
+      input.type = 'text'
+      input.value = currentText
+      input.className = 'inline-edit-input bg-white border border-blue-400 rounded px-2 py-1 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500'
+      input.style.minWidth = '200px'
+      
+      // Replace element with input
+      element.parentNode?.replaceChild(input, element)
+      input.focus()
+      input.select()
+      
+      const finishEdit = (save: boolean) => {
+        if (save) {
+          element.textContent = input.value
+          updateContentInFormData(originalContent, element.outerHTML)
+        }
+        input.parentNode?.replaceChild(element, input)
+        setIsInlineEditing(false)
+        setEditingElement(null)
+        setOriginalContent('')
+      }
+      
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          finishEdit(true)
+        } else if (e.key === 'Escape') {
+          finishEdit(false)
+        }
+      })
+      
+      input.addEventListener('blur', () => {
+        finishEdit(true)
+      })
+      
+    } else if (type === 'link') {
+      const linkEl = element as HTMLAnchorElement
+      const currentText = linkEl.textContent || ''
+      const currentHref = linkEl.href || ''
+      
+      // Create inline link editor
+      const container = document.createElement('div')
+      container.className = 'inline-edit-container bg-white border border-blue-400 rounded p-3 shadow-lg'
+      container.style.minWidth = '300px'
+      container.innerHTML = `
+        <div class="space-y-2">
+          <div>
+            <label class="text-xs font-medium text-gray-700">Text:</label>
+            <input type="text" class="link-text-input w-full border border-gray-300 rounded px-2 py-1 text-sm" value="${currentText}" />
+          </div>
+          <div>
+            <label class="text-xs font-medium text-gray-700">URL:</label>
+            <input type="url" class="link-url-input w-full border border-gray-300 rounded px-2 py-1 text-sm" value="${currentHref}" />
+          </div>
+          <div class="flex space-x-2 pt-2">
+            <button class="save-btn bg-blue-600 text-white px-3 py-1 rounded text-xs hover:bg-blue-700">Save</button>
+            <button class="cancel-btn bg-gray-300 text-gray-700 px-3 py-1 rounded text-xs hover:bg-gray-400">Cancel</button>
+            <button class="open-link-btn bg-green-600 text-white px-3 py-1 rounded text-xs hover:bg-green-700 flex items-center space-x-1">
+              <span>Open</span>
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `
+      
+      element.parentNode?.replaceChild(container, element)
+      
+      const textInput = container.querySelector('.link-text-input') as HTMLInputElement
+      const urlInput = container.querySelector('.link-url-input') as HTMLInputElement
+      const saveBtn = container.querySelector('.save-btn') as HTMLButtonElement
+      const cancelBtn = container.querySelector('.cancel-btn') as HTMLButtonElement
+      const openBtn = container.querySelector('.open-link-btn') as HTMLButtonElement
+      
+      textInput.focus()
+      textInput.select()
+      
+      const finishEdit = (save: boolean) => {
+        if (save) {
+          linkEl.textContent = textInput.value
+          linkEl.href = urlInput.value
+          updateContentInFormData(originalContent, linkEl.outerHTML)
+        }
+        container.parentNode?.replaceChild(element, container)
+        setIsInlineEditing(false)
+        setEditingElement(null)
+        setOriginalContent('')
+      }
+      
+      saveBtn.addEventListener('click', () => finishEdit(true))
+      cancelBtn.addEventListener('click', () => finishEdit(false))
+      openBtn.addEventListener('click', () => {
+        if (urlInput.value) {
+          window.open(urlInput.value, '_blank')
+        }
+      })
+      
+      // Handle keyboard shortcuts
+      const handleKeydown = (e: KeyboardEvent) => {
+        if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+          finishEdit(true)
+        } else if (e.key === 'Escape') {
+          finishEdit(false)
+        }
+      }
+      
+      textInput.addEventListener('keydown', handleKeydown)
+      urlInput.addEventListener('keydown', handleKeydown)
+    }
+  }
+
+  const updateContentInFormData = (oldContent: string, newContent: string) => {
+    setFormData(prev => ({
+      ...prev,
+      content: prev.content.replace(oldContent, newContent)
+    }))
+  }
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -1317,7 +1476,7 @@ export default function CreateTemplateForm() {
                     <CardHeader>
                       <CardTitle>Email Preview</CardTitle>
                       <p className="text-sm text-gray-600">
-                        Real-time preview of your email template
+                        Real-time preview of your email template - Click to edit text inline
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -1336,10 +1495,15 @@ export default function CreateTemplateForm() {
                           {formData.content ? (
                             <>
                               <div 
-                                className="prose max-w-none text-sm"
+                                ref={previewRef}
+                                className="prose max-w-none text-sm cursor-text"
+                                onClick={handleInlineEdit}
                                 dangerouslySetInnerHTML={{ 
                                   __html: formData.content
                                 }} 
+                                style={{
+                                  pointerEvents: isInlineEditing ? 'none' : 'auto'
+                                }}
                               />
                               {/* Preview unsubscribe footer */}
                               <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
@@ -1359,6 +1523,20 @@ export default function CreateTemplateForm() {
                           )}
                         </div>
                       </div>
+                      {formData.content && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <p className="font-medium mb-1">Inline Editing</p>
+                              <p className="text-xs">
+                                Click on any text to edit it inline. For links, click to edit both text and URL. 
+                                Links won't navigate - use the "Open" button to visit them.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
