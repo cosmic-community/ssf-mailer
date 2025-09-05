@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2, ArrowRight, RefreshCw } from 'lucide-react'
+import { Sparkles, CheckCircle, AlertCircle, Info, Upload, X, FileText, Image, File, Plus, Link, Globe, Edit, Wand2, ArrowRight, RefreshCw, ExternalLink } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
 
@@ -46,6 +46,9 @@ export default function CreateTemplateForm() {
   const [modalType, setModalType] = useState<'generate' | 'edit'>('generate')
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
+  // Simple editing states
+  const [isEditing, setIsEditing] = useState(false)
+  
   // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
   const [editContextItems, setEditContextItems] = useState<ContextItem[]>([])
@@ -59,6 +62,8 @@ export default function CreateTemplateForm() {
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const editPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
+  const modalPreviewRef = useRef<HTMLDivElement>(null)
   
   const [formData, setFormData] = useState({
     name: '',
@@ -191,6 +196,65 @@ export default function CreateTemplateForm() {
       return () => textarea.removeEventListener('input', handleInput)
     })
   }, [])
+
+  // Simple and effective inline editing implementation
+  const startEditMode = (previewRef: React.RefObject<HTMLDivElement>) => {
+    if (!previewRef.current || isEditing || isAIGenerating || isAIEditing) return
+    
+    console.log('Starting edit mode')
+    setIsEditing(true)
+    
+    const previewDiv = previewRef.current
+    previewDiv.contentEditable = 'true'
+    previewDiv.style.outline = '2px solid #3b82f6'
+    previewDiv.style.outlineOffset = '2px'
+    previewDiv.style.backgroundColor = '#fefefe'
+    previewDiv.focus()
+    
+    // Add finish editing handler
+    const finishEditing = () => {
+      if (!previewDiv || !isEditing) return
+      
+      console.log('Finishing edit mode')
+      previewDiv.contentEditable = 'false'
+      previewDiv.style.outline = 'none'
+      previewDiv.style.outlineOffset = 'initial'
+      previewDiv.style.backgroundColor = 'transparent'
+      
+      // Update form data with new content
+      const updatedContent = previewDiv.innerHTML
+      setFormData(prev => ({
+        ...prev,
+        content: updatedContent
+      }))
+      
+      setIsEditing(false)
+      
+      // Remove event listeners
+      previewDiv.removeEventListener('blur', handleBlur)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+    
+    const handleBlur = (e: FocusEvent) => {
+      // Small delay to allow clicking on buttons without losing focus
+      setTimeout(() => {
+        if (!previewDiv.contains(document.activeElement)) {
+          finishEditing()
+        }
+      }, 200)
+    }
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        finishEditing()
+      }
+    }
+    
+    // Add event listeners
+    previewDiv.addEventListener('blur', handleBlur)
+    document.addEventListener('keydown', handleKeyDown)
+  }
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -884,10 +948,20 @@ export default function CreateTemplateForm() {
                       {formData.content ? (
                         <>
                           <div 
-                            className="prose max-w-none text-sm"
+                            ref={previewRef}
+                            className={`prose max-w-none text-sm transition-all duration-200 ${
+                              isEditing 
+                                ? 'cursor-text' 
+                                : 'cursor-pointer hover:bg-blue-50/30'
+                            }`}
+                            onClick={() => !isEditing && !isAIGenerating && !isAIEditing && startEditMode(previewRef)}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content
                             }} 
+                            style={{
+                              pointerEvents: (isAIGenerating || isAIEditing) ? 'none' : 'auto',
+                              userSelect: (isAIGenerating || isAIEditing) ? 'none' : 'text'
+                            }}
                           />
                           {/* Preview unsubscribe footer */}
                           <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
@@ -919,6 +993,29 @@ export default function CreateTemplateForm() {
                       )}
                     </div>
                   </div>
+                  {formData.content && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start space-x-2">
+                        <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-blue-800">
+                          <p className="font-medium mb-1">✨ Simple Editing</p>
+                          <p className="text-xs">
+                            {isEditing ? (
+                              <span className="text-blue-700 font-medium">
+                                Editing mode active - make your changes and press Escape or click outside to finish
+                              </span>
+                            ) : (isAIGenerating || isAIEditing) ? (
+                              <span className="text-purple-700 font-medium">
+                                AI is processing content...
+                              </span>
+                            ) : (
+                              <>Click anywhere in the preview above to edit the content directly. It's that simple!</>
+                            )}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -1317,7 +1414,7 @@ export default function CreateTemplateForm() {
                     <CardHeader>
                       <CardTitle>Email Preview</CardTitle>
                       <p className="text-sm text-gray-600">
-                        Real-time preview of your email template
+                        Real-time preview of your email template - Click to edit content directly
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -1336,10 +1433,20 @@ export default function CreateTemplateForm() {
                           {formData.content ? (
                             <>
                               <div 
-                                className="prose max-w-none text-sm"
+                                ref={modalPreviewRef}
+                                className={`prose max-w-none text-sm transition-all duration-200 ${
+                                  isEditing 
+                                    ? 'cursor-text' 
+                                    : 'cursor-pointer hover:bg-blue-50/30'
+                                }`}
+                                onClick={() => !isEditing && !isAIGenerating && !isAIEditing && startEditMode(modalPreviewRef)}
                                 dangerouslySetInnerHTML={{ 
                                   __html: formData.content
                                 }} 
+                                style={{
+                                  pointerEvents: (isAIGenerating || isAIEditing) ? 'none' : 'auto',
+                                  userSelect: (isAIGenerating || isAIEditing) ? 'none' : 'text'
+                                }}
                               />
                               {/* Preview unsubscribe footer */}
                               <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
@@ -1359,6 +1466,29 @@ export default function CreateTemplateForm() {
                           )}
                         </div>
                       </div>
+                      {formData.content && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <p className="font-medium mb-1">Direct Editing</p>
+                              <p className="text-xs">
+                                {isEditing ? (
+                                  <span className="text-blue-700 font-medium">
+                                    Editing mode active - make your changes and press Escape or click outside to finish
+                                  </span>
+                                ) : (isAIGenerating || isAIEditing) ? (
+                                  <span className="text-purple-700 font-medium">
+                                    AI is processing content...
+                                  </span>
+                                ) : (
+                                  <>Click anywhere in the preview to edit the content directly. Simple and fast!</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>

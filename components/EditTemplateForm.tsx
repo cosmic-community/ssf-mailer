@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useRef, useEffect } from 'react'
+import { useState, useTransition, useRef, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight, ExternalLink } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { useToast } from '@/hooks/useToast'
 
@@ -41,12 +41,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [aiProgress, setAiProgress] = useState(0)
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
-  const [editingSessionActive, setEditingSessionActive] = useState(false) // Track if actively editing
+  const [editingSessionActive, setEditingSessionActive] = useState(false)
   const { addToast } = useToast()
   
   // Modal states
   const [showAIModal, setShowAIModal] = useState(false)
   const [modalActiveTab, setModalActiveTab] = useState('preview')
+  
+  // Inline editing states
+  const [isMainEditing, setIsMainEditing] = useState(false)
+  const [isModalEditing, setIsModalEditing] = useState(false)
   
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
@@ -56,6 +60,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null)
   const contentRef = useRef<HTMLTextAreaElement>(null)
+  const mainPreviewRef = useRef<HTMLDivElement>(null)
+  const modalPreviewRef = useRef<HTMLDivElement>(null)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -105,15 +111,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
     }
 
-    // Add beforeunload listener for browser tab close/refresh
     window.addEventListener('beforeunload', handleBeforeUnload)
 
-    // Store original router methods
     const originalPush = router.push
     const originalBack = router.back
     const originalReplace = router.replace
 
-    // Override router methods to check for unsaved changes
     router.push = (...args) => {
       if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm('You have unsaved changes. Are you sure you want to leave?')
@@ -140,7 +143,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload)
-      // Restore original router methods
       router.push = originalPush
       router.back = originalBack
       router.replace = originalReplace
@@ -168,10 +170,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     textareas.forEach(textarea => {
       const handleInput = () => autoResize(textarea)
       textarea.addEventListener('input', handleInput)
-      
-      // Initial resize
       autoResize(textarea)
-      
       return () => textarea.removeEventListener('input', handleInput)
     })
   }, [])
@@ -185,6 +184,83 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
+  // Improved inline editing with proper state management
+  const startEditMode = useCallback((previewRef: React.RefObject<HTMLDivElement>, isModal: boolean = false) => {
+    if (!previewRef.current || (isModal ? isModalEditing : isMainEditing) || isAIEditing) return
+    
+    console.log(`Starting ${isModal ? 'modal' : 'main'} edit mode`)
+    
+    if (isModal) {
+      setIsModalEditing(true)
+    } else {
+      setIsMainEditing(true)
+    }
+    
+    const previewDiv = previewRef.current
+    previewDiv.contentEditable = 'true'
+    previewDiv.style.outline = '2px solid #3b82f6'
+    previewDiv.style.outlineOffset = '2px'
+    previewDiv.style.backgroundColor = '#fefefe'
+    previewDiv.focus()
+    
+    // Store the initial content for comparison
+    const initialContent = previewDiv.innerHTML
+    
+    // Function to finish editing and update state
+    const finishEditing = () => {
+      if (!previewDiv) return
+      
+      console.log(`Finishing ${isModal ? 'modal' : 'main'} edit mode`)
+      previewDiv.contentEditable = 'false'
+      previewDiv.style.outline = 'none'
+      previewDiv.style.outlineOffset = 'initial'
+      previewDiv.style.backgroundColor = 'transparent'
+      
+      // Get the updated content
+      const updatedContent = previewDiv.innerHTML
+      
+      // Only update if content actually changed
+      if (updatedContent !== initialContent) {
+        console.log('Content changed, updating form state')
+        setFormData(prev => ({
+          ...prev,
+          content: updatedContent
+        }))
+      }
+      
+      // Reset editing state
+      if (isModal) {
+        setIsModalEditing(false)
+      } else {
+        setIsMainEditing(false)
+      }
+      
+      // Remove event listeners
+      previewDiv.removeEventListener('blur', handleBlur)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+    
+    const handleBlur = (e: FocusEvent) => {
+      // Small delay to allow clicking on buttons without losing focus
+      setTimeout(() => {
+        if (previewDiv && !previewDiv.contains(document.activeElement)) {
+          finishEditing()
+        }
+      }, 200)
+    }
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        finishEditing()
+      }
+    }
+    
+    // Add event listeners
+    previewDiv.addEventListener('blur', handleBlur)
+    document.addEventListener('keydown', handleKeyDown)
+  }, [isMainEditing, isModalEditing, isAIEditing])
+
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -194,13 +270,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setSuccess('')
   }
 
-  // Reset form to original values
   const handleReset = () => {
     setFormData(originalFormData)
     setError('')
     setSuccess('')
     
-    // Auto-resize content textarea after reset
     setTimeout(() => {
       if (contentRef.current) {
         autoResize(contentRef.current)
@@ -208,9 +282,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Detect content type from URL
   const detectContentType = (url: string): 'file' | 'webpage' => {
-    // Check if it's a direct file URL
     const fileExtensions = [
       'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg',
       'pdf', 'doc', 'docx', 'txt', 'rtf', 'md',
@@ -222,16 +294,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return 'file'
     }
     
-    // Check if it's a Cosmic CDN URL or other direct file URLs
     if (url.includes('cdn.cosmicjs.com') || url.includes('/uploads/') || url.includes('/files/')) {
       return 'file'
     }
     
-    // Otherwise, treat as webpage
     return 'webpage'
   }
 
-  // Get appropriate icon for content type
   const getContextIcon = (item: ContextItem) => {
     if (item.type === 'webpage') {
       return <Globe className="h-4 w-4" />
@@ -248,7 +317,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     return <File className="h-4 w-4" />
   }
 
-  // Add context item
   const addContextItem = (url: string) => {
     if (!url.trim()) return
     
@@ -264,12 +332,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setShowContextInput(false)
   }
 
-  // Remove context item
   const removeContextItem = (id: string) => {
     setContextItems(prev => prev.filter(item => item.id !== id))
   }
 
-  // Handle context URL input
   const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -286,7 +352,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
-    // Fixed: Add proper null check for template.id
     if (!template.id) {
       setError('Template ID is missing')
       return
@@ -300,10 +365,27 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setAiStatus('Starting AI editing...')
     setAiProgress(0)
     
+    // Exit editing mode if active
+    if (isMainEditing) {
+      setIsMainEditing(false)
+      if (mainPreviewRef.current) {
+        mainPreviewRef.current.contentEditable = 'false'
+        mainPreviewRef.current.style.outline = 'none'
+        mainPreviewRef.current.style.backgroundColor = 'transparent'
+      }
+    }
+    if (isModalEditing) {
+      setIsModalEditing(false)
+      if (modalPreviewRef.current) {
+        modalPreviewRef.current.contentEditable = 'false'
+        modalPreviewRef.current.style.outline = 'none'
+        modalPreviewRef.current.style.backgroundColor = 'transparent'
+      }
+    }
+    
     try {
-      // Create the request body with guaranteed string templateId
       const requestBody = {
-        templateId: template.id, // Now safely guaranteed to be a string
+        templateId: template.id,
         currentContent: formData.content,
         currentSubject: formData.subject,
         prompt: aiPrompt,
@@ -350,37 +432,39 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 } else if (data.type === 'content') {
                   accumulatedContent += data.text
                   setStreamingContent(accumulatedContent)
+                  // Update form data in real-time during streaming
                   setFormData(prev => ({
                     ...prev,
                     content: accumulatedContent
                   }))
                 } else if (data.type === 'complete') {
+                  // Final update with complete content
+                  const finalContent = data.data.content
+                  const finalSubject = data.data.subject || formData.subject
+                  
                   setFormData(prev => ({
                     ...prev,
-                    content: data.data.content,
-                    subject: data.data.subject || prev.subject
+                    content: finalContent,
+                    subject: finalSubject
                   }))
+                  
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
                   addToast('AI editing completed successfully!', 'success')
                   
-                  // Clear the current prompt but maintain session for continued editing
                   setAiPrompt('')
                   
-                  // Auto-resize content textarea after update
                   setTimeout(() => {
                     if (contentRef.current) {
                       autoResize(contentRef.current)
                     }
                     
-                    // Focus back to edit prompt for continued editing
                     if (aiPromptRef.current) {
                       aiPromptRef.current.focus()
                     }
                   }, 100)
                   
-                  // Show continuation prompt after success
                   setTimeout(() => {
                     setSuccess('Ready for more edits! Add another instruction or save template.')
                   }, 2000)
@@ -412,27 +496,65 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
-  // End editing session
   const endEditingSession = () => {
     setEditingSessionActive(false)
     setAiPrompt('')
     setContextItems([])
     setShowAIModal(false)
-  }
-
-  // Handle modal close - close modal without saving
-  const handleModalCancel = () => {
-    setShowAIModal(false)
-    // Optionally end the editing session or keep it active for later
-  }
-
-  // Handle modal save - ONLY close modal and update content, do NOT save to database
-  const handleModalSave = () => {
-    // Just close the modal - the template content has already been updated in formData
-    // This allows the user to continue editing or manually save the template later
-    setShowAIModal(false)
     
-    // Show a message indicating the content has been updated but not saved
+    // Reset editing states
+    setIsMainEditing(false)
+    setIsModalEditing(false)
+    if (mainPreviewRef.current) {
+      mainPreviewRef.current.contentEditable = 'false'
+      mainPreviewRef.current.style.outline = 'none'
+      mainPreviewRef.current.style.backgroundColor = 'transparent'
+    }
+    if (modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
+    }
+  }
+
+  const handleModalCancel = () => {
+    // Finish any active editing before closing
+    if (isModalEditing && modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
+      
+      // Update content if there were changes
+      const updatedContent = modalPreviewRef.current.innerHTML
+      setFormData(prev => ({
+        ...prev,
+        content: updatedContent
+      }))
+      
+      setIsModalEditing(false)
+    }
+    
+    setShowAIModal(false)
+  }
+
+  const handleModalSave = () => {
+    // Finish any active editing and save changes
+    if (isModalEditing && modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
+      
+      // Update content with final changes
+      const updatedContent = modalPreviewRef.current.innerHTML
+      setFormData(prev => ({
+        ...prev,
+        content: updatedContent
+      }))
+      
+      setIsModalEditing(false)
+    }
+    
+    setShowAIModal(false)
     setSuccess('Template content updated! Click "Update Template" to save your changes.')
     addToast('Template content updated! Click "Update Template" to save your changes.', 'success')
   }
@@ -457,7 +579,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return
     }
 
-    // Fixed: Add null check for template.id before making API call
     if (!template.id) {
       setError('Template ID is missing')
       return
@@ -467,7 +588,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     startTransition(async () => {
       try {
-        // template.id is now safely guaranteed to be a string due to the check above
         const response = await fetch(`/api/templates/${template.id}`, {
           method: 'PUT',
           headers: {
@@ -487,8 +607,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || 'Failed to update template')
         }
 
-        // CRITICAL FIX: Reset navigation prevention after successful update
-        // Update the original form data to match current form data
         setOriginalFormData({
           name: formData.name.trim(),
           subject: formData.subject.trim(),
@@ -497,13 +615,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           active: formData.active
         })
 
-        // Clear unsaved changes flag since we're successfully submitting
         setHasUnsavedChanges(false)
 
         setSuccess('Template updated successfully!')
         addToast('Template updated successfully!', 'success')
         
-        // End any active editing session
         setEditingSessionActive(false)
 
       } catch (error) {
@@ -535,9 +651,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         throw new Error(errorData.error || 'Failed to delete template')
       }
 
-      // Redirect to templates list and refresh data
       router.push('/templates')
-      router.refresh() // Ensure fresh data is fetched
+      router.refresh()
     } catch (error) {
       console.error('Delete error:', error)
       setError(error instanceof Error ? error.message : 'Failed to delete template')
@@ -545,7 +660,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }
 
-  // Handle cancel with unsaved changes check
   const handleCancel = () => {
     if (editingSessionActive) {
       endEditingSession()
@@ -719,10 +833,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   </div>
                   <div className="p-4 max-h-96 overflow-y-auto">
                     <div 
-                      className="prose max-w-none text-sm"
+                      ref={mainPreviewRef}
+                      className={`prose max-w-none text-sm transition-all duration-200 ${
+                        isMainEditing 
+                          ? 'cursor-text' 
+                          : 'cursor-pointer hover:bg-blue-50/30'
+                      }`}
+                      onClick={() => !isMainEditing && !isAIEditing && startEditMode(mainPreviewRef, false)}
                       dangerouslySetInnerHTML={{ 
                         __html: formData.content || '<p className="text-gray-500">No content</p>' 
-                      }} 
+                      }}
+                      style={{
+                        pointerEvents: isAIEditing ? 'none' : 'auto',
+                        userSelect: isAIEditing ? 'none' : 'text'
+                      }}
                     />
                     {/* Preview unsubscribe footer */}
                     {formData.content && (
@@ -739,6 +863,29 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     )}
                   </div>
                 </div>
+                {formData.content && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start space-x-2">
+                      <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-blue-800">
+                        <p className="font-medium mb-1">✨ Simple Editing</p>
+                        <p className="text-xs">
+                          {isMainEditing ? (
+                            <span className="text-blue-700 font-medium">
+                              Editing mode active - make your changes and press Escape or click outside to finish
+                            </span>
+                          ) : isAIEditing ? (
+                            <span className="text-purple-700 font-medium">
+                              AI is editing content...
+                            </span>
+                          ) : (
+                            <>Click anywhere in the preview above to edit the content directly. It's that simple!</>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -771,7 +918,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </Card>
       </div>
 
-      {/* AI Modal with Fixed Footer - Updated to remove Back to Generate button */}
+      {/* AI Modal with Fixed Footer */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
         <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
           <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
@@ -969,7 +1116,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <CardHeader>
                       <CardTitle>Email Preview</CardTitle>
                       <p className="text-sm text-gray-600">
-                        How your email will appear to recipients
+                        How your email will appear to recipients - Click to edit content directly
                       </p>
                     </CardHeader>
                     <CardContent>
@@ -986,10 +1133,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                         </div>
                         <div className="p-4 max-h-96 overflow-y-auto">
                           <div 
-                            className="prose max-w-none text-sm"
+                            ref={modalPreviewRef}
+                            className={`prose max-w-none text-sm transition-all duration-200 ${
+                              isModalEditing 
+                                ? 'cursor-text' 
+                                : 'cursor-pointer hover:bg-blue-50/30'
+                            }`}
+                            onClick={() => !isModalEditing && !isAIEditing && startEditMode(modalPreviewRef, true)}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content || '<p className="text-gray-500">No content</p>' 
-                            }} 
+                            }}
+                            style={{
+                              pointerEvents: isAIEditing ? 'none' : 'auto',
+                              userSelect: isAIEditing ? 'none' : 'text'
+                            }}
                           />
                           {/* Preview unsubscribe footer */}
                           {formData.content && (
@@ -1003,6 +1160,29 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                           )}
                         </div>
                       </div>
+                      {formData.content && (
+                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start space-x-2">
+                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-sm text-blue-800">
+                              <p className="font-medium mb-1">Direct Editing</p>
+                              <p className="text-xs">
+                                {isModalEditing ? (
+                                  <span className="text-blue-700 font-medium">
+                                    Editing mode active - make your changes and press Escape or click outside to finish
+                                  </span>
+                                ) : isAIEditing ? (
+                                  <span className="text-purple-700 font-medium">
+                                    AI is editing content...
+                                  </span>
+                                ) : (
+                                  <>Click anywhere in the preview to edit the content directly. Simple and fast!</>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 </TabsContent>
@@ -1040,10 +1220,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </div>
           </div>
 
-          {/* Fixed Footer - Updated to remove Reset button */}
+          {/* Fixed Footer */}
           <div className="border-t bg-white px-6 py-4 flex-shrink-0">
             <div className="flex items-center justify-between">
-              {/* Left side: Cancel button */}
               <Button
                 type="button"
                 variant="outline"
@@ -1053,7 +1232,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 Cancel
               </Button>
 
-              {/* Right side: Save button only */}
               <div className="flex items-center space-x-3">
                 <Button
                   type="button"
@@ -1061,7 +1239,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   disabled={isAIEditing}
                   className="bg-slate-800 hover:bg-slate-900 text-white"
                 >
-                  Save
+                  Save Changes
                 </Button>
               </div>
             </div>
