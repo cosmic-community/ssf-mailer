@@ -408,7 +408,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     
     // Add event listeners for toolbar
     const addLinkBtn = toolbar.querySelector('#add-link-btn') as HTMLButtonElement
-    addLinkBtn?.addEventListener('click', (e) => {
+    addLinkBtn?.addEventListener('click', (e: Event) => {
       e.preventDefault()
       e.stopPropagation()
       handleAddLink()
@@ -416,7 +416,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     
     // Add click handlers for existing links
     const links = previewDiv.querySelectorAll('a')
-    const linkClickHandlers = new Map<HTMLElement, () => void>()
+    const linkClickHandlers = new Map<HTMLElement, (e: Event) => void>()
     
     links.forEach(link => {
       // Disable link navigation during editing
