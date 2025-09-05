@@ -381,7 +381,7 @@ export default function CreateTemplateForm() {
     addToast('Link updated successfully', 'success')
   }
 
-  // Enhanced inline editing with link management
+  // Enhanced inline editing with link management - Fixed function signature
   const startEditMode = useCallback((previewRef: React.RefObject<HTMLDivElement>) => {
     if (!previewRef.current || isEditing || isAIGenerating || isAIEditing) return
     
@@ -416,24 +416,20 @@ export default function CreateTemplateForm() {
     
     // Add event listeners for toolbar
     const addLinkBtn = toolbar.querySelector('#add-link-btn') as HTMLButtonElement
-    addLinkBtn?.addEventListener('click', (e: Event) => {
-      e.preventDefault()
-      e.stopPropagation()
+    addLinkBtn?.addEventListener('click', () => {
       handleAddLink()
     })
     
     // Add click handlers for existing links
     const links = previewDiv.querySelectorAll('a')
-    const linkClickHandlers = new Map<HTMLElement, (e: Event) => void>()
+    const linkClickHandlers = new Map<HTMLElement, () => void>()
     
     links.forEach(link => {
       // Disable link navigation during editing
       const originalHref = link.href
       link.href = 'javascript:void(0)'
       
-      const clickHandler = (e: Event) => {
-        e.preventDefault()
-        e.stopPropagation()
+      const clickHandler = () => {
         handleEditLink(link)
       }
       
