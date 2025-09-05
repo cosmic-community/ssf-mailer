@@ -34,11 +34,12 @@ interface LinkDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (url: string, text: string) => void;
+  onVisit?: (url: string) => void;
   initialUrl?: string;
   initialText?: string;
 }
 
-function LinkDialog({ isOpen, onClose, onSave, initialUrl = '', initialText = '' }: LinkDialogProps) {
+function LinkDialog({ isOpen, onClose, onSave, onVisit, initialUrl = '', initialText = '' }: LinkDialogProps) {
   const [url, setUrl] = useState(initialUrl);
   const [text, setText] = useState(initialText);
 
@@ -53,8 +54,14 @@ function LinkDialog({ isOpen, onClose, onSave, initialUrl = '', initialText = ''
     onClose();
   };
 
+  const handleVisit = () => {
+    if (url.trim() && onVisit) {
+      onVisit(url.trim());
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    if (e.key === 'Enter') {
       e.preventDefault();
       handleSave();
     }
@@ -95,8 +102,18 @@ function LinkDialog({ isOpen, onClose, onSave, initialUrl = '', initialText = ''
             />
           </div>
           <div className="flex justify-between items-center pt-4">
-            <div className="text-xs text-gray-500">
-              💡 Press Cmd+Enter to save
+            <div className="flex space-x-2">
+              {initialUrl && onVisit && (
+                <Button 
+                  variant="outline" 
+                  onClick={handleVisit}
+                  className="flex items-center space-x-1"
+                  type="button"
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  <span>Visit</span>
+                </Button>
+              )}
             </div>
             <div className="flex space-x-2">
               <Button variant="outline" onClick={onClose}>
@@ -318,11 +335,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setShowLinkDialog(true)
   }
 
+  const handleVisitLink = (url: string) => {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
   const handleLinkSave = (url: string, text: string) => {
     if (linkDialogData.element) {
       // Editing existing link
       linkDialogData.element.setAttribute('href', url)
       linkDialogData.element.textContent = text
+      linkDialogData.element.style.color = '#3b82f6'
+      linkDialogData.element.style.textDecoration = 'underline'
     } else {
       // Creating new link from selection
       restoreSelection()
@@ -410,7 +433,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       }
       
       // Center the toolbar horizontally relative to selection, but keep it in viewport
-      const toolbarWidth = 220 // Approximate toolbar width
+      const toolbarWidth = 280 // Approximate toolbar width
       left = Math.max(margin, Math.min(viewportWidth - toolbarWidth - margin, left - (toolbarWidth / 2)))
       
       toolbar.style.top = `${top}px`
@@ -451,16 +474,25 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       })
     }
     
-    // Function to show toolbar with edit link button
+    // Function to show toolbar with edit link buttons
     const showEditLinkToolbar = (targetRect: DOMRect, linkElement: HTMLElement) => {
       if (!toolbar) return
+      
+      const url = linkElement.getAttribute('href') || ''
       
       toolbar.innerHTML = `
         <button id="edit-link-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1" title="Edit link">
           <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
             <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
           </svg>
-          <span>Edit Link</span>
+          <span>Edit</span>
+        </button>
+        <button id="visit-link-btn" class="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 flex items-center space-x-1" title="Visit link in new tab">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path>
+            <path d="M5 5a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2v-2a1 1 0 10-2 0v2H5V7h2a1 1 0 000-2H5z"></path>
+          </svg>
+          <span>Visit</span>
         </button>
         <div class="text-xs text-gray-500 px-2 whitespace-nowrap">Press Esc to finish</div>
       `
@@ -473,6 +505,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         e.preventDefault()
         e.stopPropagation()
         handleEditLink(linkElement)
+      })
+      
+      // Add event listener for visit link button
+      const visitLinkBtn = toolbar.querySelector('#visit-link-btn') as HTMLButtonElement
+      visitLinkBtn?.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        if (url) {
+          handleVisitLink(url)
+        }
       })
     }
     
@@ -534,6 +576,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const linkClickHandlers = new Map<HTMLElement, (e: Event) => void>()
     
     links.forEach(link => {
+      // Ensure link has proper styling
+      link.style.color = '#3b82f6'
+      link.style.textDecoration = 'underline'
+      
       // Disable link navigation during editing
       const originalHref = link.href
       link.href = 'javascript:void(0)'
@@ -1324,6 +1370,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           setLinkDialogData({ url: '', text: '' })
         }}
         onSave={handleLinkSave}
+        onVisit={handleVisitLink}
         initialUrl={linkDialogData.url}
         initialText={linkDialogData.text}
       />
