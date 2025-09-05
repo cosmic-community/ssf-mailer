@@ -48,8 +48,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showAIModal, setShowAIModal] = useState(false)
   const [modalActiveTab, setModalActiveTab] = useState('preview')
   
-  // Simple editing states - much cleaner approach
-  const [isEditing, setIsEditing] = useState(false)
+  // Inline editing states
+  const [isMainEditing, setIsMainEditing] = useState(false)
+  const [isModalEditing, setIsModalEditing] = useState(false)
   
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
@@ -183,12 +184,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Simple and effective inline editing implementation
-  const startEditMode = (previewRef: React.RefObject<HTMLDivElement>) => {
-    if (!previewRef.current || isEditing || isAIEditing) return
+  // Improved inline editing with proper state management
+  const startEditMode = useCallback((previewRef: React.RefObject<HTMLDivElement>, isModal: boolean = false) => {
+    if (!previewRef.current || (isModal ? isModalEditing : isMainEditing) || isAIEditing) return
     
-    console.log('Starting edit mode')
-    setIsEditing(true)
+    console.log(`Starting ${isModal ? 'modal' : 'main'} edit mode`)
+    
+    if (isModal) {
+      setIsModalEditing(true)
+    } else {
+      setIsMainEditing(true)
+    }
     
     const previewDiv = previewRef.current
     previewDiv.contentEditable = 'true'
@@ -197,24 +203,37 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     previewDiv.style.backgroundColor = '#fefefe'
     previewDiv.focus()
     
-    // Add finish editing handler
+    // Store the initial content for comparison
+    const initialContent = previewDiv.innerHTML
+    
+    // Function to finish editing and update state
     const finishEditing = () => {
-      if (!previewDiv || !isEditing) return
+      if (!previewDiv) return
       
-      console.log('Finishing edit mode')
+      console.log(`Finishing ${isModal ? 'modal' : 'main'} edit mode`)
       previewDiv.contentEditable = 'false'
       previewDiv.style.outline = 'none'
       previewDiv.style.outlineOffset = 'initial'
       previewDiv.style.backgroundColor = 'transparent'
       
-      // Update form data with new content
+      // Get the updated content
       const updatedContent = previewDiv.innerHTML
-      setFormData(prev => ({
-        ...prev,
-        content: updatedContent
-      }))
       
-      setIsEditing(false)
+      // Only update if content actually changed
+      if (updatedContent !== initialContent) {
+        console.log('Content changed, updating form state')
+        setFormData(prev => ({
+          ...prev,
+          content: updatedContent
+        }))
+      }
+      
+      // Reset editing state
+      if (isModal) {
+        setIsModalEditing(false)
+      } else {
+        setIsMainEditing(false)
+      }
       
       // Remove event listeners
       previewDiv.removeEventListener('blur', handleBlur)
@@ -224,7 +243,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const handleBlur = (e: FocusEvent) => {
       // Small delay to allow clicking on buttons without losing focus
       setTimeout(() => {
-        if (!previewDiv.contains(document.activeElement)) {
+        if (previewDiv && !previewDiv.contains(document.activeElement)) {
           finishEditing()
         }
       }, 200)
@@ -240,7 +259,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     // Add event listeners
     previewDiv.addEventListener('blur', handleBlur)
     document.addEventListener('keydown', handleKeyDown)
-  }
+  }, [isMainEditing, isModalEditing, isAIEditing])
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -347,15 +366,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setAiProgress(0)
     
     // Exit editing mode if active
-    if (isEditing) {
-      setIsEditing(false)
+    if (isMainEditing) {
+      setIsMainEditing(false)
       if (mainPreviewRef.current) {
         mainPreviewRef.current.contentEditable = 'false'
         mainPreviewRef.current.style.outline = 'none'
+        mainPreviewRef.current.style.backgroundColor = 'transparent'
       }
+    }
+    if (isModalEditing) {
+      setIsModalEditing(false)
       if (modalPreviewRef.current) {
         modalPreviewRef.current.contentEditable = 'false'
         modalPreviewRef.current.style.outline = 'none'
+        modalPreviewRef.current.style.backgroundColor = 'transparent'
       }
     }
     
@@ -408,16 +432,22 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 } else if (data.type === 'content') {
                   accumulatedContent += data.text
                   setStreamingContent(accumulatedContent)
+                  // Update form data in real-time during streaming
                   setFormData(prev => ({
                     ...prev,
                     content: accumulatedContent
                   }))
                 } else if (data.type === 'complete') {
+                  // Final update with complete content
+                  const finalContent = data.data.content
+                  const finalSubject = data.data.subject || formData.subject
+                  
                   setFormData(prev => ({
                     ...prev,
-                    content: data.data.content,
-                    subject: data.data.subject || prev.subject
+                    content: finalContent,
+                    subject: finalSubject
                   }))
+                  
                   setAiStatus('Editing complete!')
                   setAiProgress(100)
                   setSuccess('Template updated with AI suggestions!')
@@ -472,23 +502,58 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setContextItems([])
     setShowAIModal(false)
     
-    // Reset editing state
-    setIsEditing(false)
+    // Reset editing states
+    setIsMainEditing(false)
+    setIsModalEditing(false)
     if (mainPreviewRef.current) {
       mainPreviewRef.current.contentEditable = 'false'
       mainPreviewRef.current.style.outline = 'none'
+      mainPreviewRef.current.style.backgroundColor = 'transparent'
     }
     if (modalPreviewRef.current) {
       modalPreviewRef.current.contentEditable = 'false'
       modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
     }
   }
 
   const handleModalCancel = () => {
+    // Finish any active editing before closing
+    if (isModalEditing && modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
+      
+      // Update content if there were changes
+      const updatedContent = modalPreviewRef.current.innerHTML
+      setFormData(prev => ({
+        ...prev,
+        content: updatedContent
+      }))
+      
+      setIsModalEditing(false)
+    }
+    
     setShowAIModal(false)
   }
 
   const handleModalSave = () => {
+    // Finish any active editing and save changes
+    if (isModalEditing && modalPreviewRef.current) {
+      modalPreviewRef.current.contentEditable = 'false'
+      modalPreviewRef.current.style.outline = 'none'
+      modalPreviewRef.current.style.backgroundColor = 'transparent'
+      
+      // Update content with final changes
+      const updatedContent = modalPreviewRef.current.innerHTML
+      setFormData(prev => ({
+        ...prev,
+        content: updatedContent
+      }))
+      
+      setIsModalEditing(false)
+    }
+    
     setShowAIModal(false)
     setSuccess('Template content updated! Click "Update Template" to save your changes.')
     addToast('Template content updated! Click "Update Template" to save your changes.', 'success')
@@ -770,11 +835,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <div 
                       ref={mainPreviewRef}
                       className={`prose max-w-none text-sm transition-all duration-200 ${
-                        isEditing 
+                        isMainEditing 
                           ? 'cursor-text' 
                           : 'cursor-pointer hover:bg-blue-50/30'
                       }`}
-                      onClick={() => !isEditing && !isAIEditing && startEditMode(mainPreviewRef)}
+                      onClick={() => !isMainEditing && !isAIEditing && startEditMode(mainPreviewRef, false)}
                       dangerouslySetInnerHTML={{ 
                         __html: formData.content || '<p className="text-gray-500">No content</p>' 
                       }}
@@ -805,7 +870,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <div className="text-sm text-blue-800">
                         <p className="font-medium mb-1">✨ Simple Editing</p>
                         <p className="text-xs">
-                          {isEditing ? (
+                          {isMainEditing ? (
                             <span className="text-blue-700 font-medium">
                               Editing mode active - make your changes and press Escape or click outside to finish
                             </span>
@@ -1070,11 +1135,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                           <div 
                             ref={modalPreviewRef}
                             className={`prose max-w-none text-sm transition-all duration-200 ${
-                              isEditing 
+                              isModalEditing 
                                 ? 'cursor-text' 
                                 : 'cursor-pointer hover:bg-blue-50/30'
                             }`}
-                            onClick={() => !isEditing && !isAIEditing && startEditMode(modalPreviewRef)}
+                            onClick={() => !isModalEditing && !isAIEditing && startEditMode(modalPreviewRef, true)}
                             dangerouslySetInnerHTML={{ 
                               __html: formData.content || '<p className="text-gray-500">No content</p>' 
                             }}
@@ -1102,7 +1167,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                             <div className="text-sm text-blue-800">
                               <p className="font-medium mb-1">Direct Editing</p>
                               <p className="text-xs">
-                                {isEditing ? (
+                                {isModalEditing ? (
                                   <span className="text-blue-700 font-medium">
                                     Editing mode active - make your changes and press Escape or click outside to finish
                                   </span>
@@ -1174,7 +1239,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   disabled={isAIEditing}
                   className="bg-slate-800 hover:bg-slate-900 text-white"
                 >
-                  Save
+                  Save Changes
                 </Button>
               </div>
             </div>
