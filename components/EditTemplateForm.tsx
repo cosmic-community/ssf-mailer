@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { EmailTemplate, TemplateType } from '@/types'
-import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight, ExternalLink } from 'lucide-react'
+import { AlertCircle, Sparkles, CheckCircle, Info, Trash2, Upload, X, FileText, Image, File, Plus, Globe, Edit, Wand2, ArrowRight, ExternalLink, Link } from 'lucide-react'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { useToast } from '@/hooks/useToast'
 
@@ -27,6 +27,94 @@ interface ContextItem {
 
 interface EditTemplateFormProps {
   template: EmailTemplate
+}
+
+// Link editing dialog component
+interface LinkDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (url: string, text: string) => void;
+  initialUrl?: string;
+  initialText?: string;
+}
+
+function LinkDialog({ isOpen, onClose, onSave, initialUrl = '', initialText = '' }: LinkDialogProps) {
+  const [url, setUrl] = useState(initialUrl);
+  const [text, setText] = useState(initialText);
+
+  useEffect(() => {
+    setUrl(initialUrl);
+    setText(initialText);
+  }, [initialUrl, initialText]);
+
+  const handleSave = () => {
+    if (!url.trim() || !text.trim()) return;
+    onSave(url.trim(), text.trim());
+    onClose();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSave();
+    }
+    if (e.key === 'Escape') {
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2">
+            <Link className="h-5 w-5 text-blue-600" />
+            <span>{initialUrl ? 'Edit Link' : 'Add Link'}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 pt-4">
+          <div className="space-y-2">
+            <Label htmlFor="link-url">URL *</Label>
+            <Input
+              id="link-url"
+              value={url}
+              onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="https://example.com"
+              autoFocus
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="link-text">Link Text *</Label>
+            <Input
+              id="link-text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Click here"
+            />
+          </div>
+          <div className="flex justify-between items-center pt-4">
+            <div className="text-xs text-gray-500">
+              💡 Press Cmd+Enter to save
+            </div>
+            <div className="flex space-x-2">
+              <Button variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleSave}
+                disabled={!url.trim() || !text.trim()}
+                className="bg-blue-600 hover:bg-blue-700"
+              >
+                {initialUrl ? 'Update Link' : 'Add Link'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 export default function EditTemplateForm({ template }: EditTemplateFormProps) {
@@ -51,6 +139,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Inline editing states
   const [isMainEditing, setIsMainEditing] = useState(false)
   const [isModalEditing, setIsModalEditing] = useState(false)
+  
+  // Link editing states
+  const [showLinkDialog, setShowLinkDialog] = useState(false)
+  const [linkDialogData, setLinkDialogData] = useState<{ url: string; text: string; element?: HTMLElement }>({ url: '', text: '' })
+  const [savedSelection, setSavedSelection] = useState<Selection | null>(null)
   
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([])
@@ -184,7 +277,98 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100)
   }
 
-  // Improved inline editing with proper state management
+  // Link management functions
+  const saveCurrentSelection = () => {
+    const selection = window.getSelection()
+    if (selection && selection.rangeCount > 0) {
+      setSavedSelection(selection)
+    }
+  }
+
+  const restoreSelection = () => {
+    if (savedSelection && savedSelection.rangeCount > 0) {
+      try {
+        window.getSelection()?.removeAllRanges()
+        window.getSelection()?.addRange(savedSelection.getRangeAt(0))
+      } catch (e) {
+        console.warn('Could not restore selection:', e)
+      }
+    }
+  }
+
+  const handleAddLink = () => {
+    const selection = window.getSelection()
+    if (!selection || selection.isCollapsed) {
+      addToast('Please select some text to convert to a link', 'error')
+      return
+    }
+    
+    const selectedText = selection.toString()
+    saveCurrentSelection()
+    
+    setLinkDialogData({ url: '', text: selectedText })
+    setShowLinkDialog(true)
+  }
+
+  const handleEditLink = (element: HTMLElement) => {
+    const url = element.getAttribute('href') || ''
+    const text = element.textContent || ''
+    
+    setLinkDialogData({ url, text, element })
+    setShowLinkDialog(true)
+  }
+
+  const handleLinkSave = (url: string, text: string) => {
+    if (linkDialogData.element) {
+      // Editing existing link
+      linkDialogData.element.setAttribute('href', url)
+      linkDialogData.element.textContent = text
+    } else {
+      // Creating new link from selection
+      restoreSelection()
+      const selection = window.getSelection()
+      if (selection && selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const link = document.createElement('a')
+        link.href = url
+        link.textContent = text
+        link.style.color = '#3b82f6'
+        link.style.textDecoration = 'underline'
+        
+        // Add external link icon for external links
+        if (!url.startsWith('/') && !url.includes(window.location.hostname)) {
+          const icon = document.createElement('span')
+          icon.innerHTML = ' <svg class="inline w-3 h-3 ml-1" fill="currentColor" viewBox="0 0 20 20"><path d="M11 3a1 1 0 100 2h2.586l-6.293 6.293a1 1 0 101.414 1.414L15 6.414V9a1 1 0 102 0V4a1 1 0 00-1-1h-5z"></path><path d="M5 5a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2v-2a1 1 0 10-2 0v2H5V7h2a1 1 0 000-2H5z"></path></svg>'
+          link.appendChild(icon)
+        }
+        
+        // Prevent default click behavior during editing
+        link.addEventListener('click', (e) => {
+          if (isMainEditing || isModalEditing) {
+            e.preventDefault()
+            e.stopPropagation()
+          }
+        })
+        
+        range.deleteContents()
+        range.insertNode(link)
+        selection.removeAllRanges()
+      }
+    }
+    
+    // Update form data with new content
+    const previewDiv = isModalEditing ? modalPreviewRef.current : mainPreviewRef.current
+    if (previewDiv) {
+      setFormData(prev => ({
+        ...prev,
+        content: previewDiv.innerHTML
+      }))
+    }
+    
+    addToast('Link updated successfully', 'success')
+  }
+
+  // Enhanced inline editing with link management
   const startEditMode = useCallback((previewRef: React.RefObject<HTMLDivElement>, isModal: boolean = false) => {
     if (!previewRef.current || (isModal ? isModalEditing : isMainEditing) || isAIEditing) return
     
@@ -206,6 +390,62 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     // Store the initial content for comparison
     const initialContent = previewDiv.innerHTML
     
+    // Add link management toolbar
+    const toolbar = document.createElement('div')
+    toolbar.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 rounded-lg shadow-lg p-2 flex items-center space-x-2 z-50'
+    toolbar.innerHTML = `
+      <button id="add-link-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1" title="Add link to selected text">
+        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+          <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5z" clip-rule="evenodd"></path>
+          <path fill-rule="evenodd" d="M7.414 15.414a2 2 0 01-2.828-2.828l3-3a2 2 0 012.828 0 1 1 0 001.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.5-1.5a1 1 0 00-1.414-1.414l-1.5 1.5z" clip-rule="evenodd"></path>
+        </svg>
+        <span>Add Link</span>
+      </button>
+      <div class="text-xs text-gray-500 px-2">Click links to edit • Press Esc to finish</div>
+    `
+    
+    document.body.appendChild(toolbar)
+    
+    // Add event listeners for toolbar
+    const addLinkBtn = toolbar.querySelector('#add-link-btn') as HTMLButtonElement
+    addLinkBtn?.addEventListener('click', (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      handleAddLink()
+    })
+    
+    // Add click handlers for existing links
+    const links = previewDiv.querySelectorAll('a')
+    const linkClickHandlers = new Map<HTMLElement, () => void>()
+    
+    links.forEach(link => {
+      // Disable link navigation during editing
+      const originalHref = link.href
+      link.href = 'javascript:void(0)'
+      
+      const clickHandler = (e: Event) => {
+        e.preventDefault()
+        e.stopPropagation()
+        handleEditLink(link)
+      }
+      
+      link.addEventListener('click', clickHandler)
+      linkClickHandlers.set(link, clickHandler)
+      
+      // Add visual indicator for editable links
+      link.style.position = 'relative'
+      link.style.paddingRight = '20px'
+      
+      const editIcon = document.createElement('span')
+      editIcon.innerHTML = '<svg class="inline w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>'
+      editIcon.className = 'link-edit-icon'
+      editIcon.style.pointerEvents = 'none'
+      link.appendChild(editIcon)
+      
+      // Store original href for restoration
+      link.setAttribute('data-original-href', originalHref)
+    })
+    
     // Function to finish editing and update state
     const finishEditing = () => {
       if (!previewDiv) return
@@ -215,6 +455,35 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       previewDiv.style.outline = 'none'
       previewDiv.style.outlineOffset = 'initial'
       previewDiv.style.backgroundColor = 'transparent'
+      
+      // Remove toolbar
+      toolbar.remove()
+      
+      // Restore link hrefs and remove edit icons
+      const currentLinks = previewDiv.querySelectorAll('a')
+      currentLinks.forEach(link => {
+        const originalHref = link.getAttribute('data-original-href')
+        if (originalHref) {
+          link.href = originalHref
+          link.removeAttribute('data-original-href')
+        }
+        
+        // Remove edit icons
+        const editIcons = link.querySelectorAll('.link-edit-icon')
+        editIcons.forEach(icon => icon.remove())
+        
+        // Remove click handlers
+        const handler = linkClickHandlers.get(link)
+        if (handler) {
+          link.removeEventListener('click', handler)
+        }
+        
+        // Add external link functionality
+        if (!link.href.startsWith('/') && !link.href.includes(window.location.hostname)) {
+          link.target = '_blank'
+          link.rel = 'noopener noreferrer'
+        }
+      })
       
       // Get the updated content
       const updatedContent = previewDiv.innerHTML
@@ -241,9 +510,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
     
     const handleBlur = (e: FocusEvent) => {
+      // Don't finish editing if clicking on toolbar or dialog
+      const target = e.relatedTarget as Element
+      if (target && (toolbar.contains(target) || target.closest('[role="dialog"]'))) {
+        return
+      }
+      
       // Small delay to allow clicking on buttons without losing focus
       setTimeout(() => {
-        if (previewDiv && !previewDiv.contains(document.activeElement)) {
+        if (previewDiv && !previewDiv.contains(document.activeElement) && 
+            !toolbar.contains(document.activeElement as Node) && 
+            !document.querySelector('[role="dialog"]')) {
           finishEditing()
         }
       }, 200)
@@ -259,7 +536,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     // Add event listeners
     previewDiv.addEventListener('blur', handleBlur)
     document.addEventListener('keydown', handleKeyDown)
-  }, [isMainEditing, isModalEditing, isAIEditing])
+  }, [isMainEditing, isModalEditing, isAIEditing, addToast])
 
   const handleInputChange = (field: string, value: any) => {
     setFormData(prev => ({
@@ -868,18 +1145,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <div className="flex items-start space-x-2">
                       <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                       <div className="text-sm text-blue-800">
-                        <p className="font-medium mb-1">✨ Simple Editing</p>
+                        <p className="font-medium mb-1">✨ Enhanced Editing</p>
                         <p className="text-xs">
                           {isMainEditing ? (
                             <span className="text-blue-700 font-medium">
-                              Editing mode active - make your changes and press Escape or click outside to finish
+                              Editing mode active - Use toolbar to add/edit links, press Escape to finish
                             </span>
                           ) : isAIEditing ? (
                             <span className="text-purple-700 font-medium">
                               AI is editing content...
                             </span>
                           ) : (
-                            <>Click anywhere in the preview above to edit the content directly. It's that simple!</>
+                            <>Click anywhere in the preview above to edit the content directly. Add links, format text, and more!</>
                           )}
                         </p>
                       </div>
@@ -917,6 +1194,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardContent>
         </Card>
       </div>
+
+      {/* Link Dialog */}
+      <LinkDialog
+        isOpen={showLinkDialog}
+        onClose={() => {
+          setShowLinkDialog(false)
+          setLinkDialogData({ url: '', text: '' })
+        }}
+        onSave={handleLinkSave}
+        initialUrl={linkDialogData.url}
+        initialText={linkDialogData.text}
+      />
 
       {/* AI Modal with Fixed Footer */}
       <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
@@ -1165,18 +1454,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                           <div className="flex items-start space-x-2">
                             <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
                             <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">Direct Editing</p>
+                              <p className="font-medium mb-1">Enhanced Editing</p>
                               <p className="text-xs">
                                 {isModalEditing ? (
                                   <span className="text-blue-700 font-medium">
-                                    Editing mode active - make your changes and press Escape or click outside to finish
+                                    Editing mode active - Use toolbar to add/edit links, press Escape to finish
                                   </span>
                                 ) : isAIEditing ? (
                                   <span className="text-purple-700 font-medium">
                                     AI is editing content...
                                   </span>
                                 ) : (
-                                  <>Click anywhere in the preview to edit the content directly. Simple and fast!</>
+                                  <>Click anywhere in the preview to edit the content directly. Add links, format text, and more!</>
                                 )}
                               </p>
                             </div>
