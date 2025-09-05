@@ -397,40 +397,165 @@ export default function CreateTemplateForm() {
     
     // Store the initial content for comparison
     const initialContent = previewDiv.innerHTML
+    let toolbar: HTMLDivElement | null = null
     
-    // Add link management toolbar
-    const toolbar = document.createElement('div')
-    toolbar.className = 'fixed top-4 left-1/2 transform -translate-x-1/2 bg-white border border-gray-300 rounded-lg shadow-lg p-2 flex items-center space-x-2 z-50'
-    toolbar.innerHTML = `
-      <button id="add-link-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1" title="Add link to selected text">
-        <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-          <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5z" clip-rule="evenodd"></path>
-          <path fill-rule="evenodd" d="M7.414 15.414a2 2 0 01-2.828-2.828l3-3a2 2 0 012.828 0 1 1 0 001.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.5-1.5a1 1 0 00-1.414-1.414l-1.5 1.5z" clip-rule="evenodd"></path>
-        </svg>
-        <span>Add Link</span>
-      </button>
-      <div class="text-xs text-gray-500 px-2">Click links to edit • Press Esc to finish</div>
-    `
+    // Function to position toolbar relative to selection
+    const positionToolbar = (targetRect: DOMRect) => {
+      if (!toolbar) return
+      
+      const toolbarHeight = 44 // Approximate toolbar height
+      const margin = 8
+      const viewportHeight = window.innerHeight
+      const viewportWidth = window.innerWidth
+      
+      // Calculate position
+      let top = targetRect.top - toolbarHeight - margin
+      let left = targetRect.left + (targetRect.width / 2)
+      
+      // If not enough space above, position below
+      if (top < margin) {
+        top = targetRect.bottom + margin
+      }
+      
+      // Center the toolbar horizontally relative to selection, but keep it in viewport
+      const toolbarWidth = 220 // Approximate toolbar width
+      left = Math.max(margin, Math.min(viewportWidth - toolbarWidth - margin, left - (toolbarWidth / 2)))
+      
+      toolbar.style.top = `${top}px`
+      toolbar.style.left = `${left}px`
+      toolbar.style.display = 'flex'
+    }
     
+    // Function to hide toolbar
+    const hideToolbar = () => {
+      if (toolbar) {
+        toolbar.style.display = 'none'
+      }
+    }
+    
+    // Function to show toolbar with add link button
+    const showLinkToolbar = (targetRect: DOMRect) => {
+      if (!toolbar) return
+      
+      toolbar.innerHTML = `
+        <button id="add-link-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1" title="Add link to selected text">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5z" clip-rule="evenodd"></path>
+            <path fill-rule="evenodd" d="M7.414 15.414a2 2 0 01-2.828-2.828l3-3a2 2 0 012.828 0 1 1 0 001.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 005.656 5.656l1.5-1.5a1 1 0 00-1.414-1.414l-1.5 1.5z" clip-rule="evenodd"></path>
+          </svg>
+          <span>Add Link</span>
+        </button>
+        <div class="text-xs text-gray-500 px-2 whitespace-nowrap">Press Esc to finish</div>
+      `
+      
+      positionToolbar(targetRect)
+      
+      // Add event listener for add link button
+      const addLinkBtn = toolbar.querySelector('#add-link-btn') as HTMLButtonElement
+      addLinkBtn?.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        handleAddLink()
+      })
+    }
+    
+    // Function to show toolbar with edit link button
+    const showEditLinkToolbar = (targetRect: DOMRect, linkElement: HTMLElement) => {
+      if (!toolbar) return
+      
+      toolbar.innerHTML = `
+        <button id="edit-link-btn" class="px-3 py-1 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center space-x-1" title="Edit link">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path>
+          </svg>
+          <span>Edit Link</span>
+        </button>
+        <div class="text-xs text-gray-500 px-2 whitespace-nowrap">Press Esc to finish</div>
+      `
+      
+      positionToolbar(targetRect)
+      
+      // Add event listener for edit link button
+      const editLinkBtn = toolbar.querySelector('#edit-link-btn') as HTMLButtonElement
+      editLinkBtn?.addEventListener('click', (e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        handleEditLink(linkElement)
+      })
+    }
+    
+    // Create toolbar (initially hidden)
+    toolbar = document.createElement('div')
+    toolbar.className = 'fixed bg-white border border-gray-300 rounded-lg shadow-lg p-2 items-center space-x-2 z-50'
+    toolbar.style.display = 'none'
     document.body.appendChild(toolbar)
     
-    // Add event listeners for toolbar
-    const addLinkBtn = toolbar.querySelector('#add-link-btn') as HTMLButtonElement
-    addLinkBtn?.addEventListener('click', () => {
-      handleAddLink()
-    })
+    // Handle text selection changes
+    const handleSelectionChange = () => {
+      const selection = window.getSelection()
+      if (!selection || !previewDiv.contains(selection.anchorNode)) {
+        hideToolbar()
+        return
+      }
+      
+      if (selection.isCollapsed) {
+        hideToolbar()
+        return
+      }
+      
+      // Check if selection is plain text (not within a link)
+      const range = selection.getRangeAt(0)
+      const startContainer = range.startContainer
+      const endContainer = range.endContainer
+      
+      // Check if selection spans across or is within a link
+      const isInLink = (node: Node | null): HTMLElement | null => {
+        let current = node
+        while (current && current !== previewDiv) {
+          if (current.nodeType === Node.ELEMENT_NODE && (current as Element).tagName === 'A') {
+            return current as HTMLElement
+          }
+          current = current.parentNode
+        }
+        return null
+      }
+      
+      const startLink = isInLink(startContainer.nodeType === Node.TEXT_NODE ? startContainer.parentNode : startContainer)
+      const endLink = isInLink(endContainer.nodeType === Node.TEXT_NODE ? endContainer.parentNode : endContainer)
+      
+      // Only show add link button for plain text selections (not in links)
+      if (!startLink && !endLink) {
+        const rect = range.getBoundingClientRect()
+        if (rect.width > 0 && rect.height > 0) {
+          showLinkToolbar(rect)
+        }
+      } else {
+        hideToolbar()
+      }
+    }
+    
+    // Add selection change listener
+    document.addEventListener('selectionchange', handleSelectionChange)
     
     // Add click handlers for existing links
     const links = previewDiv.querySelectorAll('a')
-    const linkClickHandlers = new Map<HTMLElement, () => void>()
+    const linkClickHandlers = new Map<HTMLElement, (e: Event) => void>()
     
     links.forEach(link => {
       // Disable link navigation during editing
       const originalHref = link.href
       link.href = 'javascript:void(0)'
       
-      const clickHandler = () => {
-        handleEditLink(link)
+      const clickHandler = (e: Event) => {
+        e.preventDefault()
+        e.stopPropagation()
+        
+        // Show edit link toolbar
+        const rect = link.getBoundingClientRect()
+        showEditLinkToolbar(rect, link)
+        
+        // Clear any text selection
+        window.getSelection()?.removeAllRanges()
       }
       
       link.addEventListener('click', clickHandler)
@@ -438,13 +563,8 @@ export default function CreateTemplateForm() {
       
       // Add visual indicator for editable links
       link.style.position = 'relative'
-      link.style.paddingRight = '20px'
-      
-      const editIcon = document.createElement('span')
-      editIcon.innerHTML = '<svg class="inline w-3 h-3 ml-1 text-blue-600" fill="currentColor" viewBox="0 0 20 20"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z"></path></svg>'
-      editIcon.className = 'link-edit-icon'
-      editIcon.style.pointerEvents = 'none'
-      link.appendChild(editIcon)
+      link.style.cursor = 'pointer'
+      link.classList.add('hover:bg-blue-50')
       
       // Store original href for restoration
       link.setAttribute('data-original-href', originalHref)
@@ -461,9 +581,15 @@ export default function CreateTemplateForm() {
       previewDiv.style.backgroundColor = 'transparent'
       
       // Remove toolbar
-      toolbar.remove()
+      if (toolbar) {
+        toolbar.remove()
+        toolbar = null
+      }
       
-      // Restore link hrefs and remove edit icons
+      // Remove selection change listener
+      document.removeEventListener('selectionchange', handleSelectionChange)
+      
+      // Restore link hrefs and remove handlers
       const currentLinks = previewDiv.querySelectorAll('a')
       currentLinks.forEach(link => {
         const originalHref = link.getAttribute('data-original-href')
@@ -472,9 +598,8 @@ export default function CreateTemplateForm() {
           link.removeAttribute('data-original-href')
         }
         
-        // Remove edit icons
-        const editIcons = link.querySelectorAll('.link-edit-icon')
-        editIcons.forEach(icon => icon.remove())
+        link.classList.remove('hover:bg-blue-50')
+        link.style.cursor = 'auto'
         
         // Remove click handlers
         const handler = linkClickHandlers.get(link)
@@ -511,14 +636,14 @@ export default function CreateTemplateForm() {
     const handleBlur = (e: FocusEvent) => {
       // Don't finish editing if clicking on toolbar or dialog
       const target = e.relatedTarget as Element
-      if (target && (toolbar.contains(target) || target.closest('[role="dialog"]'))) {
+      if (target && (toolbar?.contains(target) || target.closest('[role="dialog"]'))) {
         return
       }
       
       // Small delay to allow clicking on buttons without losing focus
       setTimeout(() => {
         if (!previewDiv.contains(document.activeElement) && 
-            !toolbar.contains(document.activeElement as Node) && 
+            (!toolbar || !toolbar.contains(document.activeElement as Node)) && 
             !document.querySelector('[role="dialog"]')) {
           finishEditing()
         }
@@ -1283,14 +1408,14 @@ export default function CreateTemplateForm() {
                           <p className="text-xs">
                             {isEditing ? (
                               <span className="text-blue-700 font-medium">
-                                Editing mode active - Use toolbar to add/edit links, press Escape to finish
+                                Editing mode active - Select text to add links, click links to edit, press Escape to finish
                               </span>
                             ) : (isAIGenerating || isAIEditing) ? (
                               <span className="text-purple-700 font-medium">
                                 AI is processing content...
                               </span>
                             ) : (
-                              <>Click anywhere in the preview above to edit the content directly. Add links, format text, and more!</>
+                              <>Click anywhere in the preview above to edit the content directly. Select text to add links!</>
                             )}
                           </p>
                         </div>
@@ -1768,14 +1893,14 @@ export default function CreateTemplateForm() {
                               <p className="text-xs">
                                 {isEditing ? (
                                   <span className="text-blue-700 font-medium">
-                                    Editing mode active - Use toolbar to add/edit links, press Escape to finish
+                                    Editing mode active - Select text to add links, click links to edit, press Escape to finish
                                   </span>
                                 ) : (isAIGenerating || isAIEditing) ? (
                                   <span className="text-purple-700 font-medium">
                                     AI is processing content...
                                   </span>
                                 ) : (
-                                  <>Click anywhere in the preview to edit the content directly. Add links, format text, and more!</>
+                                  <>Click anywhere in the preview to edit the content directly. Select text to add links!</>
                                 )}
                               </p>
                             </div>
