@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const campaignId = searchParams.get('c')
-    const contactId = searchParams.get('contact')
+    const contactId = searchParams.get('u')
     const url = searchParams.get('url')
 
     if (!campaignId || !url) {

@@ -1,13 +1,13 @@
 // app/campaigns/[id]/page.tsx
 import { notFound } from 'next/navigation'
-import { getEmailCampaign, getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
+import { getEmailCampaign, getEmailTemplates, getEmailContacts, getEmailTemplate } from '@/lib/cosmic'
 import EditCampaignForm from '@/components/EditCampaignForm'
 import SendCampaignButton from '@/components/SendCampaignButton'
 import DeleteCampaignButton from '@/components/DeleteCampaignButton'
 import TestEmailModal from '@/components/TestEmailModal'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, Users, Mail, Calendar, TrendingUp, Clock, Send } from 'lucide-react'
+import { Eye, Users, Mail, Calendar, TrendingUp, Clock, Send, FileText } from 'lucide-react'
 import Link from 'next/link'
 
 // Force dynamic rendering to ensure fresh data
@@ -34,6 +34,38 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
 
   const status = campaign.metadata.status?.value || 'Draft'
   const stats = campaign.metadata.stats
+
+  // Get template content for preview
+  let templateContent: { name: string; subject: string; content: string } | null = null
+  
+  // If campaign is sent, show the snapshot
+  if (status === 'Sent' && campaign.metadata.template_snapshot) {
+    templateContent = {
+      name: campaign.metadata.template_snapshot.name,
+      subject: campaign.metadata.template_snapshot.subject,
+      content: campaign.metadata.template_snapshot.content
+    }
+  } else if (status === 'Draft') {
+    // For draft campaigns, show current template content
+    const templateId = typeof campaign.metadata?.template === 'string' 
+      ? campaign.metadata.template 
+      : campaign.metadata.template?.id
+
+    if (templateId) {
+      try {
+        const template = await getEmailTemplate(templateId)
+        if (template) {
+          templateContent = {
+            name: template.metadata.name,
+            subject: template.metadata.subject,
+            content: template.metadata.content
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load template for preview:', error)
+      }
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -146,6 +178,74 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
               templates={templates} 
               contacts={contacts} 
             />
+
+            {/* Template Preview Section */}
+            {templateContent && (
+              <Card className="mt-8">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <FileText className="h-5 w-5" />
+                    <span>
+                      {status === 'Sent' ? 'Content Snapshot' : 'Template Preview'}
+                    </span>
+                  </CardTitle>
+                  {status === 'Sent' && (
+                    <p className="text-sm text-gray-600">
+                      This is the exact content that was sent to recipients
+                    </p>
+                  )}
+                  {status === 'Draft' && (
+                    <p className="text-sm text-gray-600">
+                      Preview of the current template content
+                    </p>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Template Info */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Template:</span>
+                          <span className="ml-2">{templateContent.name}</span>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Subject:</span>
+                          <span className="ml-2">{templateContent.subject}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Email Content Preview */}
+                    <div className="border rounded-lg overflow-hidden">
+                      <div className="bg-gray-100 px-4 py-2 border-b">
+                        <span className="text-sm font-medium text-gray-700">Email Content:</span>
+                      </div>
+                      <div 
+                        className="p-4 max-h-96 overflow-y-auto"
+                        dangerouslySetInnerHTML={{ __html: templateContent.content }}
+                        style={{
+                          fontFamily: 'system-ui, -apple-system, sans-serif',
+                          lineHeight: '1.5'
+                        }}
+                      />
+                    </div>
+
+                    {/* Additional Info for Sent Campaigns */}
+                    {status === 'Sent' && campaign.metadata.template_snapshot && (
+                      <div className="text-xs text-gray-500 p-3 bg-blue-50 rounded">
+                        <div className="flex items-center space-x-1">
+                          <Eye className="h-3 w-3" />
+                          <span>
+                            Content captured on {new Date(campaign.metadata.template_snapshot.snapshot_date).toLocaleString()}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right Column - Actions & Stats */}
