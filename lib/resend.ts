@@ -1,5 +1,6 @@
 import { Resend } from 'resend'
 import { EmailTemplate, Settings, EmailContact, TemplateSnapshot } from '@/types'
+import { updateCampaignProgress } from './cosmic'
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error('RESEND_API_KEY environment variable is not set')
@@ -26,6 +27,14 @@ export interface ResendSuccessResponse {
 export interface ResendErrorResponse {
   message: string
   name: string
+}
+
+// Rate limiting configuration for Resend API
+const RATE_LIMIT = {
+  BATCH_SIZE: 100, // Send 100 emails per batch
+  BATCH_DELAY: 2000, // Wait 2 seconds between batches (30 batches per minute max)
+  RETRY_ATTEMPTS: 3, // Retry failed emails up to 3 times
+  RETRY_DELAY: 5000, // Wait 5 seconds before retry
 }
 
 // Export the sendEmail function that wraps the Resend SDK
@@ -61,7 +70,12 @@ export async function sendEmail(options: SendEmailOptions): Promise<ResendSucces
   }
 }
 
-// Export the sendCampaignEmails function for cron job usage
+// Sleep utility for delays
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+// Batch processing function with rate limiting and retry logic
 export async function sendCampaignEmails(
   campaignId: string,
   template: EmailTemplate,
@@ -74,6 +88,13 @@ export async function sendCampaignEmails(
       return { success: false, sent_count: 0, error: 'No contacts to send to' }
     }
 
+    // Filter active contacts only
+    const activeContacts = contacts.filter(contact => contact.metadata.status?.value === 'Active')
+    
+    if (activeContacts.length === 0) {
+      return { success: false, sent_count: 0, error: 'No active contacts to send to' }
+    }
+
     // Use template snapshot if available (for sent campaigns), otherwise use current template
     const emailContent = templateSnapshot?.content || template.metadata.content
     const emailSubject = templateSnapshot?.subject || template.metadata.subject
@@ -82,59 +103,147 @@ export async function sendCampaignEmails(
       return { success: false, sent_count: 0, error: 'Template content or subject is missing' }
     }
 
-    let sentCount = 0
     const fromEmail = `${settings.metadata.from_name} <${settings.metadata.from_email}>`
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    
+    let totalSent = 0
+    let totalFailed = 0
+    const totalContacts = activeContacts.length
+    
+    console.log(`Starting batch email sending for campaign ${campaignId}`)
+    console.log(`Total contacts to process: ${totalContacts}`)
+    console.log(`Batch size: ${RATE_LIMIT.BATCH_SIZE}, Delay between batches: ${RATE_LIMIT.BATCH_DELAY}ms`)
 
-    // Send emails to each contact
-    for (const contact of contacts) {
-      try {
-        // Skip unsubscribed or bounced contacts
-        if (contact.metadata.status?.value !== 'Active') {
-          console.log(`Skipping contact ${contact.metadata.email} with status: ${contact.metadata.status?.value}`)
-          continue
-        }
+    // Process contacts in batches to respect rate limits
+    for (let i = 0; i < activeContacts.length; i += RATE_LIMIT.BATCH_SIZE) {
+      const batch = activeContacts.slice(i, i + RATE_LIMIT.BATCH_SIZE)
+      const batchNumber = Math.floor(i / RATE_LIMIT.BATCH_SIZE) + 1
+      const totalBatches = Math.ceil(activeContacts.length / RATE_LIMIT.BATCH_SIZE)
+      
+      console.log(`Processing batch ${batchNumber}/${totalBatches} (${batch.length} emails)`)
 
-        // Personalize content
-        let personalizedContent = emailContent
-        let personalizedSubject = emailSubject
+      // Process each email in the current batch
+      const batchPromises = batch.map(async (contact) => {
+        let attempts = 0
+        let lastError: any = null
 
-        // Replace template variables
-        personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
-        personalizedContent = personalizedContent.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
-        personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
-        personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
+        while (attempts < RATE_LIMIT.RETRY_ATTEMPTS) {
+          try {
+            // Personalize content
+            let personalizedContent = emailContent
+            let personalizedSubject = emailSubject
 
-        // Add unsubscribe link if not already present
-        if (!personalizedContent.includes('unsubscribe')) {
-          const unsubscribeUrl = `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}`
-          personalizedContent += `<br><br><small><a href="${unsubscribeUrl}">Unsubscribe</a></small>`
-        }
+            // Replace template variables
+            personalizedContent = personalizedContent.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
+            personalizedContent = personalizedContent.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
+            personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
+            personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
 
-        await sendEmail({
-          from: fromEmail,
-          to: contact.metadata.email,
-          subject: personalizedSubject,
-          html: personalizedContent,
-          reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
-          headers: {
-            'X-Campaign-ID': campaignId,
-            'X-Contact-ID': contact.id
+            // Add unsubscribe link and footer
+            const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}&campaign=${campaignId}`
+            const companyAddress = settings.metadata.company_address || ''
+            
+            const unsubscribeFooter = `
+              <div style="margin-top: 40px; padding: 20px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 12px; color: #6b7280;">
+                <p style="margin: 0 0 10px 0;">
+                  You received this email because you subscribed to our mailing list.
+                </p>
+                <p style="margin: 0 0 10px 0;">
+                  <a href="${unsubscribeUrl}" style="color: #6b7280; text-decoration: underline;">Unsubscribe</a> from future emails.
+                </p>
+                ${companyAddress ? `<p style="margin: 0; font-size: 11px;">${companyAddress.replace(/\n/g, '<br>')}</p>` : ''}
+              </div>
+            `
+
+            personalizedContent += unsubscribeFooter
+
+            await sendEmail({
+              from: fromEmail,
+              to: contact.metadata.email,
+              subject: personalizedSubject,
+              html: personalizedContent,
+              reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
+              headers: {
+                'X-Campaign-ID': campaignId,
+                'X-Contact-ID': contact.id,
+                'List-Unsubscribe': `<${unsubscribeUrl}>`,
+                'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+              }
+            })
+
+            console.log(`✓ Sent email to ${contact.metadata.email} (attempt ${attempts + 1})`)
+            return { success: true, email: contact.metadata.email }
+
+          } catch (error: any) {
+            attempts++
+            lastError = error
+            console.error(`✗ Failed to send email to ${contact.metadata.email} (attempt ${attempts}/${RATE_LIMIT.RETRY_ATTEMPTS}):`, error.message)
+            
+            if (attempts < RATE_LIMIT.RETRY_ATTEMPTS) {
+              // Wait before retry with exponential backoff
+              const retryDelay = RATE_LIMIT.RETRY_DELAY * Math.pow(2, attempts - 1)
+              console.log(`Retrying in ${retryDelay}ms...`)
+              await sleep(retryDelay)
+            }
           }
+        }
+
+        return { success: false, email: contact.metadata.email, error: lastError?.message }
+      })
+
+      // Wait for all emails in the batch to complete
+      const batchResults = await Promise.allSettled(batchPromises)
+      
+      // Count successes and failures in this batch
+      let batchSent = 0
+      let batchFailed = 0
+      
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled' && result.value.success) {
+          batchSent++
+        } else {
+          batchFailed++
+        }
+      })
+
+      totalSent += batchSent
+      totalFailed += batchFailed
+
+      console.log(`Batch ${batchNumber} completed: ${batchSent} sent, ${batchFailed} failed`)
+      console.log(`Campaign progress: ${totalSent}/${totalContacts} sent (${Math.round((totalSent / totalContacts) * 100)}%)`)
+
+      // Update campaign progress in database
+      try {
+        await updateCampaignProgress(campaignId, {
+          sent: totalSent,
+          failed: totalFailed,
+          total: totalContacts,
+          progress_percentage: Math.round((totalSent / totalContacts) * 100),
+          last_batch_completed: new Date().toISOString()
         })
+      } catch (progressError) {
+        console.error('Failed to update campaign progress:', progressError)
+        // Don't fail the entire campaign for progress update failures
+      }
 
-        sentCount++
-        console.log(`Sent email to ${contact.metadata.email}`)
-
-      } catch (contactError) {
-        console.error(`Failed to send email to ${contact.metadata.email}:`, contactError)
-        // Continue with other contacts even if one fails
+      // Wait between batches to respect rate limits (except for the last batch)
+      if (i + RATE_LIMIT.BATCH_SIZE < activeContacts.length) {
+        console.log(`Waiting ${RATE_LIMIT.BATCH_DELAY}ms before next batch...`)
+        await sleep(RATE_LIMIT.BATCH_DELAY)
       }
     }
 
+    const successRate = Math.round((totalSent / totalContacts) * 100)
+    console.log(`Campaign ${campaignId} completed:`)
+    console.log(`- Total contacts processed: ${totalContacts}`)
+    console.log(`- Successfully sent: ${totalSent}`)
+    console.log(`- Failed to send: ${totalFailed}`)
+    console.log(`- Success rate: ${successRate}%`)
+
     return {
-      success: sentCount > 0,
-      sent_count: sentCount,
-      error: sentCount === 0 ? 'No emails were sent successfully' : undefined
+      success: totalSent > 0,
+      sent_count: totalSent,
+      error: totalSent === 0 ? `No emails were sent successfully. ${totalFailed} contacts failed.` : undefined
     }
 
   } catch (error) {

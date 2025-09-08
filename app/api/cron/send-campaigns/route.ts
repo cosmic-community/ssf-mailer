@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getEmailCampaigns, updateCampaignStatus, getEmailTemplate, getSettings } from '@/lib/cosmic'
+import { getEmailCampaigns, updateCampaignStatus, getEmailTemplate, getSettings, updateCampaignProgress } from '@/lib/cosmic'
 import { sendCampaignEmails } from '@/lib/resend'
 
 export async function GET(request: NextRequest) {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    console.log('Starting cron job: send-campaigns')
+    console.log('🚀 Starting cron job: send-campaigns')
 
     // Get all campaigns that are scheduled for sending
     const campaigns = await getEmailCampaigns()
@@ -27,48 +27,82 @@ export async function GET(request: NextRequest) {
       return campaignSendDate <= now
     })
 
-    console.log(`Found ${scheduledCampaigns.length} campaigns ready to send`)
+    console.log(`📧 Found ${scheduledCampaigns.length} campaigns ready to send`)
 
     const results = []
 
     for (const campaign of scheduledCampaigns) {
       try {
-        console.log(`Processing campaign: ${campaign.metadata.name} (${campaign.id})`)
+        console.log(`📋 Processing campaign: ${campaign.metadata.name} (${campaign.id})`)
 
-        // Update status to "Sending"
+        // Update status to "Sending" to prevent duplicate processing
         await updateCampaignStatus(campaign.id, 'Sending')
 
         // Get the template for this campaign
         const template = await getEmailTemplate(campaign.metadata.template_id)
         if (!template) {
-          console.error(`Template not found for campaign ${campaign.id}`)
+          console.error(`❌ Template not found for campaign ${campaign.id}`)
+          // Reset campaign status back to scheduled
+          await updateCampaignStatus(campaign.id, 'Scheduled')
           continue
         }
 
         // Get settings
         const settings = await getSettings()
         if (!settings) {
-          console.error('Settings not found - cannot send emails')
+          console.error('❌ Settings not found - cannot send emails')
+          // Reset campaign status back to scheduled
+          await updateCampaignStatus(campaign.id, 'Scheduled')
           continue
         }
 
-        // Send the campaign emails
+        // Get target contacts (active ones only)
+        const allContacts = campaign.metadata.target_contacts || []
+        const activeContacts = allContacts.filter(contact => 
+          contact && contact.metadata?.status?.value === 'Active'
+        )
+
+        if (activeContacts.length === 0) {
+          console.error(`❌ No active contacts found for campaign ${campaign.id}`)
+          // Reset campaign status back to scheduled
+          await updateCampaignStatus(campaign.id, 'Scheduled')
+          continue
+        }
+
+        console.log(`📊 Campaign ${campaign.id}: ${activeContacts.length} active contacts to process`)
+
+        // Initialize progress tracking
+        await updateCampaignProgress(campaign.id, {
+          sent: 0,
+          failed: 0,
+          total: activeContacts.length,
+          progress_percentage: 0,
+          last_batch_completed: new Date().toISOString()
+        })
+
+        // Send the campaign emails with batching and rate limiting
         const sendResult = await sendCampaignEmails(
           campaign.id,
           template,
-          campaign.metadata.target_contacts || [],
+          activeContacts,
           settings,
           campaign.metadata.template_snapshot
         )
 
         if (sendResult.success) {
-          // Update campaign status to "Sent" with stats
+          // Calculate final stats
+          const failedCount = activeContacts.length - sendResult.sent_count
+          const successRate = activeContacts.length > 0 ? Math.round((sendResult.sent_count / activeContacts.length) * 100) : 0
+          
+          // Update campaign status to "Sent" with final stats
           await updateCampaignStatus(campaign.id, 'Sent', {
             sent: sendResult.sent_count,
             delivered: sendResult.sent_count, // Assume delivered initially
+            opened: 0,
             clicked: 0,
-            bounced: 0,
+            bounced: failedCount,
             unsubscribed: 0,
+            open_rate: '0%',
             click_rate: '0%'
           })
 
@@ -76,10 +110,14 @@ export async function GET(request: NextRequest) {
             campaign_id: campaign.id,
             campaign_name: campaign.metadata.name,
             status: 'success',
-            sent_count: sendResult.sent_count
+            sent_count: sendResult.sent_count,
+            failed_count: failedCount,
+            success_rate: `${successRate}%`,
+            total_contacts: activeContacts.length
           })
 
-          console.log(`Successfully sent campaign ${campaign.id} to ${sendResult.sent_count} recipients`)
+          console.log(`✅ Successfully completed campaign ${campaign.id}`)
+          console.log(`   📊 Stats: ${sendResult.sent_count}/${activeContacts.length} sent (${successRate}% success rate)`)
         } else {
           // Update campaign status back to "Scheduled" on failure
           await updateCampaignStatus(campaign.id, 'Scheduled')
@@ -88,20 +126,21 @@ export async function GET(request: NextRequest) {
             campaign_id: campaign.id,
             campaign_name: campaign.metadata.name,
             status: 'failed',
-            error: sendResult.error
+            error: sendResult.error,
+            total_contacts: activeContacts.length
           })
 
-          console.error(`Failed to send campaign ${campaign.id}: ${sendResult.error}`)
+          console.error(`❌ Failed to send campaign ${campaign.id}: ${sendResult.error}`)
         }
 
       } catch (error) {
-        console.error(`Error processing campaign ${campaign.id}:`, error)
+        console.error(`💥 Error processing campaign ${campaign.id}:`, error)
         
         // Reset campaign status on error
         try {
           await updateCampaignStatus(campaign.id, 'Scheduled')
         } catch (resetError) {
-          console.error(`Failed to reset campaign status for ${campaign.id}:`, resetError)
+          console.error(`❌ Failed to reset campaign status for ${campaign.id}:`, resetError)
         }
 
         results.push({
@@ -113,19 +152,23 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log('Cron job completed:', results)
+    console.log('🎯 Cron job completed successfully')
+    console.log('📈 Results summary:', results)
 
     return NextResponse.json({
       success: true,
       message: `Processed ${scheduledCampaigns.length} scheduled campaigns`,
-      results
+      processed_count: scheduledCampaigns.length,
+      results,
+      timestamp: new Date().toISOString()
     })
 
   } catch (error) {
-    console.error('Cron job error:', error)
+    console.error('💥 Cron job error:', error)
     return NextResponse.json({
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timestamp: new Date().toISOString()
     }, { status: 500 })
   }
 }

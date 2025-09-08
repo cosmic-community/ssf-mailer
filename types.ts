@@ -76,7 +76,17 @@ export interface CampaignStats {
   click_rate?: string;
 }
 
-// Marketing Campaign interface - Updated to include 'Sending' status and template snapshot
+// Campaign sending progress interface for batch tracking
+export interface CampaignProgress {
+  sent: number;
+  failed: number;
+  total: number;
+  progress_percentage: number;
+  last_batch_completed: string;
+  last_updated?: string;
+}
+
+// Marketing Campaign interface - Updated to include 'Sending' status, template snapshot, and progress tracking
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
@@ -92,6 +102,7 @@ export interface MarketingCampaign extends CosmicObject {
     };
     send_date?: string;
     stats?: CampaignStats;
+    sending_progress?: CampaignProgress;
   };
 }
 
@@ -111,6 +122,7 @@ export interface EmailCampaign extends CosmicObject {
     };
     send_date?: string;
     stats?: CampaignStats;
+    sending_progress?: CampaignProgress;
   };
 }
 
