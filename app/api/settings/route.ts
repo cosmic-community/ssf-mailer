@@ -136,20 +136,9 @@ export async function POST(request: NextRequest) {
       )
     }
     
-    // Fix TS2345: Convert ai_tone string to expected object format for Cosmic
-    const settingsDataForCosmic = {
-      ...data,
-      // Convert simple string value to Cosmic's select-dropdown format
-      ai_tone: data.ai_tone ? {
-        key: data.ai_tone.toLowerCase(),
-        value: data.ai_tone
-      } : undefined,
-      // Keep test_emails as string (comma-separated format)
-      test_emails: data.test_emails || ''
-    }
-    
-    // Create or update settings
-    const settings = await createOrUpdateSettings(settingsDataForCosmic)
+    // Create or update settings - pass data directly
+    // The createOrUpdateSettings function will handle converting ai_tone to Cosmic's format
+    const settings = await createOrUpdateSettings(data)
     
     return NextResponse.json({
       success: true,
