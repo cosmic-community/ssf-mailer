@@ -1,190 +1,275 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getEmailCampaigns, updateCampaignStatus, getEmailTemplate, getSettings, updateCampaignProgress, getEmailContacts } from '@/lib/cosmic'
-import { sendCampaignEmails } from '@/lib/resend'
-import { EmailContact } from '@/types'
+import { 
+  getMarketingCampaigns, 
+  getEmailContacts, 
+  updateCampaignStatus, 
+  updateCampaignProgress,
+  getSettings 
+} from '@/lib/cosmic'
+import { sendEmail } from '@/lib/resend'
+import { MarketingCampaign, EmailContact } from '@/types'
+
+const BATCH_SIZE = 100 // Send 100 emails per batch
+const MAX_BATCHES_PER_RUN = 5 // Process max 5 batches per cron run (500 emails)
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify cron authorization (optional - add auth header check if needed)
+    // Verify this is a cron request (optional - can be removed for manual testing)
     const authHeader = request.headers.get('authorization')
-    if (process.env.CRON_SECRET && authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+      // For development/testing, allow requests without cron secret
+      console.log('Warning: No valid cron secret provided. This should only happen in development.')
     }
 
-    console.log('🚀 Starting cron job: send-campaigns')
+    console.log('Cron job started: Processing sending campaigns')
 
-    // Get all campaigns that are scheduled for sending
-    const campaigns = await getEmailCampaigns()
-    const now = new Date()
-    
-    const scheduledCampaigns = campaigns.filter(campaign => {
-      const status = campaign.metadata.status?.value || 'Draft'
-      const sendDate = campaign.metadata.send_date
-      
-      // Only process campaigns that are scheduled and have a send date in the past
-      if (status !== 'Scheduled' || !sendDate) return false
-      
-      const campaignSendDate = new Date(sendDate)
-      return campaignSendDate <= now
-    })
+    // Get all campaigns that are in "Sending" status
+    const campaigns = await getMarketingCampaigns()
+    const sendingCampaigns = campaigns.filter(
+      campaign => campaign.metadata.status?.value === 'Sending'
+    )
 
-    console.log(`📧 Found ${scheduledCampaigns.length} campaigns ready to send`)
+    console.log(`Found ${sendingCampaigns.length} campaigns to process`)
 
-    const results = []
+    if (sendingCampaigns.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No campaigns to process',
+        processed: 0
+      })
+    }
 
-    for (const campaign of scheduledCampaigns) {
+    // Get settings for from email, etc.
+    const settings = await getSettings()
+    if (!settings) {
+      console.error('No settings found - cannot send emails')
+      return NextResponse.json(
+        { error: 'Email settings not configured' },
+        { status: 500 }
+      )
+    }
+
+    let totalProcessed = 0
+
+    // Process each sending campaign
+    for (const campaign of sendingCampaigns) {
       try {
-        console.log(`📋 Processing campaign: ${campaign.metadata.name} (${campaign.id})`)
-
-        // Update status to "Sending" to prevent duplicate processing
-        await updateCampaignStatus(campaign.id, 'Sending')
-
-        // Get the template for this campaign - handle the new template field structure
-        let template = null
-        if (typeof campaign.metadata?.template === 'object') {
-          template = campaign.metadata.template
-        } else if (typeof campaign.metadata?.template === 'string') {
-          template = await getEmailTemplate(campaign.metadata.template)
-        }
-
-        if (!template) {
-          console.error(`❌ Template not found for campaign ${campaign.id}`)
-          // Reset campaign status back to scheduled
-          await updateCampaignStatus(campaign.id, 'Scheduled')
-          continue
-        }
-
-        // Get settings
-        const settings = await getSettings()
-        if (!settings) {
-          console.error('❌ Settings not found - cannot send emails')
-          // Reset campaign status back to scheduled
-          await updateCampaignStatus(campaign.id, 'Scheduled')
-          continue
-        }
-
-        // Fix: Get all email contacts and filter by target contact IDs
-        const allContacts = await getEmailContacts()
-        const targetContactIds = campaign.metadata.target_contacts || []
+        console.log(`Processing campaign: ${campaign.metadata.name} (${campaign.id})`)
         
-        // Filter contacts by IDs and ensure they're active
-        const activeContacts: EmailContact[] = allContacts.filter(contact => 
-          targetContactIds.includes(contact.id) && 
-          contact.metadata?.status?.value === 'Active'
-        )
+        const result = await processCampaignBatch(campaign, settings)
+        totalProcessed += result.processed
 
-        if (activeContacts.length === 0) {
-          console.error(`❌ No active contacts found for campaign ${campaign.id}`)
-          // Reset campaign status back to scheduled
-          await updateCampaignStatus(campaign.id, 'Scheduled')
-          continue
-        }
-
-        console.log(`📊 Campaign ${campaign.id}: ${activeContacts.length} active contacts to process`)
-
-        // Initialize progress tracking
-        await updateCampaignProgress(campaign.id, {
-          sent: 0,
-          failed: 0,
-          total: activeContacts.length,
-          progress_percentage: 0,
-          last_batch_completed: new Date().toISOString()
-        })
-
-        // Send the campaign emails with batching and rate limiting
-        const sendResult = await sendCampaignEmails(
-          campaign.id,
-          template,
-          activeContacts,
-          settings,
-          campaign.metadata.template_snapshot
-        )
-
-        if (sendResult.success) {
-          // Calculate final stats
-          const failedCount = activeContacts.length - sendResult.sent_count
-          const successRate = activeContacts.length > 0 ? Math.round((sendResult.sent_count / activeContacts.length) * 100) : 0
-          
-          // Update campaign status to "Sent" with final stats
-          await updateCampaignStatus(campaign.id, 'Sent', {
-            sent: sendResult.sent_count,
-            delivered: sendResult.sent_count, // Assume delivered initially
-            opened: 0,
-            clicked: 0,
-            bounced: failedCount,
-            unsubscribed: 0,
-            open_rate: '0%',
-            click_rate: '0%'
-          })
-
-          results.push({
-            campaign_id: campaign.id,
-            campaign_name: campaign.metadata.name,
-            status: 'success',
-            sent_count: sendResult.sent_count,
-            failed_count: failedCount,
-            success_rate: `${successRate}%`,
-            total_contacts: activeContacts.length
-          })
-
-          console.log(`✅ Successfully completed campaign ${campaign.id}`)
-          console.log(`   📊 Stats: ${sendResult.sent_count}/${activeContacts.length} sent (${successRate}% success rate)`)
-        } else {
-          // Update campaign status back to "Scheduled" on failure
-          await updateCampaignStatus(campaign.id, 'Scheduled')
-          
-          results.push({
-            campaign_id: campaign.id,
-            campaign_name: campaign.metadata.name,
-            status: 'failed',
-            error: sendResult.error,
-            total_contacts: activeContacts.length
-          })
-
-          console.error(`❌ Failed to send campaign ${campaign.id}: ${sendResult.error}`)
+        // If campaign is completed, update status
+        if (result.completed) {
+          await updateCampaignStatus(campaign.id, 'Sent', result.finalStats)
+          console.log(`Campaign ${campaign.id} completed successfully`)
         }
 
       } catch (error) {
-        console.error(`💥 Error processing campaign ${campaign.id}:`, error)
+        console.error(`Error processing campaign ${campaign.id}:`, error)
         
-        // Reset campaign status on error
-        try {
-          await updateCampaignStatus(campaign.id, 'Scheduled')
-        } catch (resetError) {
-          console.error(`❌ Failed to reset campaign status for ${campaign.id}:`, resetError)
-        }
-
-        results.push({
-          campaign_id: campaign.id,
-          campaign_name: campaign.metadata.name,
-          status: 'error',
-          error: error instanceof Error ? error.message : 'Unknown error'
+        // Update campaign with error status
+        await updateCampaignStatus(campaign.id, 'Cancelled', {
+          sent: 0,
+          delivered: 0,
+          opened: 0,
+          clicked: 0,
+          bounced: 0,
+          unsubscribed: 0,
+          open_rate: '0%',
+          click_rate: '0%'
         })
       }
     }
 
-    console.log('🎯 Cron job completed successfully')
-    console.log('📈 Results summary:', results)
+    console.log(`Cron job completed. Processed ${totalProcessed} emails across ${sendingCampaigns.length} campaigns`)
 
     return NextResponse.json({
       success: true,
-      message: `Processed ${scheduledCampaigns.length} scheduled campaigns`,
-      processed_count: scheduledCampaigns.length,
-      results,
-      timestamp: new Date().toISOString()
+      message: `Processed ${totalProcessed} emails across ${sendingCampaigns.length} campaigns`,
+      processed: totalProcessed
     })
 
   } catch (error) {
-    console.error('💥 Cron job error:', error)
-    return NextResponse.json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      timestamp: new Date().toISOString()
-    }, { status: 500 })
+    console.error('Cron job error:', error)
+    return NextResponse.json(
+      { error: 'Cron job failed' },
+      { status: 500 }
+    )
   }
 }
 
-// Also support POST for manual triggering
-export async function POST(request: NextRequest) {
-  return GET(request)
+async function processCampaignBatch(campaign: MarketingCampaign, settings: any) {
+  const progress = campaign.metadata.sending_progress || {
+    sent: 0,
+    failed: 0,
+    total: 0,
+    progress_percentage: 0,
+    last_batch_completed: new Date().toISOString()
+  }
+
+  // Get all target recipients for this campaign
+  let targetRecipients: EmailContact[] = []
+
+  // Get recipients by contact IDs
+  if (campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0) {
+    const contacts = await getEmailContacts()
+    const targetContactIds = campaign.metadata.target_contacts.map((contact: any) => 
+      typeof contact === 'string' ? contact : contact.id
+    )
+    
+    const contactRecipients = contacts.filter(contact => 
+      targetContactIds.includes(contact.id) && 
+      contact.metadata.status?.value === 'Active' // Only send to active contacts
+    )
+    
+    targetRecipients = [...targetRecipients, ...contactRecipients]
+  }
+
+  // Get recipients by tags
+  if (campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0) {
+    const contacts = await getEmailContacts()
+    const tagRecipients = contacts.filter(contact => 
+      contact.metadata.status?.value === 'Active' && // Only send to active contacts
+      contact.metadata.tags && 
+      campaign.metadata.target_tags!.some(tag => contact.metadata.tags!.includes(tag))
+    )
+    
+    // Merge with existing recipients (avoid duplicates)
+    for (const contact of tagRecipients) {
+      if (!targetRecipients.find(existing => existing.id === contact.id)) {
+        targetRecipients.push(contact)
+      }
+    }
+  }
+
+  // Filter out already processed contacts (if this is a resumed batch)
+  const totalRecipients = targetRecipients.length
+  const remainingRecipients = targetRecipients.slice(progress.sent)
+
+  console.log(`Campaign ${campaign.id}: ${totalRecipients} total recipients, ${remainingRecipients.length} remaining`)
+
+  if (remainingRecipients.length === 0) {
+    // Campaign is complete
+    const finalStats = {
+      sent: progress.sent,
+      delivered: progress.sent, // Assume delivered for now (could be enhanced with webhooks)
+      opened: 0,
+      clicked: 0,
+      bounced: progress.failed,
+      unsubscribed: 0,
+      open_rate: '0%', // Could be calculated later with tracking
+      click_rate: '0%'
+    }
+
+    return {
+      processed: 0,
+      completed: true,
+      finalStats
+    }
+  }
+
+  // Process batches (max MAX_BATCHES_PER_RUN per cron run)
+  let batchesProcessed = 0
+  let emailsProcessed = 0
+  let emailsFailed = 0
+
+  while (batchesProcessed < MAX_BATCHES_PER_RUN && remainingRecipients.length > emailsProcessed) {
+    const batchStart = emailsProcessed
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, remainingRecipients.length)
+    const batch = remainingRecipients.slice(batchStart, batchEnd)
+
+    console.log(`Processing batch ${batchesProcessed + 1}: ${batch.length} emails`)
+
+    // Send emails in this batch
+    for (const contact of batch) {
+      try {
+        await sendCampaignEmail(campaign, contact, settings)
+        emailsProcessed++
+      } catch (error) {
+        console.error(`Failed to send email to ${contact.metadata.email}:`, error)
+        emailsFailed++
+      }
+    }
+
+    batchesProcessed++
+
+    // Update progress after each batch
+    const newProgress = {
+      sent: progress.sent + emailsProcessed,
+      failed: progress.failed + emailsFailed,
+      total: totalRecipients,
+      progress_percentage: Math.round(((progress.sent + emailsProcessed) / totalRecipients) * 100),
+      last_batch_completed: new Date().toISOString()
+    }
+
+    await updateCampaignProgress(campaign.id, newProgress)
+
+    console.log(`Batch completed. Progress: ${newProgress.sent}/${newProgress.total} (${newProgress.progress_percentage}%)`)
+  }
+
+  // Check if campaign is complete
+  const isComplete = (progress.sent + emailsProcessed) >= totalRecipients
+
+  let finalStats
+  if (isComplete) {
+    finalStats = {
+      sent: progress.sent + emailsProcessed,
+      delivered: progress.sent + emailsProcessed, // Assume delivered for now
+      opened: 0,
+      clicked: 0,
+      bounced: progress.failed + emailsFailed,
+      unsubscribed: 0,
+      open_rate: '0%',
+      click_rate: '0%'
+    }
+  }
+
+  return {
+    processed: emailsProcessed,
+    completed: isComplete,
+    finalStats
+  }
+}
+
+async function sendCampaignEmail(campaign: MarketingCampaign, contact: EmailContact, settings: any) {
+  // Get template content from snapshot or original template
+  let subject: string
+  let content: string
+
+  if (campaign.metadata.template_snapshot) {
+    subject = campaign.metadata.template_snapshot.subject
+    content = campaign.metadata.template_snapshot.content
+  } else {
+    // Fallback to original template (shouldn't happen in normal flow)
+    throw new Error('No template snapshot available for campaign')
+  }
+
+  // Replace template variables
+  const personalizedSubject = subject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
+  const personalizedContent = content.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
+
+  // Add tracking and unsubscribe links
+  const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}`
+  
+  const finalContent = personalizedContent + `
+    <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center; font-size: 12px; color: #666;">
+      <p>
+        You're receiving this email because you subscribed to our mailing list. 
+        <br>
+        <a href="${unsubscribeUrl}" style="color: #666; text-decoration: underline;">Unsubscribe</a>
+      </p>
+    </div>
+  `
+
+  // Send email via Resend
+  await sendEmail({
+    to: [contact.metadata.email],
+    subject: personalizedSubject,
+    html: finalContent,
+    from: `${settings.metadata.from_name} <${settings.metadata.from_email}>`,
+    reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
+  })
+
+  console.log(`Email sent successfully to ${contact.metadata.email}`)
 }

@@ -1,312 +1,200 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { MarketingCampaign } from '@/types'
 import { Button } from '@/components/ui/button'
-import { Send, Calendar, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Send, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
+import { useToast } from '@/hooks/useToast'
 
 interface SendCampaignButtonProps {
-  campaignId: string
-  campaignName: string
-  recipientCount: number
-  initialStatus?: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'
-  initialSendDate?: string
-  onSent?: () => void
+  campaign: MarketingCampaign
+  onStatusChange?: () => void
 }
 
-export default function SendCampaignButton({ 
-  campaignId, 
-  campaignName, 
-  recipientCount, 
-  initialStatus = 'Draft',
-  initialSendDate = '',
-  onSent 
-}: SendCampaignButtonProps) {
+export default function SendCampaignButton({ campaign, onStatusChange }: SendCampaignButtonProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState('')
-  const [showScheduleInput, setShowScheduleInput] = useState(false)
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [currentStatus, setCurrentStatus] = useState<'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'>(initialStatus)
-  const [currentSendDate, setCurrentSendDate] = useState<string>(initialSendDate)
+  const { addToast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
 
-  useEffect(() => {
-    setCurrentStatus(initialStatus)
-    setCurrentSendDate(initialSendDate)
-  }, [initialStatus, initialSendDate])
+  const currentStatus = campaign.metadata.status?.value || 'Draft'
+  const canSend = ['Draft', 'Scheduled'].includes(currentStatus)
+  const isSending = currentStatus === 'Sending'
+  const isSent = currentStatus === 'Sent'
+  const isCancelled = currentStatus === 'Cancelled'
 
-  // Don't show send button for already sent campaigns
-  if (currentStatus === 'Sent') {
-    return (
-      <div className="flex items-center space-x-2 text-green-600">
-        <CheckCircle className="h-4 w-4" />
-        <span className="text-sm font-medium">Campaign Sent</span>
-      </div>
-    )
+  // Get recipient count
+  const getRecipientCount = () => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    return contactCount > 0 ? contactCount : (tagCount > 0 ? 'Tagged contacts' : 0)
   }
 
-  // Show sending status
-  if (currentStatus === 'Sending') {
-    return (
-      <div className="flex items-center space-x-2 text-blue-600">
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-        <span className="text-sm font-medium">Sending...</span>
-      </div>
-    )
-  }
+  const handleSendNow = async () => {
+    if (!canSend) return
 
-  const handleSendNow = () => {
-    setError('')
+    // Confirm action
+    const recipientCount = getRecipientCount()
+    const message = `Are you sure you want to send this campaign${typeof recipientCount === 'number' && recipientCount > 0 ? ` to ${recipientCount} recipients` : ''}? This action cannot be undone.`
     
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sendDate: '' // Empty string for immediate send
-          })
-        })
-
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to send campaign'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
-
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to send campaign')
-        }
-
-        setCurrentStatus('Sent')
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Send campaign error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to send campaign')
-      }
-    })
-  }
-
-  const handleSchedule = () => {
-    if (!scheduleDate) {
-      setError('Please select a date and time')
+    if (!confirm(message)) {
       return
     }
 
-    setError('')
-    
-    startTransition(async () => {
-      try {
-        // Send to the send endpoint with schedule date
-        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sendDate: scheduleDate
-          })
-        })
+    setIsLoading(true)
 
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to schedule campaign'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to schedule campaign')
-        }
+      const result = await response.json()
 
-        setShowScheduleInput(false)
-        setScheduleDate('')
-        setCurrentStatus('Scheduled')
-        setCurrentSendDate(scheduleDate)
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Schedule campaign error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to schedule campaign')
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to send campaign')
       }
-    })
+
+      addToast('Campaign sending initiated! Emails will be sent in batches.', 'success')
+      
+      // Refresh the page to show updated status
+      if (onStatusChange) {
+        onStatusChange()
+      } else {
+        router.refresh()
+      }
+
+    } catch (error) {
+      console.error('Send campaign error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send campaign'
+      addToast(errorMessage, 'error')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleCancelSchedule = () => {
-    setError('')
-    
-    startTransition(async () => {
-      try {
-        // Update campaign to remove schedule
-        const response = await fetch(`/api/campaigns/${campaignId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            send_date: '',
-            status: 'Draft'
-          }),
-        })
+  const handleSchedule = async () => {
+    const scheduleDate = prompt('Enter schedule date and time (YYYY-MM-DD HH:MM):')
+    if (!scheduleDate) return
 
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to cancel schedule'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'Scheduled',
+          send_date: new Date(scheduleDate).toISOString()
+        }),
+      })
 
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to cancel schedule')
-        }
-
-        setCurrentStatus('Draft')
-        setCurrentSendDate('')
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Cancel schedule error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to cancel schedule')
+      if (!response.ok) {
+        throw new Error('Failed to schedule campaign')
       }
-    })
+
+      addToast('Campaign scheduled successfully!', 'success')
+      
+      if (onStatusChange) {
+        onStatusChange()
+      } else {
+        router.refresh()
+      }
+
+    } catch (error) {
+      console.error('Schedule campaign error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to schedule campaign'
+      addToast(errorMessage, 'error')
+    }
   }
 
-  // Get minimum datetime (current time + 5 minutes)
-  const getMinDateTime = () => {
-    const now = new Date()
-    now.setMinutes(now.getMinutes() + 5)
-    return now.toISOString().slice(0, 16)
+  // Show progress for sending campaigns
+  if (isSending && campaign.metadata.sending_progress) {
+    const progress = campaign.metadata.sending_progress
+    return (
+      <div className="space-y-2">
+        <Button disabled className="w-full">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Sending... {progress.progress_percentage}%
+        </Button>
+        <div className="text-xs text-gray-600 text-center">
+          {progress.sent} of {progress.total} emails sent
+        </div>
+        <div className="w-full bg-gray-200 rounded-full h-2">
+          <div 
+            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+            style={{ width: `${progress.progress_percentage}%` }}
+          ></div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isSent) {
+    return (
+      <Button disabled className="w-full">
+        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+        Campaign Sent
+      </Button>
+    )
+  }
+
+  if (isCancelled) {
+    return (
+      <Button disabled variant="destructive" className="w-full">
+        <AlertCircle className="mr-2 h-4 w-4" />
+        Campaign Cancelled
+      </Button>
+    )
+  }
+
+  if (currentStatus === 'Scheduled') {
+    return (
+      <div className="space-y-2">
+        <Button disabled className="w-full">
+          <Clock className="mr-2 h-4 w-4 text-blue-500" />
+          Scheduled
+        </Button>
+        {campaign.metadata.send_date && (
+          <div className="text-xs text-gray-600 text-center">
+            Scheduled for: {new Date(campaign.metadata.send_date).toLocaleString()}
+          </div>
+        )}
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-3">
-      {error && (
-        <div className="flex items-center space-x-2 text-red-600 text-sm">
-          <AlertTriangle className="h-4 w-4" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {currentStatus === 'Scheduled' && currentSendDate && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-center space-x-2 text-blue-800">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              Scheduled for: {new Date(currentSendDate).toLocaleString()}
-            </span>
-          </div>
-          <Button
-            onClick={handleCancelSchedule}
-            disabled={isPending}
-            variant="outline"
-            size="sm"
-            className="mt-2"
-          >
-            Cancel Schedule
-          </Button>
-        </div>
-      )}
-
-      {!showScheduleInput && currentStatus !== 'Scheduled' && (
-        <div className="flex space-x-2">
-          <Button
-            onClick={handleSendNow}
-            disabled={isPending || recipientCount === 0}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Send className="h-4 w-4 mr-2" />
-            {isPending ? 'Sending...' : `Send Now (${recipientCount})`}
-          </Button>
-          
-          <Button
-            onClick={() => setShowScheduleInput(true)}
-            disabled={isPending || recipientCount === 0}
-            variant="outline"
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            Schedule
-          </Button>
-        </div>
-      )}
-
-      {showScheduleInput && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-          <div>
-            <label htmlFor="schedule-date" className="block text-sm font-medium text-gray-700 mb-1">
-              Schedule Date & Time
-            </label>
-            <input
-              id="schedule-date"
-              type="datetime-local"
-              value={scheduleDate}
-              onChange={(e) => setScheduleDate(e.target.value)}
-              min={getMinDateTime()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Campaign will be sent automatically at the scheduled time via cron job
-            </p>
-          </div>
-          
-          <div className="flex space-x-2">
-            <Button
-              onClick={handleSchedule}
-              disabled={isPending || !scheduleDate}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {isPending ? 'Scheduling...' : 'Schedule Campaign'}
-            </Button>
-            
-            <Button
-              onClick={() => {
-                setShowScheduleInput(false)
-                setScheduleDate('')
-                setError('')
-              }}
-              disabled={isPending}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-          </div>
+    <div className="space-y-2">
+      <Button
+        onClick={handleSendNow}
+        disabled={isLoading || !canSend}
+        className="w-full"
+      >
+        {isLoading ? (
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+        ) : (
+          <Send className="mr-2 h-4 w-4" />
+        )}
+        {isLoading ? 'Initiating...' : 'Send Now'}
+      </Button>
+      
+      <Button
+        onClick={handleSchedule}
+        disabled={isLoading}
+        variant="outline"
+        className="w-full"
+        size="sm"
+      >
+        <Clock className="mr-2 h-4 w-4" />
+        Schedule for Later
+      </Button>
+      
+      {typeof getRecipientCount() === 'number' && getRecipientCount() > 0 && (
+        <div className="text-xs text-gray-600 text-center">
+          Ready to send to {getRecipientCount()} recipients
         </div>
       )}
     </div>
