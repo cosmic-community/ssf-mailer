@@ -56,17 +56,14 @@ export async function POST(
     }
 
     // Get target contacts - Fix: Handle contact IDs properly
-    const targetContactIds = campaign.metadata?.target_contacts || []
-    if (!Array.isArray(targetContactIds) || targetContactIds.length === 0) {
+    const targetContacts = campaign.metadata?.target_contacts || []
+    if (!Array.isArray(targetContacts) || targetContacts.length === 0) {
       return NextResponse.json(
         { error: 'No target contacts found for this campaign' },
         { status: 400 }
       )
     }
 
-    // Get all email contacts to match with target IDs
-    const allContacts = await getEmailContacts()
-    
     // Fix: Filter contacts by IDs and ensure they're active
     const targetContacts: EmailContact[] = allContacts.filter(contact => 
       targetContactIds.includes(contact.id) && 
