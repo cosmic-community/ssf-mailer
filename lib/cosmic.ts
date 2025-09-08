@@ -394,6 +394,7 @@ export async function updateEmailCampaign(
     sent_date?: string
     stats?: any
     template_snapshot?: any
+    status?: string
   }
 ): Promise<MarketingCampaign | null> {
   try {
@@ -413,6 +414,14 @@ export async function updateEmailCampaign(
     if (data.send_date !== undefined) metadataUpdates.send_date = data.send_date
     if (data.stats !== undefined) metadataUpdates.stats = data.stats
     if (data.template_snapshot !== undefined) metadataUpdates.template_snapshot = data.template_snapshot
+    
+    // Handle status specially to maintain proper format
+    if (data.status !== undefined) {
+      metadataUpdates.status = {
+        key: data.status.toLowerCase(),
+        value: data.status
+      }
+    }
 
     if (Object.keys(metadataUpdates).length > 0) {
       updateData.metadata = metadataUpdates
@@ -428,7 +437,7 @@ export async function updateEmailCampaign(
 
 export async function updateCampaignStatus(
   id: string, 
-  status: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Paused',
+  status: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled',
   stats?: any,
   template_snapshot?: any
 ): Promise<MarketingCampaign | null> {

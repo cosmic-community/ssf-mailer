@@ -1,43 +1,144 @@
-// app/api/campaigns/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { cosmic } from '@/lib/cosmic'
-import { revalidatePath } from 'next/cache'
+import { updateEmailCampaign, deleteEmailCampaign, getEmailCampaign } from '@/lib/cosmic'
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+interface RouteParams {
+  params: Promise<{ id: string }>
+}
+
+export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
-    const body = await request.json()
+    const campaign = await getEmailCampaign(id)
     
-    // Validate required fields
-    if (!body.name || !body.template_id) {
+    if (!campaign) {
       return NextResponse.json(
-        { error: 'Campaign name and template are required' },
+        { error: 'Campaign not found' },
+        { status: 404 }
+      )
+    }
+
+    return NextResponse.json({
+      success: true,
+      campaign
+    })
+  } catch (error) {
+    console.error('Campaign fetch error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch campaign' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PUT(request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params
+    const data = await request.json()
+    
+    // Validate required fields for updates
+    if (data.name && !data.name.trim()) {
+      return NextResponse.json(
+        { error: 'Campaign name is required' },
         { status: 400 }
       )
     }
 
-    // Update the campaign - store template as ID reference, not object
-    const result = await cosmic.objects.updateOne(id, {
-      title: body.name,
-      metadata: {
-        name: body.name,
-        template: body.template_id, // Store as ID reference
-        target_contacts: body.contact_ids || [],
-        target_tags: body.target_tags || [],
-        send_date: body.send_date || ''
+    // Special handling for status updates
+    if (data.status) {
+      const validStatuses = ['Draft', 'Scheduled', 'Sending', 'Sent', 'Cancelled']
+      if (!validStatuses.includes(data.status)) {
+        return NextResponse.json(
+          { error: 'Invalid campaign status' },
+          { status: 400 }
+        )
       }
+    }
+
+    // Validate schedule date if provided
+    if (data.send_date && data.send_date !== '') {
+      const scheduleDate = new Date(data.send_date)
+      const now = new Date()
+      
+      if (isNaN(scheduleDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid schedule date format' },
+          { status: 400 }
+        )
+      }
+      
+      // Allow scheduling in the past for manual cron testing
+      // In production, you might want to enforce future dates
+      if (data.status === 'Scheduled' && scheduleDate <= now) {
+        const fiveMinutesFromNow = new Date(now.getTime() + 5 * 60 * 1000)
+        if (scheduleDate < fiveMinutesFromNow) {
+          return NextResponse.json(
+            { error: 'Schedule date must be at least 5 minutes in the future' },
+            { status: 400 }
+          )
+        }
+      }
+    }
+
+    // Prepare update data
+    const updateData: any = {}
+    
+    if (data.name !== undefined) updateData.name = data.name
+    if (data.template_id !== undefined) updateData.template_id = data.template_id
+    if (data.contact_ids !== undefined) updateData.contact_ids = data.contact_ids
+    if (data.target_tags !== undefined) updateData.target_tags = data.target_tags
+    if (data.send_date !== undefined) updateData.send_date = data.send_date
+    if (data.stats !== undefined) updateData.stats = data.stats
+    if (data.template_snapshot !== undefined) updateData.template_snapshot = data.template_snapshot
+
+    // Handle status update with special logic
+    if (data.status !== undefined) {
+      // Get current campaign to check current status
+      const currentCampaign = await getEmailCampaign(id)
+      if (!currentCampaign) {
+        return NextResponse.json(
+          { error: 'Campaign not found' },
+          { status: 404 }
+        )
+      }
+
+      const currentStatus = currentCampaign.metadata.status?.value || 'Draft'
+      
+      // Prevent certain status transitions
+      if (currentStatus === 'Sent' && data.status !== 'Sent') {
+        return NextResponse.json(
+          { error: 'Cannot change status of sent campaign' },
+          { status: 400 }
+        )
+      }
+
+      if (currentStatus === 'Sending' && !['Sending', 'Sent', 'Cancelled'].includes(data.status)) {
+        return NextResponse.json(
+          { error: 'Cannot change status while campaign is sending' },
+          { status: 400 }
+        )
+      }
+
+      // Update with status - use special status update function for proper formatting
+      const campaign = await updateEmailCampaign(id, updateData)
+      if (campaign) {
+        // Then update the status using the specialized function
+        await updateCampaignStatus(id, data.status, data.stats, data.template_snapshot)
+      }
+    } else {
+      // Regular update without status change
+      await updateEmailCampaign(id, updateData)
+    }
+
+    // Fetch updated campaign
+    const updatedCampaign = await getEmailCampaign(id)
+
+    return NextResponse.json({
+      success: true,
+      message: 'Campaign updated successfully',
+      campaign: updatedCampaign
     })
-
-    // Revalidate the campaigns page to ensure updates are reflected
-    revalidatePath('/campaigns')
-    revalidatePath(`/campaigns/${id}`)
-
-    return NextResponse.json({ success: true, data: result })
   } catch (error) {
-    console.error('Error updating campaign:', error)
+    console.error('Campaign update error:', error)
     return NextResponse.json(
       { error: 'Failed to update campaign' },
       { status: 500 }
@@ -45,25 +146,43 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params
+    
+    // Check if campaign exists and get its current status
+    const campaign = await getEmailCampaign(id)
+    if (!campaign) {
+      return NextResponse.json(
+        { error: 'Campaign not found' },
+        { status: 404 }
+      )
+    }
 
-    // Delete the campaign from Cosmic
-    await cosmic.objects.deleteOne(id)
+    const status = campaign.metadata.status?.value || 'Draft'
+    
+    // Prevent deletion of campaigns that are currently sending
+    if (status === 'Sending') {
+      return NextResponse.json(
+        { error: 'Cannot delete campaign while it is sending' },
+        { status: 400 }
+      )
+    }
 
-    // Revalidate the campaigns page to reflect the deletion
-    revalidatePath('/campaigns')
+    await deleteEmailCampaign(id)
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      message: 'Campaign deleted successfully'
+    })
   } catch (error) {
-    console.error('Error deleting campaign:', error)
+    console.error('Campaign deletion error:', error)
     return NextResponse.json(
       { error: 'Failed to delete campaign' },
       { status: 500 }
     )
   }
 }
+
+// Helper function import - fix missing import
+import { updateCampaignStatus } from '@/lib/cosmic'
