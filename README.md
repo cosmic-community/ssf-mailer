@@ -1,207 +1,137 @@
-# Cosmic Email Marketing
+# Email Marketing Platform
 
-![App Preview](https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=300&fit=crop&auto=format)
+A modern email marketing platform built with Next.js, TypeScript, and Cosmic CMS for content management.
 
-A comprehensive email marketing platform that enables you to manage contacts, create templates, build campaigns, and send professional emails using Resend integration.
+## Features
 
-## ✨ Features
+- **Contact Management**: Import, manage, and segment email contacts
+- **Template Management**: Create and edit email templates with AI assistance
+- **Campaign Management**: Create, schedule, and send email campaigns
+- **Analytics**: Track campaign performance and engagement metrics
+- **Automated Sending**: Cron job support for scheduled campaign delivery
+- **Unsubscribe Handling**: Automatic unsubscribe link management
+- **Settings Management**: Configure sender information, branding, and AI preferences
 
-- **Contact Management**: Add contacts individually or upload via forms with tag-based segmentation
-- **Template Builder**: Create and manage reusable email templates with live preview
-- **Campaign Creation**: Build targeted marketing campaigns with contact filtering
-- **Email Delivery**: Send professional emails using Resend with tracking capabilities
-- **Analytics Dashboard**: Monitor campaign performance with detailed statistics
-- **Template Personalization**: Dynamic content with merge tags like {{first_name}}
-- **Responsive Design**: Fully responsive interface that works on all devices
-- **Real-time Updates**: Live data synchronization with your Cosmic content
-
-## <!-- CLONE_PROJECT_BUTTON -->
-
-## Prompts
-
-This application was built using the following prompts to generate the content structure and code:
-
-### Content Model Prompt
-
-> "Create an email marketing platform that enables you to:
-> 1. Upload email contacts
-> 2. Create email templates
-> 3. Create marketing campaigns"
-
-### Code Generation Prompt
-
-> Create an email marketing platform that enables you to:
-> 1. Add / upload email contacts
-> 2. Create email templates
-> 3. Create marketing campaigns
-> 4. Send emails with Resend
-
-The app has been tailored to work with your existing Cosmic content structure and includes all the features requested above.
-
-## 🚀 Technologies Used
-
-- **Next.js 15** - React framework with App Router
-- **TypeScript** - Type-safe development
-- **Tailwind CSS** - Utility-first styling
-- **Cosmic CMS** - Headless content management
-- **Resend** - Email delivery service
-- **React Hook Form** - Form management
-- **Date-fns** - Date utilities
-
-## 🛠️ Getting Started
+## Getting Started
 
 ### Prerequisites
 
 - Node.js 18+ or Bun
-- A Cosmic account and bucket
-- A Resend account for email sending
+- Cosmic CMS account
+- Resend account (for email sending)
 
-### Installation
+### Environment Variables
 
-1. Clone the repository:
+Copy `.env.example` to `.env.local` and fill in your values:
+
 ```bash
-git clone <your-repo-url>
-cd cosmic-email-marketing
-```
-
-2. Install dependencies:
-```bash
-bun install
-```
-
-3. Set up environment variables:
-```bash
-cp .env.example .env.local
-```
-
-Add your credentials:
-```env
+# Cosmic CMS Configuration
 COSMIC_BUCKET_SLUG=your-bucket-slug
 COSMIC_READ_KEY=your-read-key
 COSMIC_WRITE_KEY=your-write-key
+
+# Email Service (Resend)
 RESEND_API_KEY=your-resend-api-key
+
+# Authentication
+AUTH_SECRET=your-auth-secret
+
+# Optional: Cron job security
+CRON_SECRET=your-cron-secret
+
+# Application URL
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-4. Run the development server:
+### Installation
+
 ```bash
+# Install dependencies
+bun install
+
+# Run the development server
 bun dev
 ```
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+### Cron Job Setup
 
-## 📚 Cosmic SDK Examples
+The application supports automated campaign sending via cron jobs. Set up a cron job to call the following endpoint:
 
-### Fetching Email Contacts
-```typescript
-import { cosmic } from '@/lib/cosmic'
+```bash
+# Example: Run every minute to check for scheduled campaigns
+* * * * * curl -X GET "https://your-domain.com/api/cron/send-campaigns" -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
 
-async function getContacts() {
-  try {
-    const response = await cosmic.objects
-      .find({ type: 'email-contacts' })
-      .props(['id', 'title', 'metadata'])
-      .depth(1)
-    
-    return response.objects
-  } catch (error) {
-    if (error.status === 404) {
-      return []
+Or use a service like Vercel Cron, GitHub Actions, or any cron job service:
+
+```javascript
+// Vercel Cron example in vercel.json
+{
+  "crons": [
+    {
+      "path": "/api/cron/send-campaigns",
+      "schedule": "* * * * *"
     }
-    throw error
-  }
+  ]
 }
 ```
 
-### Creating Email Templates
-```typescript
-async function createTemplate(templateData: CreateTemplateData) {
-  return await cosmic.objects.insertOne({
-    type: 'email-templates',
-    title: templateData.name,
-    metadata: {
-      name: templateData.name,
-      subject: templateData.subject,
-      content: templateData.content,
-      template_type: templateData.template_type,
-      active: true
-    }
-  })
-}
+### Campaign Scheduling
+
+Campaigns can be sent in two ways:
+
+1. **Immediate Sending**: Use the "Send Now" button for immediate delivery
+2. **Scheduled Sending**: Use the "Schedule" button to set a future date/time. The cron job will automatically send the campaign at the scheduled time.
+
+### Deployment
+
+Deploy to Vercel, Netlify, or any platform that supports Next.js:
+
+```bash
+bun run build
+bun start
 ```
 
-### Managing Campaigns
-```typescript
-async function createCampaign(campaignData: CreateCampaignData) {
-  return await cosmic.objects.insertOne({
-    type: 'marketing-campaigns',
-    title: campaignData.name,
-    metadata: {
-      name: campaignData.name,
-      template: campaignData.template_id,
-      target_contacts: campaignData.contact_ids,
-      target_tags: campaignData.target_tags,
-      status: 'draft',
-      send_date: campaignData.send_date,
-      stats: {}
-    }
-  })
-}
-```
+## API Endpoints
 
-## 🎯 Cosmic CMS Integration
+### Campaigns
+- `GET /api/campaigns` - List all campaigns
+- `POST /api/campaigns` - Create a new campaign
+- `GET /api/campaigns/[id]` - Get campaign details
+- `PUT /api/campaigns/[id]` - Update campaign (including scheduling)
+- `DELETE /api/campaigns/[id]` - Delete campaign
+- `POST /api/campaigns/[id]/send` - Send campaign immediately
+- `POST /api/campaigns/[id]/test` - Send test emails
 
-This application leverages three main Cosmic object types:
+### Cron Jobs
+- `GET /api/cron/send-campaigns` - Process scheduled campaigns (automated)
 
-### Email Contacts
-- **First Name**: Text field (required)
-- **Last Name**: Text field (optional)
-- **Email Address**: Text field with validation (required)
-- **Subscription Status**: Select dropdown (Active/Unsubscribed/Bounced)
-- **Tags**: Check boxes (Newsletter, Promotions, Product Updates, VIP Customer)
-- **Subscribe Date**: Date field
-- **Notes**: Textarea for additional information
+### Contacts
+- `GET /api/contacts` - List all contacts
+- `POST /api/contacts` - Create a new contact
+- `GET /api/contacts/[id]` - Get contact details
+- `PUT /api/contacts/[id]` - Update contact
+- `DELETE /api/contacts/[id]` - Delete contact
 
-### Email Templates
-- **Template Name**: Text field (required)
-- **Subject Line**: Text field (required)
-- **Email Content**: HTML textarea (required)
-- **Template Type**: Select dropdown (Welcome Email/Newsletter/Promotional/Transactional)
-- **Preview Image**: File upload for template thumbnails
-- **Active**: Switch to enable/disable templates
+### Templates
+- `GET /api/templates` - List all templates
+- `POST /api/templates` - Create a new template
+- `GET /api/templates/[id]` - Get template details
+- `PUT /api/templates/[id]` - Update template
+- `DELETE /api/templates/[id]` - Delete template
 
-### Marketing Campaigns
-- **Campaign Name**: Text field (required)
-- **Email Template**: Object relationship to email-templates
-- **Target Contacts**: Objects relationship to email-contacts
-- **Target Tags**: Check boxes matching contact tags
-- **Campaign Status**: Select dropdown (Draft/Scheduled/Sent/Cancelled)
-- **Send Date**: Date field for scheduling
-- **Campaign Statistics**: JSON field for tracking metrics
+### Settings
+- `GET /api/settings` - Get current settings
+- `POST /api/settings` - Update settings
 
-## 📧 Email Integration with Resend
+## Tech Stack
 
-The platform integrates with Resend for professional email delivery:
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Database**: Cosmic CMS (Headless CMS)
+- **Email Service**: Resend
+- **Deployment**: Vercel (recommended)
 
-- Template personalization with merge tags
-- Bulk email sending capabilities
-- Delivery status tracking
-- Campaign analytics and reporting
-- Professional sender reputation management
+## License
 
-## 🚀 Deployment Options
-
-### Vercel (Recommended)
-1. Connect your repository to Vercel
-2. Add environment variables in the Vercel dashboard
-3. Deploy with automatic builds
-
-### Netlify
-1. Connect your repository to Netlify
-2. Set build command: `bun run build`
-3. Set publish directory: `out`
-4. Add environment variables in Netlify settings
-
-### Other Platforms
-The application can be deployed to any platform that supports Next.js applications.
-
-Make sure to set the required environment variables in your hosting platform's dashboard.
+MIT License

@@ -76,22 +76,32 @@ export interface CampaignStats {
   click_rate?: string;
 }
 
-// Marketing Campaign interface - Updated to include template snapshot
+// Campaign sending progress interface for batch tracking
+export interface CampaignProgress {
+  sent: number;
+  failed: number;
+  total: number;
+  progress_percentage: number;
+  last_batch_completed: string;
+  last_updated?: string;
+}
+
+// Marketing Campaign interface - Updated to use template instead of template_id
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
-    template_id: string;
-    template?: EmailTemplate;
+    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
-    target_contacts?: EmailContact[];
+    target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
     };
     send_date?: string;
     stats?: CampaignStats;
+    sending_progress?: CampaignProgress;
   };
 }
 
@@ -100,17 +110,17 @@ export interface EmailCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
-    template_id: string;
-    template?: EmailTemplate;
+    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
-    target_contacts?: EmailContact[];
+    target_contacts?: string[];
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
     };
     send_date?: string;
     stats?: CampaignStats;
+    sending_progress?: CampaignProgress;
   };
 }
 
@@ -179,7 +189,7 @@ export interface CreateTemplateData {
 
 export interface CreateCampaignData {
   name: string;
-  template_id: string;
+  template_id: string; // Still use template_id in form data for clarity
   contact_ids?: string[];
   target_tags?: string[];
   send_date?: string;
