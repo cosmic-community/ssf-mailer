@@ -1,7 +1,7 @@
 import { Resend } from 'resend'
 import { EmailTemplate, Settings, EmailContact, TemplateSnapshot } from '@/types'
 import { updateCampaignProgress } from './cosmic'
-import { addTrackingToEmail } from './email-tracking'
+import { addTrackingToEmail, createUnsubscribeUrl } from './email-tracking'
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error('RESEND_API_KEY environment variable is not set')
@@ -18,6 +18,8 @@ export interface SendEmailOptions {
   text?: string
   reply_to?: string
   headers?: Record<string, string>
+  campaignId?: string
+  contactId?: string
 }
 
 // The Resend library returns a Promise that resolves to either success data or throws an error
@@ -41,14 +43,22 @@ const RATE_LIMIT = {
 // Export the sendEmail function that wraps the Resend SDK
 export async function sendEmail(options: SendEmailOptions): Promise<ResendSuccessResponse> {
   try {
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+    
+    // Apply click tracking if this is a campaign email
+    let finalHtmlContent = options.html
+    if (options.html && options.campaignId && options.contactId) {
+      finalHtmlContent = addTrackingToEmail(options.html, options.campaignId, options.contactId, baseUrl)
+    }
+    
     // Ensure text field is always a string (required by Resend API)
-    const textContent = options.text || (options.html ? options.html.replace(/<[^>]*>/g, '') : options.subject)
+    const textContent = options.text || (finalHtmlContent ? finalHtmlContent.replace(/<[^>]*>/g, '') : options.subject)
     
     const result = await resend.emails.send({
       from: options.from,
       to: options.to,
       subject: options.subject,
-      html: options.html,
+      html: finalHtmlContent,
       text: textContent, // Now guaranteed to be a string
       reply_to: options.reply_to,
       headers: options.headers
@@ -140,11 +150,8 @@ export async function sendCampaignEmails(
             personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
             personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
 
-            // Add click tracking to all links in the email content
-            personalizedContent = addTrackingToEmail(personalizedContent, campaignId, contact.id, baseUrl)
-
             // Add unsubscribe link and footer
-            const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}&campaign=${campaignId}`
+            const unsubscribeUrl = createUnsubscribeUrl(contact.metadata.email, baseUrl)
             const companyAddress = settings.metadata.company_address || ''
             
             const unsubscribeFooter = `
@@ -167,6 +174,8 @@ export async function sendCampaignEmails(
               subject: personalizedSubject,
               html: personalizedContent,
               reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
+              campaignId: campaignId, // Pass campaign ID for tracking
+              contactId: contact.id, // Pass contact ID for tracking
               headers: {
                 'X-Campaign-ID': campaignId,
                 'X-Contact-ID': contact.id,

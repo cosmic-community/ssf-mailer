@@ -7,6 +7,7 @@ import {
   getSettings 
 } from '@/lib/cosmic'
 import { sendEmail } from '@/lib/resend'
+import { addTrackingToEmail, createUnsubscribeUrl } from '@/lib/email-tracking'
 import { MarketingCampaign, EmailContact } from '@/types'
 
 const BATCH_SIZE = 100 // Send 100 emails per batch
@@ -249,10 +250,16 @@ async function sendCampaignEmail(campaign: MarketingCampaign, contact: EmailCont
   const personalizedSubject = subject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
   const personalizedContent = content.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
 
-  // Add tracking and unsubscribe links
-  const unsubscribeUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}`
+  // Get base URL for tracking and unsubscribe
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+
+  // Add click tracking to all links in the email
+  const trackedContent = addTrackingToEmail(personalizedContent, campaign.id, contact.id, baseUrl)
+
+  // Add unsubscribe footer
+  const unsubscribeUrl = createUnsubscribeUrl(contact.metadata.email, baseUrl)
   
-  const finalContent = personalizedContent + `
+  const finalContent = trackedContent + `
     <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e5e5; text-align: center; font-size: 12px; color: #666;">
       <p>
         You're receiving this email because you subscribed to our mailing list. 
@@ -262,13 +269,21 @@ async function sendCampaignEmail(campaign: MarketingCampaign, contact: EmailCont
     </div>
   `
 
-  // Send email via Resend
+  // Send email via Resend with tracking enabled
   await sendEmail({
     to: [contact.metadata.email],
     subject: personalizedSubject,
     html: finalContent,
     from: `${settings.metadata.from_name} <${settings.metadata.from_email}>`,
     reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
+    campaignId: campaign.id, // This enables click tracking in sendEmail function
+    contactId: contact.id,
+    headers: {
+      'X-Campaign-ID': campaign.id,
+      'X-Contact-ID': contact.id,
+      'List-Unsubscribe': `<${unsubscribeUrl}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click'
+    }
   })
 
   console.log(`Email sent successfully to ${contact.metadata.email}`)
