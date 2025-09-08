@@ -352,46 +352,42 @@ export async function createMarketingCampaign(data: CreateCampaignData): Promise
       }
     }
 
-    // Get contacts if contact_ids provided
-    let targetContacts: EmailContact[] = []
+    // Validate contact IDs if provided - but don't store full contact objects
+    let validContactIds: string[] = []
     if (data.contact_ids && data.contact_ids.length > 0) {
-      console.log('Fetching contacts for IDs:', data.contact_ids)
+      console.log('Validating contacts for IDs:', data.contact_ids)
       
-      // Fetch each contact individually and filter out null results
+      // Validate each contact ID exists
       const contactPromises = data.contact_ids.map(async (id) => {
         try {
           const contact = await getEmailContact(id)
-          if (!contact) {
-            console.warn(`Contact with ID ${id} not found`)
-            return null
-          }
-          return contact
+          return contact ? id : null
         } catch (error) {
-          console.error(`Error fetching contact ${id}:`, error)
+          console.error(`Error validating contact ${id}:`, error)
           return null
         }
       })
       
-      const contacts = await Promise.all(contactPromises)
-      targetContacts = contacts.filter((contact): contact is EmailContact => contact !== null)
+      const validatedIds = await Promise.all(contactPromises)
+      validContactIds = validatedIds.filter((id): id is string => id !== null)
       
-      console.log(`Found ${targetContacts.length} valid contacts out of ${data.contact_ids.length} requested`)
+      console.log(`Found ${validContactIds.length} valid contacts out of ${data.contact_ids.length} requested`)
       
       // Only validate if we specifically requested contacts but found none
-      if (targetContacts.length === 0 && data.contact_ids.length > 0) {
+      if (validContactIds.length === 0 && data.contact_ids.length > 0) {
         throw new Error('None of the selected contacts could be found or are accessible')
       }
     }
 
     // Validate that we have targets (either contacts or tags)
-    const hasContacts = targetContacts.length > 0
+    const hasContacts = validContactIds.length > 0
     const hasTags = data.target_tags && data.target_tags.length > 0
     
     if (!hasContacts && !hasTags) {
       throw new Error('No valid targets found - please select contacts or tags')
     }
 
-    console.log(`Creating campaign with ${targetContacts.length} contacts and ${data.target_tags?.length || 0} tags`)
+    console.log(`Creating campaign with ${validContactIds.length} contacts and ${data.target_tags?.length || 0} tags`)
 
     const { object } = await cosmic.objects.insertOne({
       title: data.name,
@@ -399,7 +395,7 @@ export async function createMarketingCampaign(data: CreateCampaignData): Promise
       metadata: {
         name: data.name,
         template_id: data.template_id,
-        target_contacts: targetContacts,
+        target_contact_ids: validContactIds, // Store only IDs, not full objects
         target_tags: data.target_tags || [],
         status: {
           key: 'draft',
@@ -514,15 +510,24 @@ export async function updateMarketingCampaign(id: string, data: Partial<CreateCa
       }
     }
 
-    // Handle contact_ids if provided
+    // Handle contact_ids if provided - store only IDs
     if (data.contact_ids !== undefined) {
-      let targetContacts: EmailContact[] = []
+      let validContactIds: string[] = []
       if (data.contact_ids.length > 0) {
-        const contactPromises = data.contact_ids.map(id => getEmailContact(id))
-        const contacts = await Promise.all(contactPromises)
-        targetContacts = contacts.filter(contact => contact !== null) as EmailContact[]
+        // Validate each contact ID exists
+        const contactPromises = data.contact_ids.map(async (id) => {
+          try {
+            const contact = await getEmailContact(id)
+            return contact ? id : null
+          } catch (error) {
+            console.error(`Error validating contact ${id}:`, error)
+            return null
+          }
+        })
+        const validatedIds = await Promise.all(contactPromises)
+        validContactIds = validatedIds.filter((id): id is string => id !== null)
       }
-      metadataUpdates.target_contacts = targetContacts
+      metadataUpdates.target_contact_ids = validContactIds
     }
 
     if (Object.keys(metadataUpdates).length > 0) {

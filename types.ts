@@ -86,7 +86,7 @@ export interface CampaignProgress {
   last_updated?: string;
 }
 
-// Marketing Campaign interface - Updated to include 'Sending' status, template snapshot, and progress tracking
+// Marketing Campaign interface - Updated to store contact IDs instead of full objects
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
@@ -94,7 +94,8 @@ export interface MarketingCampaign extends CosmicObject {
     template_id: string;
     template?: EmailTemplate;
     template_snapshot?: TemplateSnapshot;
-    target_contacts?: EmailContact[];
+    target_contact_ids?: string[]; // Store contact IDs instead of full objects
+    target_contacts?: EmailContact[]; // Keep for backward compatibility, but deprecated
     target_tags?: string[];
     status: {
       key: string;
@@ -114,6 +115,7 @@ export interface EmailCampaign extends CosmicObject {
     template_id: string;
     template?: EmailTemplate;
     template_snapshot?: TemplateSnapshot;
+    target_contact_ids?: string[];
     target_contacts?: EmailContact[];
     target_tags?: string[];
     status: {
