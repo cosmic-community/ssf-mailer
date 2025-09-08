@@ -382,34 +382,6 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                 </CardContent>
               </Card>
             )}
-
-            {/* Template Snapshot Info */}
-            {campaign.metadata.template_snapshot && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Eye className="h-5 w-5" />
-                    <span>Content Snapshot</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="text-sm">
-                  <div className="space-y-2">
-                    <div>
-                      <span className="font-medium text-gray-700">Template:</span> {campaign.metadata.template_snapshot.name}
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Subject:</span> {campaign.metadata.template_snapshot.subject}
-                    </div>
-                    <div>
-                      <span className="font-medium text-gray-700">Captured:</span> {new Date(campaign.metadata.template_snapshot.snapshot_date).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-3 p-2 bg-blue-50 rounded">
-                    This snapshot preserves the exact content that was/will be sent to recipients.
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
         </div>
       </div>
