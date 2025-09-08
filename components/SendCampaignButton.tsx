@@ -1,314 +1,330 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { MarketingCampaign } from '@/types'
+import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
-import { Send, Calendar, AlertTriangle, CheckCircle } from 'lucide-react'
+import { Send, Clock, Check, AlertCircle } from 'lucide-react'
 
 interface SendCampaignButtonProps {
-  campaignId: string
-  campaignName: string
-  recipientCount: number
-  initialStatus?: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'
-  initialSendDate?: string
-  onSent?: () => void
+  campaign: MarketingCampaign
 }
 
-export default function SendCampaignButton({ 
-  campaignId, 
-  campaignName, 
-  recipientCount, 
-  initialStatus = 'Draft',
-  initialSendDate = '',
-  onSent 
-}: SendCampaignButtonProps) {
+export default function SendCampaignButton({ campaign }: SendCampaignButtonProps) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  const [error, setError] = useState('')
-  const [showScheduleInput, setShowScheduleInput] = useState(false)
-  const [scheduleDate, setScheduleDate] = useState('')
-  const [currentStatus, setCurrentStatus] = useState<'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'>(initialStatus)
-  const [currentSendDate, setCurrentSendDate] = useState<string>(initialSendDate)
+  const { addToast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
 
-  useEffect(() => {
-    setCurrentStatus(initialStatus)
-    setCurrentSendDate(initialSendDate)
-  }, [initialStatus, initialSendDate])
+  const status = campaign.metadata.status?.value || 'Draft'
+  
+  // Check if campaign has targets
+  const hasContacts = campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0
+  const hasTags = campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0
+  const hasTargets = hasContacts || hasTags
 
-  // Don't show send button for already sent campaigns
-  if (currentStatus === 'Sent') {
-    return (
-      <div className="flex items-center space-x-2 text-green-600">
-        <CheckCircle className="h-4 w-4" />
-        <span className="text-sm font-medium">Campaign Sent</span>
-      </div>
-    )
+  // Check if campaign is scheduled for future
+  const isScheduledForFuture = () => {
+    if (!campaign.metadata.send_date) return false
+    const scheduleDate = new Date(campaign.metadata.send_date)
+    const now = new Date()
+    return scheduleDate > now
   }
 
-  // Show sending status
-  if (currentStatus === 'Sending') {
-    return (
-      <div className="flex items-center space-x-2 text-blue-600">
-        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-        <span className="text-sm font-medium">Sending...</span>
-      </div>
-    )
-  }
-
-  const handleSendNow = () => {
-    setError('')
-    
-    startTransition(async () => {
-      try {
-        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sendDate: '' // Empty string for immediate send
-          })
-        })
-
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to send campaign'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
-
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to send campaign')
-        }
-
-        setCurrentStatus('Sent')
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Send campaign error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to send campaign')
-      }
-    })
-  }
-
-  const handleSchedule = () => {
-    if (!scheduleDate) {
-      setError('Please select a date and time')
+  const handleSendNow = async () => {
+    if (!hasTargets) {
+      addToast('Campaign has no target recipients', 'error')
       return
     }
 
-    setError('')
+    if (!campaign.metadata.template) {
+      addToast('Campaign has no email template selected', 'error')
+      return
+    }
+
+    setIsLoading(true)
     
-    startTransition(async () => {
-      try {
-        // Send to the send endpoint with schedule date
-        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            sendDate: scheduleDate
-          })
-        })
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/send`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
 
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to schedule campaign'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
-
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to schedule campaign')
-        }
-
-        setShowScheduleInput(false)
-        setScheduleDate('')
-        setCurrentStatus('Scheduled')
-        setCurrentSendDate(scheduleDate)
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Schedule campaign error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to schedule campaign')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send campaign')
       }
-    })
+
+      const data = await response.json()
+      
+      addToast(data.message || 'Campaign sending initiated successfully!', 'success')
+      router.refresh()
+      
+    } catch (error) {
+      console.error('Campaign send error:', error)
+      addToast(
+        error instanceof Error ? error.message : 'Failed to send campaign', 
+        'error'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const handleCancelSchedule = () => {
-    setError('')
+  const handleSchedule = async () => {
+    if (!hasTargets) {
+      addToast('Campaign has no target recipients', 'error')
+      return
+    }
+
+    if (!campaign.metadata.template) {
+      addToast('Campaign has no email template selected', 'error')
+      return
+    }
+
+    if (!campaign.metadata.send_date) {
+      addToast('No send date specified for scheduling', 'error')
+      return
+    }
+
+    setIsLoading(true)
     
-    startTransition(async () => {
-      try {
-        // Update campaign to remove schedule
-        const response = await fetch(`/api/campaigns/${campaignId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            send_date: '',
-            status: 'Draft'
-          }),
-        })
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'Scheduled'
+        }),
+      })
 
-        // Check if response is ok first
-        if (!response.ok) {
-          const errorText = await response.text()
-          let errorMessage = 'Failed to cancel schedule'
-          
-          try {
-            const errorData = JSON.parse(errorText)
-            errorMessage = errorData.error || errorMessage
-          } catch {
-            // If JSON parsing fails, use the raw text or status
-            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
-          }
-          
-          throw new Error(errorMessage)
-        }
-
-        const result = await response.json()
-        
-        if (!result.success) {
-          throw new Error(result.error || 'Failed to cancel schedule')
-        }
-
-        setCurrentStatus('Draft')
-        setCurrentSendDate('')
-        onSent?.()
-        router.refresh()
-      } catch (error) {
-        console.error('Cancel schedule error:', error)
-        setError(error instanceof Error ? error.message : 'Failed to cancel schedule')
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to schedule campaign')
       }
-    })
+
+      addToast('Campaign scheduled successfully!', 'success')
+      router.refresh()
+      
+    } catch (error) {
+      console.error('Campaign schedule error:', error)
+      addToast(
+        error instanceof Error ? error.message : 'Failed to schedule campaign', 
+        'error'
+      )
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  // Get minimum datetime (current time + 5 minutes)
-  const getMinDateTime = () => {
-    const now = new Date()
-    now.setMinutes(now.getMinutes() + 5)
-    return now.toISOString().slice(0, 16)
+  const getRecipientCount = () => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    
+    if (contactCount > 0 && tagCount > 0) {
+      return contactCount + tagCount // Approximate, as tags could overlap with contacts
+    } else if (contactCount > 0) {
+      return contactCount
+    } else {
+      // For tags, we can't determine exact count without querying contacts
+      // Show a placeholder that indicates tag-based targeting
+      return `Tag${tagCount === 1 ? '' : 's'}: ${campaign.metadata.target_tags?.join(', ')}`
+    }
   }
 
+  const getRecipientDisplay = () => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    
+    if (contactCount > 0 && tagCount > 0) {
+      return `${contactCount} contacts + ${tagCount} tag${tagCount === 1 ? '' : 's'}`
+    } else if (contactCount > 0) {
+      return `${contactCount} recipient${contactCount === 1 ? '' : 's'}`
+    } else if (tagCount > 0) {
+      return `Recipients with tag${tagCount === 1 ? '' : 's'}: ${campaign.metadata.target_tags?.join(', ')}`
+    }
+    return 'No recipients selected'
+  }
+
+  // Show different UI based on campaign status
+  if (status === 'Sent') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-green-50 border border-green-200 rounded-lg">
+          <Check className="h-5 w-5 text-green-600 mr-2" />
+          <span className="text-green-800 font-medium">Campaign Sent Successfully</span>
+        </div>
+        
+        {campaign.metadata.stats && (
+          <div className="text-sm text-gray-600 text-center">
+            <div>Sent to {campaign.metadata.stats.sent || 0} recipients</div>
+            {campaign.metadata.stats.delivered !== undefined && Number(campaign.metadata.stats.delivered) > 0 && (
+              <div>Delivered: {campaign.metadata.stats.delivered}</div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (status === 'Sending') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-2"></div>
+          <span className="text-yellow-800 font-medium">Campaign is Sending</span>
+        </div>
+        
+        {campaign.metadata.sending_progress && (
+          <div className="text-sm text-gray-600 text-center">
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div 
+                className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${campaign.metadata.sending_progress.progress_percentage}%` }}
+              ></div>
+            </div>
+            <div>
+              Progress: {campaign.metadata.sending_progress.sent} / {campaign.metadata.sending_progress.total} 
+              ({campaign.metadata.sending_progress.progress_percentage}%)
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (status === 'Cancelled') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+          <span className="text-red-800 font-medium">Campaign Cancelled</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'Scheduled') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <Clock className="h-5 w-5 text-blue-600 mr-2" />
+          <span className="text-blue-800 font-medium">Campaign Scheduled</span>
+        </div>
+        
+        {campaign.metadata.send_date && (
+          <div className="text-sm text-gray-600 text-center">
+            <div>Scheduled for: {new Date(campaign.metadata.send_date).toLocaleString()}</div>
+            <div className="mt-1">{getRecipientDisplay()}</div>
+          </div>
+        )}
+
+        <Button
+          onClick={handleSendNow}
+          disabled={isLoading || !hasTargets}
+          className="w-full"
+          variant="outline"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              Sending Now...
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4 mr-2" />
+              Send Now Instead
+            </>
+          )}
+        </Button>
+      </div>
+    )
+  }
+
+  // Draft status - show send options
   return (
-    <div className="space-y-3">
-      {error && (
-        <div className="flex items-center space-x-2 text-red-600 text-sm">
-          <AlertTriangle className="h-4 w-4" />
-          <span>{error}</span>
-        </div>
-      )}
-
-      {currentStatus === 'Scheduled' && currentSendDate && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-center space-x-2 text-blue-800">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              Scheduled for: {new Date(currentSendDate).toLocaleString()}
-            </span>
+    <div className="space-y-4">
+      {!hasTargets && (
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-sm text-orange-800">
+              <div className="font-medium">No recipients selected</div>
+              <div className="mt-1">Please select contacts or tags before sending.</div>
+            </div>
           </div>
-          <Button
-            onClick={handleCancelSchedule}
-            disabled={isPending}
-            variant="outline"
-            size="sm"
-            className="mt-2"
-          >
-            Cancel Schedule
-          </Button>
         </div>
       )}
 
-      {!showScheduleInput && currentStatus !== 'Scheduled' && (
-        <div className="flex space-x-2">
-          <Button
-            onClick={handleSendNow}
-            disabled={isPending || recipientCount === 0}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
+      {!campaign.metadata.template && (
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-sm text-orange-800">
+              <div className="font-medium">No template selected</div>
+              <div className="mt-1">Please select an email template before sending.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasTargets && campaign.metadata.template && (
+        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="text-sm text-gray-700 text-center">
+            <div className="font-medium">Ready to send to:</div>
+            <div className="mt-1">{getRecipientDisplay()}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Now Button */}
+      <Button
+        onClick={handleSendNow}
+        disabled={isLoading || !hasTargets || !campaign.metadata.template}
+        className="w-full"
+      >
+        {isLoading ? (
+          <>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            Sending...
+          </>
+        ) : (
+          <>
             <Send className="h-4 w-4 mr-2" />
-            {isPending ? 'Sending...' : `Send Now (${recipientCount})`}
-          </Button>
-          
-          <Button
-            onClick={() => setShowScheduleInput(true)}
-            disabled={isPending || recipientCount === 0}
-            variant="outline"
-          >
-            <Calendar className="h-4 w-4 mr-2" />
-            Schedule
-          </Button>
-        </div>
+            Send Now
+          </>
+        )}
+      </Button>
+
+      {/* Schedule Button (only show if send_date is set and in future) */}
+      {campaign.metadata.send_date && isScheduledForFuture() && (
+        <Button
+          onClick={handleSchedule}
+          disabled={isLoading || !hasTargets || !campaign.metadata.template}
+          variant="outline"
+          className="w-full"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              Scheduling...
+            </>
+          ) : (
+            <>
+              <Clock className="h-4 w-4 mr-2" />
+              Schedule for {new Date(campaign.metadata.send_date).toLocaleDateString()}
+            </>
+          )}
+        </Button>
       )}
 
-      {showScheduleInput && (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-          <div>
-            <label htmlFor="schedule-date" className="block text-sm font-medium text-gray-700 mb-1">
-              Schedule Date & Time
-            </label>
-            <input
-              id="schedule-date"
-              type="datetime-local"
-              value={scheduleDate}
-              onChange={(e) => setScheduleDate(e.target.value)}
-              min={getMinDateTime()}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <p className="text-xs text-gray-500 mt-1">
-              Campaign will be sent automatically at the scheduled time via cron job
-            </p>
-          </div>
-          
-          <div className="flex space-x-2">
-            <Button
-              onClick={handleSchedule}
-              disabled={isPending || !scheduleDate}
-              className="bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              <Calendar className="h-4 w-4 mr-2" />
-              {isPending ? 'Scheduling...' : 'Schedule Campaign'}
-            </Button>
-            
-            <Button
-              onClick={() => {
-                setShowScheduleInput(false)
-                setScheduleDate('')
-                setError('')
-              }}
-              disabled={isPending}
-              variant="outline"
-            >
-              Cancel
-            </Button>
-          </div>
-        </div>
-      )}
+      <div className="text-xs text-gray-500 text-center pt-2 border-t border-gray-200">
+        Emails will be sent in batches via background processing for optimal delivery.
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { Resend } from 'resend'
 import { EmailTemplate, Settings, EmailContact, TemplateSnapshot } from '@/types'
 import { updateCampaignProgress } from './cosmic'
+import { addTrackingToEmail } from './email-tracking'
 
 if (!process.env.RESEND_API_KEY) {
   throw new Error('RESEND_API_KEY environment variable is not set')
@@ -138,6 +139,9 @@ export async function sendCampaignEmails(
             personalizedContent = personalizedContent.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
             personalizedSubject = personalizedSubject.replace(/\{\{first_name\}\}/g, contact.metadata.first_name || 'there')
             personalizedSubject = personalizedSubject.replace(/\{\{last_name\}\}/g, contact.metadata.last_name || '')
+
+            // Add click tracking to all links in the email content
+            personalizedContent = addTrackingToEmail(personalizedContent, campaignId, contact.id, baseUrl)
 
             // Add unsubscribe link and footer
             const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(contact.metadata.email)}&campaign=${campaignId}`
