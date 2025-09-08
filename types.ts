@@ -76,7 +76,7 @@ export interface CampaignStats {
   click_rate?: string;
 }
 
-// Marketing Campaign interface - Updated to include template snapshot
+// Marketing Campaign interface - Updated to include 'Sending' status and template snapshot
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
@@ -88,7 +88,7 @@ export interface MarketingCampaign extends CosmicObject {
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
     };
     send_date?: string;
     stats?: CampaignStats;
@@ -107,7 +107,7 @@ export interface EmailCampaign extends CosmicObject {
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sent' | 'Cancelled';
+      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
     };
     send_date?: string;
     stats?: CampaignStats;

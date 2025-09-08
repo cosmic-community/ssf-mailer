@@ -4,25 +4,25 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Send, Calendar, AlertTriangle, CheckCircle } from 'lucide-react'
-import { MarketingCampaign } from '@/types'
 
 interface SendCampaignButtonProps {
-  campaign: MarketingCampaign
+  campaignId: string
+  campaignName: string
+  recipientCount: number
   onSent?: () => void
 }
 
-export default function SendCampaignButton({ campaign, onSent }: SendCampaignButtonProps) {
+export default function SendCampaignButton({ campaignId, campaignName, recipientCount, onSent }: SendCampaignButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [showScheduleInput, setShowScheduleInput] = useState(false)
   const [scheduleDate, setScheduleDate] = useState('')
-  
-  const status = campaign.metadata.status?.value || 'Draft'
-  const currentSendDate = campaign.metadata.send_date
+  const [currentStatus, setCurrentStatus] = useState<'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'>('Draft')
+  const [currentSendDate, setCurrentSendDate] = useState<string>('')
 
   // Don't show send button for already sent campaigns
-  if (status === 'Sent') {
+  if (currentStatus === 'Sent') {
     return (
       <div className="flex items-center space-x-2 text-green-600">
         <CheckCircle className="h-4 w-4" />
@@ -32,7 +32,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
   }
 
   // Show sending status
-  if (status === 'Sending') {
+  if (currentStatus === 'Sending') {
     return (
       <div className="flex items-center space-x-2 text-blue-600">
         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
@@ -46,7 +46,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
     
     startTransition(async () => {
       try {
-        const response = await fetch(`/api/campaigns/${campaign.id}/send`, {
+        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
           method: 'POST',
         })
 
@@ -56,6 +56,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
           throw new Error(result.error || 'Failed to send campaign')
         }
 
+        setCurrentStatus('Sent')
         onSent?.()
         router.refresh()
       } catch (error) {
@@ -76,7 +77,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
     startTransition(async () => {
       try {
         // Update campaign with scheduled date and status
-        const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        const response = await fetch(`/api/campaigns/${campaignId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -95,6 +96,8 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
 
         setShowScheduleInput(false)
         setScheduleDate('')
+        setCurrentStatus('Scheduled')
+        setCurrentSendDate(scheduleDate)
         onSent?.()
         router.refresh()
       } catch (error) {
@@ -110,7 +113,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
     startTransition(async () => {
       try {
         // Update campaign to remove schedule
-        const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        const response = await fetch(`/api/campaigns/${campaignId}`, {
           method: 'PUT',
           headers: {
             'Content-Type': 'application/json',
@@ -127,6 +130,8 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
           throw new Error(result.error || 'Failed to cancel schedule')
         }
 
+        setCurrentStatus('Draft')
+        setCurrentSendDate('')
         onSent?.()
         router.refresh()
       } catch (error) {
@@ -152,7 +157,7 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
         </div>
       )}
 
-      {status === 'Scheduled' && currentSendDate && (
+      {currentStatus === 'Scheduled' && currentSendDate && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <div className="flex items-center space-x-2 text-blue-800">
             <Calendar className="h-4 w-4" />
@@ -172,20 +177,20 @@ export default function SendCampaignButton({ campaign, onSent }: SendCampaignBut
         </div>
       )}
 
-      {!showScheduleInput && status !== 'Scheduled' && (
+      {!showScheduleInput && currentStatus !== 'Scheduled' && (
         <div className="flex space-x-2">
           <Button
             onClick={handleSendNow}
-            disabled={isPending}
+            disabled={isPending || recipientCount === 0}
             className="bg-green-600 hover:bg-green-700 text-white"
           >
             <Send className="h-4 w-4 mr-2" />
-            {isPending ? 'Sending...' : 'Send Now'}
+            {isPending ? 'Sending...' : `Send Now (${recipientCount})`}
           </Button>
           
           <Button
             onClick={() => setShowScheduleInput(true)}
-            disabled={isPending}
+            disabled={isPending || recipientCount === 0}
             variant="outline"
           >
             <Calendar className="h-4 w-4 mr-2" />
