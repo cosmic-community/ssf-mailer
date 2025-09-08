@@ -395,7 +395,7 @@ export async function createMarketingCampaign(data: CreateCampaignData): Promise
       metadata: {
         name: data.name,
         template_id: data.template_id,
-        target_contact_ids: validContactIds, // Store only IDs, not full objects
+        target_contacts: validContactIds, // Store only IDs in target_contacts field
         target_tags: data.target_tags || [],
         status: {
           key: 'draft',
@@ -510,7 +510,7 @@ export async function updateMarketingCampaign(id: string, data: Partial<CreateCa
       }
     }
 
-    // Handle contact_ids if provided - store only IDs
+    // Handle contact_ids if provided - store only IDs in target_contacts
     if (data.contact_ids !== undefined) {
       let validContactIds: string[] = []
       if (data.contact_ids.length > 0) {
@@ -527,7 +527,7 @@ export async function updateMarketingCampaign(id: string, data: Partial<CreateCa
         const validatedIds = await Promise.all(contactPromises)
         validContactIds = validatedIds.filter((id): id is string => id !== null)
       }
-      metadataUpdates.target_contact_ids = validContactIds
+      metadataUpdates.target_contacts = validContactIds
     }
 
     if (Object.keys(metadataUpdates).length > 0) {

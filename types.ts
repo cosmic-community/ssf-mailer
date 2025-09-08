@@ -86,7 +86,7 @@ export interface CampaignProgress {
   last_updated?: string;
 }
 
-// Marketing Campaign interface - Updated to store contact IDs instead of full objects
+// Marketing Campaign interface - Updated to use target_contacts instead of target_contact_ids
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
@@ -94,8 +94,7 @@ export interface MarketingCampaign extends CosmicObject {
     template_id: string;
     template?: EmailTemplate;
     template_snapshot?: TemplateSnapshot;
-    target_contact_ids?: string[]; // Store contact IDs instead of full objects
-    target_contacts?: EmailContact[]; // Keep for backward compatibility, but deprecated
+    target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
     status: {
       key: string;
@@ -115,8 +114,7 @@ export interface EmailCampaign extends CosmicObject {
     template_id: string;
     template?: EmailTemplate;
     template_snapshot?: TemplateSnapshot;
-    target_contact_ids?: string[];
-    target_contacts?: EmailContact[];
+    target_contacts?: string[];
     target_tags?: string[];
     status: {
       key: string;

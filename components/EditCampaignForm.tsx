@@ -32,30 +32,11 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     return ''
   }
 
-  // Get target contact IDs from campaign metadata - prioritize target_contact_ids
+  // Get target contact IDs from campaign metadata - use target_contacts field
   const getTargetContactIds = () => {
-    // First check for the new target_contact_ids field
-    if (campaign.metadata?.target_contact_ids && Array.isArray(campaign.metadata.target_contact_ids)) {
-      return campaign.metadata.target_contact_ids
-    }
-    
-    // Fallback to old target_contacts format for backward compatibility
-    if (!campaign.metadata?.target_contacts) return []
-    
-    // Handle array of contact objects or IDs
-    if (Array.isArray(campaign.metadata.target_contacts)) {
-      return campaign.metadata.target_contacts.map(contact => {
-        // If it's a string, it's already an ID
-        if (typeof contact === 'string') {
-          return contact
-        }
-        // If it's an object with an id property, extract the ID
-        if (contact && typeof contact === 'object' && 'id' in contact) {
-          return contact.id
-        }
-        // Fallback - return the contact as-is if it's neither
-        return contact
-      }).filter(id => typeof id === 'string') as string[]
+    // Use the target_contacts field which stores contact IDs
+    if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
+      return campaign.metadata.target_contacts.filter(id => typeof id === 'string') as string[]
     }
     
     return []
