@@ -226,9 +226,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           from: `${fromName} <${fromEmail}>`,
           to: [email],
           subject: emailSubject,
-          html: emailContent,
-          campaignId: id,
-          contactId: contact.id
+          html: emailContent
         })
 
         sentCount++
