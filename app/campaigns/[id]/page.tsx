@@ -84,10 +84,26 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
 
   const preview = generatePreviewContent()
   const isDraft = campaign.metadata?.status?.value === 'Draft'
+  const isScheduled = campaign.metadata?.status?.value === 'Scheduled'
 
-  // Calculate recipient count
-  const recipientCount = (campaign.metadata?.target_contacts?.length || 0) + 
-                        (campaign.metadata?.target_tags?.length || 0)
+  // Calculate recipient count from both contacts and tags
+  const targetContactsCount = campaign.metadata?.target_contacts?.length || 0
+  const targetTagsCount = campaign.metadata?.target_tags?.length || 0
+  
+  // For tags, we need to count actual contacts that have those tags
+  let contactsFromTags = 0
+  if (targetTagsCount > 0 && campaign.metadata?.target_tags) {
+    const activeContacts = contacts.filter(contact => 
+      contact.metadata?.status?.value !== 'Unsubscribed'
+    )
+    
+    contactsFromTags = activeContacts.filter(contact => {
+      const contactTags = contact.metadata?.tags || []
+      return campaign.metadata?.target_tags?.some(tag => contactTags.includes(tag))
+    }).length
+  }
+
+  const recipientCount = targetContactsCount > 0 ? targetContactsCount : contactsFromTags
 
   // Check if campaign has a template for test email functionality
   const hasTemplate = !!(
@@ -126,7 +142,7 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
               }`}>
                 {campaign.metadata?.status?.value}
               </span>
-              {isDraft && (
+              {(isDraft || isScheduled) && (
                 <>
                   <DeleteCampaignButton 
                     campaignId={campaign.id}
@@ -143,6 +159,8 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
                     campaignId={campaign.id}
                     campaignName={campaign.metadata?.name || 'Campaign'}
                     recipientCount={recipientCount}
+                    initialStatus={campaign.metadata?.status?.value}
+                    initialSendDate={campaign.metadata?.send_date}
                   />
                 </>
               )}
@@ -182,6 +200,83 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
             </div>
           </div>
         )}
+
+        {/* Campaign Target Info */}
+        <div className="mb-8">
+          <div className="card">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Target Audience</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Selected Contacts</h3>
+                {targetContactsCount > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      {targetContactsCount} specific contact{targetContactsCount !== 1 ? 's' : ''} selected
+                    </p>
+                    <div className="max-h-32 overflow-y-auto">
+                      {campaign.metadata?.target_contacts?.map(contactId => {
+                        const contact = contacts.find(c => c.id === contactId)
+                        if (!contact) return (
+                          <div key={contactId} className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded">
+                            Contact not found (ID: {contactId})
+                          </div>
+                        )
+                        return (
+                          <div key={contactId} className="flex items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                            <span className="font-medium">
+                              {contact.metadata?.first_name} {contact.metadata?.last_name}
+                            </span>
+                            <span className="text-gray-500 ml-2">
+                              ({contact.metadata?.email})
+                            </span>
+                            <span className={`ml-auto text-xs px-2 py-1 rounded-full ${
+                              contact.metadata?.status?.value === 'Active' 
+                                ? 'bg-green-100 text-green-800' 
+                                : contact.metadata?.status?.value === 'Bounced'
+                                ? 'bg-yellow-100 text-yellow-800'
+                                : 'bg-gray-100 text-gray-800'
+                            }`}>
+                              {contact.metadata?.status?.value}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No specific contacts selected</p>
+                )}
+              </div>
+              
+              <div>
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Selected Tags</h3>
+                {targetTagsCount > 0 ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-gray-600">
+                      {targetTagsCount} tag{targetTagsCount !== 1 ? 's' : ''} selected, targeting ~{contactsFromTags} contact{contactsFromTags !== 1 ? 's' : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {campaign.metadata?.target_tags?.map(tag => (
+                        <span key={tag} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">No tags selected</p>
+                )}
+              </div>
+            </div>
+            
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-700">Total Recipients:</span>
+                <span className="text-lg font-semibold text-gray-900">{recipientCount}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
         {/* Email Preview */}
         <div className="mb-8">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Send, Calendar, AlertTriangle, CheckCircle } from 'lucide-react'
@@ -9,17 +9,31 @@ interface SendCampaignButtonProps {
   campaignId: string
   campaignName: string
   recipientCount: number
+  initialStatus?: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'
+  initialSendDate?: string
   onSent?: () => void
 }
 
-export default function SendCampaignButton({ campaignId, campaignName, recipientCount, onSent }: SendCampaignButtonProps) {
+export default function SendCampaignButton({ 
+  campaignId, 
+  campaignName, 
+  recipientCount, 
+  initialStatus = 'Draft',
+  initialSendDate = '',
+  onSent 
+}: SendCampaignButtonProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [error, setError] = useState('')
   const [showScheduleInput, setShowScheduleInput] = useState(false)
   const [scheduleDate, setScheduleDate] = useState('')
-  const [currentStatus, setCurrentStatus] = useState<'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'>('Draft')
-  const [currentSendDate, setCurrentSendDate] = useState<string>('')
+  const [currentStatus, setCurrentStatus] = useState<'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled'>(initialStatus)
+  const [currentSendDate, setCurrentSendDate] = useState<string>(initialSendDate)
+
+  useEffect(() => {
+    setCurrentStatus(initialStatus)
+    setCurrentSendDate(initialSendDate)
+  }, [initialStatus, initialSendDate])
 
   // Don't show send button for already sent campaigns
   if (currentStatus === 'Sent') {

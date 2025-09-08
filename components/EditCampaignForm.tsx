@@ -124,17 +124,63 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     }))
   }
 
+  const handleRevertToDraft = async () => {
+    setIsLoading(true)
+    setError('')
+    
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'Draft',
+          send_date: ''
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to revert campaign to draft')
+      }
+
+      addToast('Campaign reverted to draft successfully!', 'success')
+      router.refresh()
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to revert campaign to draft'
+      setError(errorMessage)
+      addToast(errorMessage, 'error')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
   const canEdit = campaign.metadata?.status?.value === 'Draft'
+  const isScheduled = campaign.metadata?.status?.value === 'Scheduled'
 
   return (
     <div className="card max-w-4xl">
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Edit Campaign</h2>
-        {!canEdit && (
-          <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-            Campaign cannot be edited after sending
-          </span>
-        )}
+        <h2 className="text-2xl font-bold text-gray-900">
+          {canEdit ? 'Edit Campaign' : 'Campaign Details'}
+        </h2>
+        <div className="flex items-center space-x-3">
+          {!canEdit && !isScheduled && (
+            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
+              Campaign cannot be edited after sending
+            </span>
+          )}
+          {isScheduled && (
+            <button
+              onClick={handleRevertToDraft}
+              disabled={isLoading}
+              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? 'Reverting...' : 'Revert to Draft'}
+            </button>
+          )}
+        </div>
       </div>
       
       {error && (
@@ -280,6 +326,26 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 ))
               )}
             </div>
+            
+            {/* Show selected contacts summary */}
+            {formData.contact_ids.length > 0 && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-700">
+                  <strong>Selected Contacts ({formData.contact_ids.length}):</strong>
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formData.contact_ids.map(contactId => {
+                    const contact = activeContacts.find(c => c.id === contactId)
+                    if (!contact) return null
+                    return (
+                      <span key={contactId} className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                        {contact.metadata?.first_name} {contact.metadata?.last_name}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -316,6 +382,15 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 ))
               )}
             </div>
+            
+            {/* Show selected tags summary */}
+            {formData.target_tags.length > 0 && (
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Selected Tags ({formData.target_tags.length}):</strong> {formData.target_tags.join(', ')}
+                </p>
+              </div>
+            )}
           </div>
         )}
 
@@ -363,6 +438,47 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
               />
             </div>
           )}
+        </div>
+
+        {/* Current Campaign Status Info */}
+        <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-700">Current Status:</p>
+              <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
+                campaign.metadata?.status?.value === 'Sent' 
+                  ? 'bg-green-100 text-green-800' 
+                  : campaign.metadata?.status?.value === 'Scheduled'
+                  ? 'bg-blue-100 text-blue-800'
+                  : campaign.metadata?.status?.value === 'Sending'
+                  ? 'bg-yellow-100 text-yellow-800'
+                  : campaign.metadata?.status?.value === 'Draft'
+                  ? 'bg-gray-100 text-gray-800'
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {campaign.metadata?.status?.value || 'Draft'}
+              </span>
+            </div>
+            
+            {campaign.metadata?.send_date && (
+              <div>
+                <p className="text-sm font-medium text-gray-700">Scheduled For:</p>
+                <p className="text-sm text-gray-600 mt-1">
+                  {new Date(campaign.metadata.send_date).toLocaleString()}
+                </p>
+              </div>
+            )}
+            
+            <div>
+              <p className="text-sm font-medium text-gray-700">Target Recipients:</p>
+              <p className="text-sm text-gray-600 mt-1">
+                {formData.target_type === 'contacts' 
+                  ? `${formData.contact_ids.length} specific contacts`
+                  : `${formData.target_tags.length} tags selected`
+                }
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Actions */}
