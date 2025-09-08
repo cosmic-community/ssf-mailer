@@ -306,7 +306,12 @@ export default async function HomePage() {
                           </div>
                           <div className="flex-1">
                             <p className="font-medium text-gray-900">{campaign.metadata?.name}</p>
-                            <p className="text-xs text-gray-500">{campaign.metadata?.template?.metadata?.name || 'No template'}</p>
+                            <p className="text-xs text-gray-500">
+                              {typeof campaign.metadata?.template === 'object' && campaign.metadata.template?.metadata?.name 
+                                ? campaign.metadata.template.metadata.name 
+                                : 'No template'
+                              }
+                            </p>
                           </div>
                         </div>
                         <span className={`px-2 py-1 text-xs rounded-full font-medium ${
