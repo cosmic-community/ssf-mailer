@@ -55,33 +55,33 @@ export async function POST(
       )
     }
 
-    // Get target contacts - Fix: Extract email addresses from contact objects
-    const targetContacts = campaign.metadata?.target_contacts || []
-    if (!Array.isArray(targetContacts) || targetContacts.length === 0) {
+    // Get target contacts - Fix: Handle contact IDs properly
+    const targetContactIds = campaign.metadata?.target_contacts || []
+    if (!Array.isArray(targetContactIds) || targetContactIds.length === 0) {
       return NextResponse.json(
         { error: 'No target contacts found for this campaign' },
         { status: 400 }
       )
     }
 
-    // Fix: Extract email addresses from contact objects instead of trying to convert objects to strings
-    const recipientEmails: string[] = targetContacts
-      .filter((contact): contact is EmailContact => 
-        contact && 
-        typeof contact === 'object' && 
-        'metadata' in contact && 
-        contact.metadata && 
-        typeof contact.metadata.email === 'string' &&
-        contact.metadata.status?.value === 'Active'
-      )
-      .map((contact: EmailContact) => contact.metadata.email)
+    // Get all email contacts to match with target IDs
+    const allContacts = await getEmailContacts()
+    
+    // Fix: Filter contacts by IDs and ensure they're active
+    const targetContacts: EmailContact[] = allContacts.filter(contact => 
+      targetContactIds.includes(contact.id) && 
+      contact.metadata?.status?.value === 'Active'
+    )
 
-    if (recipientEmails.length === 0) {
+    if (targetContacts.length === 0) {
       return NextResponse.json(
         { error: 'No active contacts found to send to' },
         { status: 400 }
       )
     }
+
+    // Extract email addresses from contact objects
+    const recipientEmails: string[] = targetContacts.map((contact: EmailContact) => contact.metadata.email)
 
     // Get settings for email configuration
     const settings = await getSettings()
@@ -135,15 +135,13 @@ export async function POST(
       recipientEmails.map(async (email) => {
         try {
           // Get contact for personalization
-          const contact = targetContacts.find(c => 
-            c && 
-            typeof c === 'object' && 
-            'metadata' in c && 
-            c.metadata?.email === email
-          ) as EmailContact | undefined
+          const contact = targetContacts.find(c => c.metadata?.email === email)
+          if (!contact) {
+            throw new Error('Contact not found for email: ' + email)
+          }
 
-          const firstName = contact?.metadata?.first_name || 'there'
-          const contactId = contact?.id || 'unknown'
+          const firstName = contact.metadata?.first_name || 'there'
+          const contactId = contact.id
 
           // Personalize content using the template snapshot
           let personalizedContent = templateSnapshot.content

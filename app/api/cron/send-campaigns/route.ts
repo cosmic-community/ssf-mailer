@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getEmailCampaigns, updateCampaignStatus, getEmailTemplate, getSettings, updateCampaignProgress } from '@/lib/cosmic'
+import { getEmailCampaigns, updateCampaignStatus, getEmailTemplate, getSettings, updateCampaignProgress, getEmailContacts } from '@/lib/cosmic'
 import { sendCampaignEmails } from '@/lib/resend'
+import { EmailContact } from '@/types'
 
 export async function GET(request: NextRequest) {
   try {
@@ -56,10 +57,14 @@ export async function GET(request: NextRequest) {
           continue
         }
 
-        // Get target contacts (active ones only)
-        const allContacts = campaign.metadata.target_contacts || []
-        const activeContacts = allContacts.filter(contact => 
-          contact && contact.metadata?.status?.value === 'Active'
+        // Fix: Get all email contacts and filter by target contact IDs
+        const allContacts = await getEmailContacts()
+        const targetContactIds = campaign.metadata.target_contacts || []
+        
+        // Filter contacts by IDs and ensure they're active
+        const activeContacts: EmailContact[] = allContacts.filter(contact => 
+          targetContactIds.includes(contact.id) && 
+          contact.metadata?.status?.value === 'Active'
         )
 
         if (activeContacts.length === 0) {
