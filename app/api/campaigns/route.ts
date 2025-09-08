@@ -1,109 +1,91 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createMarketingCampaign, getEmailTemplate } from '@/lib/cosmic'
-import { revalidatePath } from 'next/cache'
+import { createMarketingCampaign, getMarketingCampaigns } from '@/lib/cosmic'
+import { CreateCampaignData } from '@/types'
+
+export async function GET() {
+  try {
+    const campaigns = await getMarketingCampaigns()
+    
+    return NextResponse.json({
+      success: true,
+      data: campaigns
+    })
+  } catch (error) {
+    console.error('Campaigns fetch error:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch campaigns' },
+      { status: 500 }
+    )
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    console.log('Campaign creation request body:', JSON.stringify(body, null, 2))
+    const data: CreateCampaignData = await request.json()
+    
+    console.log('Creating campaign with data:', data)
     
     // Validate required fields
-    if (!body.name || !body.template_id) {
-      const errorMsg = 'Campaign name and template are required'
-      console.error('Validation error:', errorMsg, { body })
+    if (!data.name || !data.name.trim()) {
       return NextResponse.json(
-        { error: errorMsg, details: 'Missing required fields', receivedData: body },
+        { error: 'Campaign name is required' },
         { status: 400 }
       )
     }
-
-    // Get the template to validate it exists
-    console.log('Fetching template with ID:', body.template_id)
-    const template = await getEmailTemplate(body.template_id)
-    if (!template) {
-      const errorMsg = 'Template not found'
-      console.error('Template not found:', body.template_id)
+    
+    if (!data.template_id) {
       return NextResponse.json(
-        { error: errorMsg, details: `Template ID ${body.template_id} does not exist`, templateId: body.template_id },
-        { status: 404 }
+        { error: 'Email template is required' },
+        { status: 400 }
       )
     }
-    console.log('Template found:', template.metadata?.name)
-
-    // Create the campaign using template ID, not the full object
-    console.log('Creating campaign with data:', {
-      name: body.name,
-      template_id: body.template_id,
-      contact_ids: body.contact_ids || [],
-      target_tags: body.target_tags || [],
-      send_date: body.send_date || ''
-    })
     
-    const result = await createMarketingCampaign({
-      name: body.name,
-      template_id: body.template_id,
-      contact_ids: body.contact_ids || [],
-      target_tags: body.target_tags || [],
-      send_date: body.send_date || ''
-    })
-
-    // Fix TS18047: Add null check for result
-    if (!result) {
-      console.error('Campaign creation failed: result is null')
+    // Validate that at least one target is selected
+    const hasContacts = data.contact_ids && data.contact_ids.length > 0
+    const hasTags = data.target_tags && data.target_tags.length > 0
+    
+    if (!hasContacts && !hasTags) {
       return NextResponse.json(
-        { error: 'Failed to create campaign', details: 'Campaign creation returned null result' },
-        { status: 500 }
+        { error: 'Please select at least one contact or tag for this campaign' },
+        { status: 400 }
       )
     }
-
-    console.log('Campaign created successfully:', result.id)
-
-    // Revalidate the campaigns page to ensure the new campaign appears
-    revalidatePath('/campaigns')
     
-    return NextResponse.json({ success: true, data: result })
-  } catch (error: any) {
-    // Log detailed error information
-    console.error('Error creating campaign - Full details:')
-    console.error('Error message:', error.message)
-    console.error('Error stack:', error.stack)
-    console.error('Error object:', error)
+    console.log('Validation passed, creating campaign...')
     
-    // Check if it's a Cosmic API error
-    if (error.response) {
-      console.error('Cosmic API response error:', {
-        status: error.response.status,
-        statusText: error.response.statusText,
-        data: error.response.data
-      })
-      
-      return NextResponse.json({
-        error: 'Cosmic API error',
-        details: error.message,
-        cosmicError: {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        }
-      }, { status: error.response.status || 500 })
-    }
+    // Create the campaign with proper error handling
+    const campaign = await createMarketingCampaign(data)
     
-    // Check if it's a network error
-    if (error.code === 'ENOTFOUND' || error.code === 'ECONNREFUSED') {
-      console.error('Network error:', error.code)
-      return NextResponse.json({
-        error: 'Network connection error',
-        details: `Failed to connect to Cosmic API: ${error.message}`,
-        networkError: error.code
-      }, { status: 503 })
-    }
+    console.log('Campaign created successfully:', campaign.id)
     
-    // Generic error handling with full error details
     return NextResponse.json({
+      success: true,
+      message: 'Campaign created successfully',
+      data: campaign
+    })
+  } catch (error: any) {
+    console.error('Campaign creation error:', error)
+    
+    // Provide more detailed error information
+    let errorResponse: any = {
       error: 'Failed to create campaign',
-      details: error.message,
-      errorType: error.constructor.name,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    }, { status: 500 })
+      details: error.message || 'Unknown error occurred'
+    }
+    
+    // Check for specific error types
+    if (error.message?.includes('Template not found')) {
+      errorResponse.error = 'Selected email template is not available'
+      errorResponse.details = 'Please select a different template or create a new one'
+    } else if (error.message?.includes('No contacts found')) {
+      errorResponse.error = 'No active contacts found'
+      errorResponse.details = 'Please select different contacts or add new contacts first'
+    } else if (error.status) {
+      errorResponse.cosmicError = {
+        status: error.status,
+        statusText: error.statusText || 'Cosmic API Error'
+      }
+    }
+    
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }

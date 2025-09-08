@@ -342,14 +342,56 @@ export async function getEmailCampaign(id: string): Promise<MarketingCampaign | 
 
 export async function createMarketingCampaign(data: CreateCampaignData): Promise<MarketingCampaign> {
   try {
+    console.log('Creating marketing campaign with data:', data)
+    
+    // Validate template exists
+    if (data.template_id) {
+      const template = await getEmailTemplate(data.template_id)
+      if (!template) {
+        throw new Error('Selected email template not found')
+      }
+    }
+
     // Get contacts if contact_ids provided
     let targetContacts: EmailContact[] = []
     if (data.contact_ids && data.contact_ids.length > 0) {
-      // Fetch each contact individually
-      const contactPromises = data.contact_ids.map(id => getEmailContact(id))
+      console.log('Fetching contacts for IDs:', data.contact_ids)
+      
+      // Fetch each contact individually and filter out null results
+      const contactPromises = data.contact_ids.map(async (id) => {
+        try {
+          const contact = await getEmailContact(id)
+          if (!contact) {
+            console.warn(`Contact with ID ${id} not found`)
+            return null
+          }
+          return contact
+        } catch (error) {
+          console.error(`Error fetching contact ${id}:`, error)
+          return null
+        }
+      })
+      
       const contacts = await Promise.all(contactPromises)
-      targetContacts = contacts.filter(contact => contact !== null) as EmailContact[]
+      targetContacts = contacts.filter((contact): contact is EmailContact => contact !== null)
+      
+      console.log(`Found ${targetContacts.length} valid contacts out of ${data.contact_ids.length} requested`)
+      
+      // Only validate if we specifically requested contacts but found none
+      if (targetContacts.length === 0 && data.contact_ids.length > 0) {
+        throw new Error('None of the selected contacts could be found or are accessible')
+      }
     }
+
+    // Validate that we have targets (either contacts or tags)
+    const hasContacts = targetContacts.length > 0
+    const hasTags = data.target_tags && data.target_tags.length > 0
+    
+    if (!hasContacts && !hasTags) {
+      throw new Error('No valid targets found - please select contacts or tags')
+    }
+
+    console.log(`Creating campaign with ${targetContacts.length} contacts and ${data.target_tags?.length || 0} tags`)
 
     const { object } = await cosmic.objects.insertOne({
       title: data.name,
@@ -377,10 +419,11 @@ export async function createMarketingCampaign(data: CreateCampaignData): Promise
       }
     })
 
+    console.log('Marketing campaign created successfully:', object.id)
     return object as MarketingCampaign
   } catch (error) {
     console.error('Error creating marketing campaign:', error)
-    throw new Error('Failed to create marketing campaign')
+    throw error // Re-throw to preserve the original error
   }
 }
 

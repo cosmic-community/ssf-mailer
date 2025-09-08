@@ -51,6 +51,42 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
     setError('')
     setIsLoading(true)
 
+    // Client-side validation
+    if (!formData.name.trim()) {
+      setError('Campaign name is required')
+      setIsLoading(false)
+      scrollToTop()
+      return
+    }
+
+    if (!formData.template_id) {
+      setError('Please select an email template')
+      setIsLoading(false)
+      scrollToTop()
+      return
+    }
+
+    // Validate that at least one target is selected
+    const hasContacts = formData.target_type === 'contacts' && formData.contact_ids.length > 0
+    const hasTags = formData.target_type === 'tags' && formData.target_tags.length > 0
+    
+    if (!hasContacts && !hasTags) {
+      setError(formData.target_type === 'contacts' 
+        ? 'Please select at least one contact' 
+        : 'Please select at least one tag')
+      setIsLoading(false)
+      scrollToTop()
+      return
+    }
+
+    // Validate scheduled date if needed
+    if (formData.schedule_type === 'scheduled' && !formData.send_date) {
+      setError('Please select a send date and time')
+      setIsLoading(false)
+      scrollToTop()
+      return
+    }
+
     console.log('Submitting campaign creation form with data:', formData)
 
     try {
@@ -60,7 +96,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: formData.name,
+          name: formData.name.trim(),
           template_id: formData.template_id,
           contact_ids: formData.target_type === 'contacts' ? formData.contact_ids : [],
           target_tags: formData.target_type === 'tags' ? formData.target_tags : [],
@@ -77,7 +113,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
         responseData = JSON.parse(responseText)
       } catch (parseError) {
         console.error('Failed to parse response as JSON:', parseError)
-        throw new Error(`Server returned non-JSON response: ${responseText}`)
+        throw new Error(`Server returned invalid response: ${responseText}`)
       }
 
       if (!response.ok) {
@@ -88,12 +124,6 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
         if (responseData.details) {
           errorMessage += `: ${responseData.details}`
         }
-        if (responseData.cosmicError) {
-          errorMessage += ` (Cosmic API Error: ${responseData.cosmicError.status} ${responseData.cosmicError.statusText})`
-        }
-        if (responseData.networkError) {
-          errorMessage += ` (Network Error: ${responseData.networkError})`
-        }
         
         setError(errorMessage)
         addToast(errorMessage, 'error')
@@ -103,7 +133,6 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
 
       console.log('Campaign created successfully:', responseData)
       addToast('Campaign created successfully!', 'success')
-      scrollToTop()
       
       // Navigate to the newly created campaign page using the returned campaign ID
       if (responseData.data && responseData.data.id) {
@@ -130,20 +159,42 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
   }
 
   const handleContactToggle = (contactId: string) => {
-    setFormData(prev => ({
-      ...prev,
-      contact_ids: prev.contact_ids.includes(contactId)
+    console.log('Toggling contact:', contactId)
+    setFormData(prev => {
+      const newContactIds = prev.contact_ids.includes(contactId)
         ? prev.contact_ids.filter(id => id !== contactId)
         : [...prev.contact_ids, contactId]
-    }))
+      
+      console.log('Updated contact_ids:', newContactIds)
+      return {
+        ...prev,
+        contact_ids: newContactIds
+      }
+    })
   }
 
   const handleTagToggle = (tag: string) => {
+    console.log('Toggling tag:', tag)
     setFormData(prev => ({
       ...prev,
       target_tags: prev.target_tags.includes(tag)
         ? prev.target_tags.filter(t => t !== tag)
         : [...prev.target_tags, tag]
+    }))
+  }
+
+  const handleSelectAllContacts = () => {
+    const allActiveIds = activeContacts.map(contact => contact.id)
+    setFormData(prev => ({
+      ...prev,
+      contact_ids: prev.contact_ids.length === allActiveIds.length ? [] : allActiveIds
+    }))
+  }
+
+  const handleSelectAllTags = () => {
+    setFormData(prev => ({
+      ...prev,
+      target_tags: prev.target_tags.length === uniqueTags.length ? [] : [...uniqueTags]
     }))
   }
 
@@ -176,7 +227,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
           {/* Campaign Name */}
           <div>
             <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
-              Campaign Name
+              Campaign Name *
             </label>
             <input
               type="text"
@@ -186,17 +237,19 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
               value={formData.name}
               onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
               placeholder="Enter campaign name"
+              disabled={isLoading}
             />
           </div>
 
           {/* Template Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Email Template
+              Email Template *
             </label>
             <Select
               value={formData.template_id}
               onValueChange={(value) => setFormData(prev => ({ ...prev, template_id: value }))}
+              disabled={isLoading}
             >
               <SelectTrigger className="w-full">
                 <SelectValue placeholder="Select a template" />
@@ -227,7 +280,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
           {/* Target Type Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
-              Target Audience
+              Target Audience *
             </label>
             <div className="space-y-2">
               <label className="flex items-center">
@@ -238,6 +291,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   checked={formData.target_type === 'contacts'}
                   onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
                   className="form-radio"
+                  disabled={isLoading}
                 />
                 <span className="ml-2 text-sm text-gray-700">Select specific contacts</span>
               </label>
@@ -249,6 +303,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   checked={formData.target_type === 'tags'}
                   onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
                   className="form-radio"
+                  disabled={isLoading}
                 />
                 <span className="ml-2 text-sm text-gray-700">Select by tags</span>
               </label>
@@ -258,9 +313,22 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
           {/* Contact Selection */}
           {formData.target_type === 'contacts' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select Contacts ({formData.contact_ids.length} selected)
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Contacts ({formData.contact_ids.length} selected)
+                </label>
+                {activeContacts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAllContacts}
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                    disabled={isLoading}
+                  >
+                    {formData.contact_ids.length === activeContacts.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                )}
+              </div>
+              
               {contacts.length > activeContacts.length && (
                 <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <p className="text-sm text-blue-700">
@@ -268,6 +336,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   </p>
                 </div>
               )}
+              
               <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
                 {activeContacts.length === 0 ? (
                   <p className="text-sm text-gray-500">
@@ -285,6 +354,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                         checked={formData.contact_ids.includes(contact.id)}
                         onChange={() => handleContactToggle(contact.id)}
                         className="form-checkbox"
+                        disabled={isLoading}
                       />
                       <span className="ml-2 text-sm text-gray-700">
                         {contact.metadata?.first_name} {contact.metadata?.last_name} 
@@ -299,6 +369,11 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                             Bounced
                           </span>
                         )}
+                        {contact.metadata?.tags && contact.metadata.tags.length > 0 && (
+                          <span className="ml-1 text-xs text-gray-500">
+                            {contact.metadata.tags.join(', ')}
+                          </span>
+                        )}
                       </span>
                     </label>
                   ))
@@ -310,33 +385,56 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
           {/* Tag Selection */}
           {formData.target_type === 'tags' && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                Select Tags ({formData.target_tags.length} selected)
-              </label>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Tags ({formData.target_tags.length} selected)
+                </label>
+                {uniqueTags.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAllTags}
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                    disabled={isLoading}
+                  >
+                    {formData.target_tags.length === uniqueTags.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                )}
+              </div>
+              
               {contacts.length > activeContacts.length && (
                 <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                   <p className="text-sm text-blue-700">
-                    <strong>Note:</strong> Tags are based on active contacts only. Unsubscribed contacts will not receive emails even if they have matching tags.
+                    <strong>Note:</strong> Only active contacts with these tags will receive emails. Unsubscribed contacts will be automatically excluded.
                   </p>
                 </div>
               )}
+              
               <div className="space-y-2">
                 {uniqueTags.length === 0 ? (
                   <p className="text-sm text-gray-500">
                     No tags available. Add tags to your active contacts first.
                   </p>
                 ) : (
-                  uniqueTags.map((tag) => (
-                    <label key={tag} className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={formData.target_tags.includes(tag)}
-                        onChange={() => handleTagToggle(tag)}
-                        className="form-checkbox"
-                      />
-                      <span className="ml-2 text-sm text-gray-700">{tag}</span>
-                    </label>
-                  ))
+                  uniqueTags.map((tag) => {
+                    const contactsWithTag = activeContacts.filter(contact => 
+                      contact.metadata?.tags?.includes(tag)
+                    ).length
+                    
+                    return (
+                      <label key={tag} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={formData.target_tags.includes(tag)}
+                          onChange={() => handleTagToggle(tag)}
+                          className="form-checkbox"
+                          disabled={isLoading}
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          {tag} <span className="text-gray-500">({contactsWithTag} contact{contactsWithTag !== 1 ? 's' : ''})</span>
+                        </span>
+                      </label>
+                    )
+                  })
                 )}
               </div>
             </div>
@@ -356,6 +454,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   checked={formData.schedule_type === 'now'}
                   onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
                   className="form-radio"
+                  disabled={isLoading}
                 />
                 <span className="ml-2 text-sm text-gray-700">Save as draft (review before sending)</span>
               </label>
@@ -367,6 +466,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   checked={formData.schedule_type === 'scheduled'}
                   onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
                   className="form-radio"
+                  disabled={isLoading}
                 />
                 <span className="ml-2 text-sm text-gray-700">Schedule for later</span>
               </label>
@@ -380,6 +480,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   value={formData.send_date}
                   onChange={(e) => setFormData(prev => ({ ...prev, send_date: e.target.value }))}
                   min={new Date().toISOString().slice(0, 16)}
+                  disabled={isLoading}
                 />
               </div>
             )}
