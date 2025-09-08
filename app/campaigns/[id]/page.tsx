@@ -1,3 +1,4 @@
+// app/campaigns/[id]/page.tsx
 import { notFound } from 'next/navigation'
 import { getEmailCampaign, getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
 import EditCampaignForm from '@/components/EditCampaignForm'
@@ -6,7 +7,7 @@ import DeleteCampaignButton from '@/components/DeleteCampaignButton'
 import TestEmailModal from '@/components/TestEmailModal'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, Users, Mail, Calendar, TrendingUp, Clock } from 'lucide-react'
+import { Eye, Users, Mail, Calendar, TrendingUp, Clock, Send } from 'lucide-react'
 import Link from 'next/link'
 
 // Force dynamic rendering to ensure fresh data
@@ -125,8 +126,12 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             </div>
 
             <div className="flex items-center space-x-3">
-              <TestEmailModal campaign={campaign} />
-              <DeleteCampaignButton campaignId={campaign.id} campaignName={campaign.metadata.name} />
+              <TestEmailModal campaignId={campaign.id} />
+              <DeleteCampaignButton 
+                campaignId={campaign.id} 
+                campaignName={campaign.metadata.name}
+                isDraft={status === 'Draft'}
+              />
             </div>
           </div>
         </div>

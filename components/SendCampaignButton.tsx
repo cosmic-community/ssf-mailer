@@ -3,46 +3,47 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { MarketingCampaign } from '@/types'
-import { Button } from '@/components/ui/button'
-import { Send, Clock, CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
+import { Button } from '@/components/ui/button'
+import { Send, Clock, Check, AlertCircle } from 'lucide-react'
 
 interface SendCampaignButtonProps {
   campaign: MarketingCampaign
-  onStatusChange?: () => void
 }
 
-export default function SendCampaignButton({ campaign, onStatusChange }: SendCampaignButtonProps) {
+export default function SendCampaignButton({ campaign }: SendCampaignButtonProps) {
   const router = useRouter()
   const { addToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
 
-  const currentStatus = campaign.metadata.status?.value || 'Draft'
-  const canSend = ['Draft', 'Scheduled'].includes(currentStatus)
-  const isSending = currentStatus === 'Sending'
-  const isSent = currentStatus === 'Sent'
-  const isCancelled = currentStatus === 'Cancelled'
+  const status = campaign.metadata.status?.value || 'Draft'
+  
+  // Check if campaign has targets
+  const hasContacts = campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0
+  const hasTags = campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0
+  const hasTargets = hasContacts || hasTags
 
-  // Get recipient count
-  const getRecipientCount = () => {
-    const contactCount = campaign.metadata.target_contacts?.length || 0
-    const tagCount = campaign.metadata.target_tags?.length || 0
-    return contactCount > 0 ? contactCount : (tagCount > 0 ? 'Tagged contacts' : 0)
+  // Check if campaign is scheduled for future
+  const isScheduledForFuture = () => {
+    if (!campaign.metadata.send_date) return false
+    const scheduleDate = new Date(campaign.metadata.send_date)
+    const now = new Date()
+    return scheduleDate > now
   }
 
   const handleSendNow = async () => {
-    if (!canSend) return
+    if (!hasTargets) {
+      addToast('Campaign has no target recipients', 'error')
+      return
+    }
 
-    // Confirm action
-    const recipientCount = getRecipientCount()
-    const message = `Are you sure you want to send this campaign${typeof recipientCount === 'number' && recipientCount > 0 ? ` to ${recipientCount} recipients` : ''}? This action cannot be undone.`
-    
-    if (!confirm(message)) {
+    if (!campaign.metadata.template) {
+      addToast('Campaign has no email template selected', 'error')
       return
     }
 
     setIsLoading(true)
-
+    
     try {
       const response = await fetch(`/api/campaigns/${campaign.id}/send`, {
         method: 'POST',
@@ -51,34 +52,45 @@ export default function SendCampaignButton({ campaign, onStatusChange }: SendCam
         },
       })
 
-      const result = await response.json()
-
       if (!response.ok) {
-        throw new Error(result.error || 'Failed to send campaign')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to send campaign')
       }
 
-      addToast('Campaign sending initiated! Emails will be sent in batches.', 'success')
+      const data = await response.json()
       
-      // Refresh the page to show updated status
-      if (onStatusChange) {
-        onStatusChange()
-      } else {
-        router.refresh()
-      }
-
+      addToast(data.message || 'Campaign sending initiated successfully!', 'success')
+      router.refresh()
+      
     } catch (error) {
-      console.error('Send campaign error:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to send campaign'
-      addToast(errorMessage, 'error')
+      console.error('Campaign send error:', error)
+      addToast(
+        error instanceof Error ? error.message : 'Failed to send campaign', 
+        'error'
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleSchedule = async () => {
-    const scheduleDate = prompt('Enter schedule date and time (YYYY-MM-DD HH:MM):')
-    if (!scheduleDate) return
+    if (!hasTargets) {
+      addToast('Campaign has no target recipients', 'error')
+      return
+    }
 
+    if (!campaign.metadata.template) {
+      addToast('Campaign has no email template selected', 'error')
+      return
+    }
+
+    if (!campaign.metadata.send_date) {
+      addToast('No send date specified for scheduling', 'error')
+      return
+    }
+
+    setIsLoading(true)
+    
     try {
       const response = await fetch(`/api/campaigns/${campaign.id}`, {
         method: 'PUT',
@@ -86,117 +98,233 @@ export default function SendCampaignButton({ campaign, onStatusChange }: SendCam
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          status: 'Scheduled',
-          send_date: new Date(scheduleDate).toISOString()
+          status: 'Scheduled'
         }),
       })
 
       if (!response.ok) {
-        throw new Error('Failed to schedule campaign')
+        const errorData = await response.json()
+        throw new Error(errorData.error || 'Failed to schedule campaign')
       }
 
       addToast('Campaign scheduled successfully!', 'success')
+      router.refresh()
       
-      if (onStatusChange) {
-        onStatusChange()
-      } else {
-        router.refresh()
-      }
-
     } catch (error) {
-      console.error('Schedule campaign error:', error)
-      const errorMessage = error instanceof Error ? error.message : 'Failed to schedule campaign'
-      addToast(errorMessage, 'error')
+      console.error('Campaign schedule error:', error)
+      addToast(
+        error instanceof Error ? error.message : 'Failed to schedule campaign', 
+        'error'
+      )
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  // Show progress for sending campaigns
-  if (isSending && campaign.metadata.sending_progress) {
-    const progress = campaign.metadata.sending_progress
+  const getRecipientCount = () => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    
+    if (contactCount > 0 && tagCount > 0) {
+      return contactCount + tagCount // Approximate, as tags could overlap with contacts
+    } else if (contactCount > 0) {
+      return contactCount
+    } else {
+      // For tags, we can't determine exact count without querying contacts
+      // Show a placeholder that indicates tag-based targeting
+      return `Tag${tagCount === 1 ? '' : 's'}: ${campaign.metadata.target_tags?.join(', ')}`
+    }
+  }
+
+  const getRecipientDisplay = () => {
+    const contactCount = campaign.metadata.target_contacts?.length || 0
+    const tagCount = campaign.metadata.target_tags?.length || 0
+    
+    if (contactCount > 0 && tagCount > 0) {
+      return `${contactCount} contacts + ${tagCount} tag${tagCount === 1 ? '' : 's'}`
+    } else if (contactCount > 0) {
+      return `${contactCount} recipient${contactCount === 1 ? '' : 's'}`
+    } else if (tagCount > 0) {
+      return `Recipients with tag${tagCount === 1 ? '' : 's'}: ${campaign.metadata.target_tags?.join(', ')}`
+    }
+    return 'No recipients selected'
+  }
+
+  // Show different UI based on campaign status
+  if (status === 'Sent') {
     return (
-      <div className="space-y-2">
-        <Button disabled className="w-full">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Sending... {progress.progress_percentage}%
-        </Button>
-        <div className="text-xs text-gray-600 text-center">
-          {progress.sent} of {progress.total} emails sent
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-green-50 border border-green-200 rounded-lg">
+          <Check className="h-5 w-5 text-green-600 mr-2" />
+          <span className="text-green-800 font-medium">Campaign Sent Successfully</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
-          <div 
-            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-            style={{ width: `${progress.progress_percentage}%` }}
-          ></div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isSent) {
-    return (
-      <Button disabled className="w-full">
-        <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-        Campaign Sent
-      </Button>
-    )
-  }
-
-  if (isCancelled) {
-    return (
-      <Button disabled variant="destructive" className="w-full">
-        <AlertCircle className="mr-2 h-4 w-4" />
-        Campaign Cancelled
-      </Button>
-    )
-  }
-
-  if (currentStatus === 'Scheduled') {
-    return (
-      <div className="space-y-2">
-        <Button disabled className="w-full">
-          <Clock className="mr-2 h-4 w-4 text-blue-500" />
-          Scheduled
-        </Button>
-        {campaign.metadata.send_date && (
-          <div className="text-xs text-gray-600 text-center">
-            Scheduled for: {new Date(campaign.metadata.send_date).toLocaleString()}
+        
+        {campaign.metadata.stats && (
+          <div className="text-sm text-gray-600 text-center">
+            <div>Sent to {campaign.metadata.stats.sent || 0} recipients</div>
+            {campaign.metadata.stats.delivered !== undefined && Number(campaign.metadata.stats.delivered) > 0 && (
+              <div>Delivered: {campaign.metadata.stats.delivered}</div>
+            )}
           </div>
         )}
       </div>
     )
   }
 
+  if (status === 'Sending') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-2"></div>
+          <span className="text-yellow-800 font-medium">Campaign is Sending</span>
+        </div>
+        
+        {campaign.metadata.sending_progress && (
+          <div className="text-sm text-gray-600 text-center">
+            <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
+              <div 
+                className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${campaign.metadata.sending_progress.progress_percentage}%` }}
+              ></div>
+            </div>
+            <div>
+              Progress: {campaign.metadata.sending_progress.sent} / {campaign.metadata.sending_progress.total} 
+              ({campaign.metadata.sending_progress.progress_percentage}%)
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (status === 'Cancelled') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-red-50 border border-red-200 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-red-600 mr-2" />
+          <span className="text-red-800 font-medium">Campaign Cancelled</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (status === 'Scheduled') {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <Clock className="h-5 w-5 text-blue-600 mr-2" />
+          <span className="text-blue-800 font-medium">Campaign Scheduled</span>
+        </div>
+        
+        {campaign.metadata.send_date && (
+          <div className="text-sm text-gray-600 text-center">
+            <div>Scheduled for: {new Date(campaign.metadata.send_date).toLocaleString()}</div>
+            <div className="mt-1">{getRecipientDisplay()}</div>
+          </div>
+        )}
+
+        <Button
+          onClick={handleSendNow}
+          disabled={isLoading || !hasTargets}
+          className="w-full"
+          variant="outline"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              Sending Now...
+            </>
+          ) : (
+            <>
+              <Send className="h-4 w-4 mr-2" />
+              Send Now Instead
+            </>
+          )}
+        </Button>
+      </div>
+    )
+  }
+
+  // Draft status - show send options
   return (
-    <div className="space-y-2">
+    <div className="space-y-4">
+      {!hasTargets && (
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-sm text-orange-800">
+              <div className="font-medium">No recipients selected</div>
+              <div className="mt-1">Please select contacts or tags before sending.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!campaign.metadata.template && (
+        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
+          <div className="flex items-start">
+            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
+            <div className="text-sm text-orange-800">
+              <div className="font-medium">No template selected</div>
+              <div className="mt-1">Please select an email template before sending.</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasTargets && campaign.metadata.template && (
+        <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+          <div className="text-sm text-gray-700 text-center">
+            <div className="font-medium">Ready to send to:</div>
+            <div className="mt-1">{getRecipientDisplay()}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Send Now Button */}
       <Button
         onClick={handleSendNow}
-        disabled={isLoading || !canSend}
+        disabled={isLoading || !hasTargets || !campaign.metadata.template}
         className="w-full"
       >
         {isLoading ? (
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <>
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            Sending...
+          </>
         ) : (
-          <Send className="mr-2 h-4 w-4" />
+          <>
+            <Send className="h-4 w-4 mr-2" />
+            Send Now
+          </>
         )}
-        {isLoading ? 'Initiating...' : 'Send Now'}
       </Button>
-      
-      <Button
-        onClick={handleSchedule}
-        disabled={isLoading}
-        variant="outline"
-        className="w-full"
-        size="sm"
-      >
-        <Clock className="mr-2 h-4 w-4" />
-        Schedule for Later
-      </Button>
-      
-      {typeof getRecipientCount() === 'number' && getRecipientCount() > 0 && (
-        <div className="text-xs text-gray-600 text-center">
-          Ready to send to {getRecipientCount()} recipients
-        </div>
+
+      {/* Schedule Button (only show if send_date is set and in future) */}
+      {campaign.metadata.send_date && isScheduledForFuture() && (
+        <Button
+          onClick={handleSchedule}
+          disabled={isLoading || !hasTargets || !campaign.metadata.template}
+          variant="outline"
+          className="w-full"
+        >
+          {isLoading ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              Scheduling...
+            </>
+          ) : (
+            <>
+              <Clock className="h-4 w-4 mr-2" />
+              Schedule for {new Date(campaign.metadata.send_date).toLocaleDateString()}
+            </>
+          )}
+        </Button>
       )}
+
+      <div className="text-xs text-gray-500 text-center pt-2 border-t border-gray-200">
+        Emails will be sent in batches via background processing for optimal delivery.
+      </div>
     </div>
   )
 }
