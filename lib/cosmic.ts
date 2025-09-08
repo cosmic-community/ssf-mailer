@@ -17,8 +17,8 @@ if (!process.env.COSMIC_BUCKET_SLUG || !process.env.COSMIC_READ_KEY || !process.
   throw new Error('Missing required Cosmic environment variables')
 }
 
-// Create the Cosmic client
-const cosmic = createBucketClient({
+// Create the Cosmic client and export it
+export const cosmic = createBucketClient({
   bucketSlug: process.env.COSMIC_BUCKET_SLUG,
   readKey: process.env.COSMIC_READ_KEY,
   writeKey: process.env.COSMIC_WRITE_KEY
@@ -135,6 +135,38 @@ export async function deleteEmailContact(id: string): Promise<void> {
   } catch (error) {
     console.error(`Error deleting email contact ${id}:`, error)
     throw new Error('Failed to delete email contact')
+  }
+}
+
+// Unsubscribe function
+export async function unsubscribeContact(email: string): Promise<boolean> {
+  try {
+    // Find contact by email
+    const { objects } = await cosmic.objects
+      .find({ 
+        type: 'email-contacts',
+        'metadata.email': email 
+      })
+      .props(['id', 'metadata'])
+      .depth(0)
+    
+    if (objects.length === 0) {
+      return false // Contact not found
+    }
+
+    const contact = objects[0]
+    
+    // Update status to unsubscribed
+    await cosmic.objects.updateOne(contact.id, {
+      metadata: {
+        status: 'Unsubscribed'
+      }
+    })
+    
+    return true
+  } catch (error) {
+    console.error(`Error unsubscribing contact with email ${email}:`, error)
+    return false
   }
 }
 
@@ -303,6 +335,11 @@ export async function getMarketingCampaign(id: string): Promise<MarketingCampaig
   }
 }
 
+// Add alias function for getEmailCampaign
+export async function getEmailCampaign(id: string): Promise<MarketingCampaign | null> {
+  return getMarketingCampaign(id)
+}
+
 export async function createMarketingCampaign(data: CreateCampaignData): Promise<MarketingCampaign> {
   try {
     // Get contacts if contact_ids provided
@@ -457,6 +494,11 @@ export async function updateMarketingCampaign(id: string, data: Partial<CreateCa
   }
 }
 
+// Add alias function for updateEmailCampaign
+export async function updateEmailCampaign(id: string, data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats }>): Promise<MarketingCampaign> {
+  return updateMarketingCampaign(id, data)
+}
+
 export async function deleteMarketingCampaign(id: string): Promise<void> {
   try {
     await cosmic.objects.deleteOne(id)
@@ -464,6 +506,11 @@ export async function deleteMarketingCampaign(id: string): Promise<void> {
     console.error(`Error deleting marketing campaign ${id}:`, error)
     throw new Error('Failed to delete marketing campaign')
   }
+}
+
+// Add alias function for deleteEmailCampaign
+export async function deleteEmailCampaign(id: string): Promise<void> {
+  return deleteMarketingCampaign(id)
 }
 
 // Settings
@@ -559,6 +606,11 @@ export async function updateSettings(data: UpdateSettingsData): Promise<Settings
     console.error('Error updating settings:', error)
     throw new Error('Failed to update settings')
   }
+}
+
+// Add alias function for createOrUpdateSettings
+export async function createOrUpdateSettings(data: UpdateSettingsData): Promise<Settings> {
+  return updateSettings(data)
 }
 
 // Helper function to check if an error has a status property
