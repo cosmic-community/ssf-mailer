@@ -62,11 +62,33 @@ export default function SendCampaignButton({
       try {
         const response = await fetch(`/api/campaigns/${campaignId}/send`, {
           method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            sendDate: '' // Empty string for immediate send
+          })
         })
 
-        const result = await response.json()
-
+        // Check if response is ok first
         if (!response.ok) {
+          const errorText = await response.text()
+          let errorMessage = 'Failed to send campaign'
+          
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            // If JSON parsing fails, use the raw text or status
+            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
+          }
+          
+          throw new Error(errorMessage)
+        }
+
+        const result = await response.json()
+        
+        if (!result.success) {
           throw new Error(result.error || 'Failed to send campaign')
         }
 
@@ -90,21 +112,36 @@ export default function SendCampaignButton({
     
     startTransition(async () => {
       try {
-        // Update campaign with scheduled date and status
-        const response = await fetch(`/api/campaigns/${campaignId}`, {
-          method: 'PUT',
+        // Send to the send endpoint with schedule date
+        const response = await fetch(`/api/campaigns/${campaignId}/send`, {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            send_date: scheduleDate,
-            status: 'Scheduled'
-          }),
+            sendDate: scheduleDate
+          })
         })
 
-        const result = await response.json()
-
+        // Check if response is ok first
         if (!response.ok) {
+          const errorText = await response.text()
+          let errorMessage = 'Failed to schedule campaign'
+          
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            // If JSON parsing fails, use the raw text or status
+            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
+          }
+          
+          throw new Error(errorMessage)
+        }
+
+        const result = await response.json()
+        
+        if (!result.success) {
           throw new Error(result.error || 'Failed to schedule campaign')
         }
 
@@ -138,9 +175,25 @@ export default function SendCampaignButton({
           }),
         })
 
-        const result = await response.json()
-
+        // Check if response is ok first
         if (!response.ok) {
+          const errorText = await response.text()
+          let errorMessage = 'Failed to cancel schedule'
+          
+          try {
+            const errorData = JSON.parse(errorText)
+            errorMessage = errorData.error || errorMessage
+          } catch {
+            // If JSON parsing fails, use the raw text or status
+            errorMessage = errorText || `HTTP ${response.status}: ${response.statusText}`
+          }
+          
+          throw new Error(errorMessage)
+        }
+
+        const result = await response.json()
+        
+        if (!result.success) {
           throw new Error(result.error || 'Failed to cancel schedule')
         }
 
