@@ -32,18 +32,19 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     return ''
   }
 
-  // Get target contact IDs from campaign metadata - handle both full objects and IDs
+  // Get target contact IDs from campaign metadata - handle both full objects and IDs with proper typing
   const getTargetContactIds = (): string[] => {
     if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
-      return campaign.metadata.target_contacts.map(contact => {
+      return campaign.metadata.target_contacts.map((contact: any) => {
+        // Handle both full contact objects and string IDs
         if (typeof contact === 'object' && contact !== null && 'id' in contact) {
-          return contact.id
+          return contact.id as string
         }
         if (typeof contact === 'string') {
           return contact
         }
         return ''
-      }).filter(id => id !== '')
+      }).filter((id: string) => id !== '')
     }
     
     return []
@@ -506,6 +507,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
             >
               {isLoading ? 'Updating...' : 'Update Campaign'}
             </button>
+          </button>
           )}
         </div>
       </form>
