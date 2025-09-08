@@ -86,8 +86,28 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
   const isDraft = campaign.metadata?.status?.value === 'Draft'
   const isScheduled = campaign.metadata?.status?.value === 'Scheduled'
 
-  // Calculate recipient count from both contacts and tags
-  const targetContactsCount = campaign.metadata?.target_contacts?.length || 0
+  // Calculate recipient count from both contacts and tags with proper type checking
+  let targetContactsCount = 0
+  let targetContactsData: EmailContact[] = []
+
+  // Handle target_contacts field - it can contain full objects or just IDs
+  if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
+    campaign.metadata.target_contacts.forEach(contact => {
+      if (typeof contact === 'object' && contact !== null && 'id' in contact) {
+        // It's a full contact object
+        targetContactsData.push(contact as EmailContact)
+        targetContactsCount++
+      } else if (typeof contact === 'string') {
+        // It's just an ID - find the full contact
+        const fullContact = contacts.find(c => c.id === contact)
+        if (fullContact) {
+          targetContactsData.push(fullContact)
+          targetContactsCount++
+        }
+      }
+    })
+  }
+
   const targetTagsCount = campaign.metadata?.target_tags?.length || 0
   
   // For tags, we need to count actual contacts that have those tags
@@ -214,33 +234,25 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
                       {targetContactsCount} specific contact{targetContactsCount !== 1 ? 's' : ''} selected
                     </p>
                     <div className="max-h-32 overflow-y-auto">
-                      {campaign.metadata?.target_contacts?.map(contactId => {
-                        const contact = contacts.find(c => c.id === contactId)
-                        if (!contact) return (
-                          <div key={contactId} className="text-xs text-red-500 bg-red-50 px-2 py-1 rounded">
-                            Contact not found (ID: {contactId})
-                          </div>
-                        )
-                        return (
-                          <div key={contactId} className="flex items-center text-sm bg-gray-50 px-3 py-2 rounded">
-                            <span className="font-medium">
-                              {contact.metadata?.first_name} {contact.metadata?.last_name}
-                            </span>
-                            <span className="text-gray-500 ml-2">
-                              ({contact.metadata?.email})
-                            </span>
-                            <span className={`ml-auto text-xs px-2 py-1 rounded-full ${
-                              contact.metadata?.status?.value === 'Active' 
-                                ? 'bg-green-100 text-green-800' 
-                                : contact.metadata?.status?.value === 'Bounced'
-                                ? 'bg-yellow-100 text-yellow-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}>
-                              {contact.metadata?.status?.value}
-                            </span>
-                          </div>
-                        )
-                      })}
+                      {targetContactsData.map(contact => (
+                        <div key={contact.id} className="flex items-center text-sm bg-gray-50 px-3 py-2 rounded">
+                          <span className="font-medium">
+                            {contact.metadata?.first_name} {contact.metadata?.last_name}
+                          </span>
+                          <span className="text-gray-500 ml-2">
+                            ({contact.metadata?.email})
+                          </span>
+                          <span className={`ml-auto text-xs px-2 py-1 rounded-full ${
+                            contact.metadata?.status?.value === 'Active' 
+                              ? 'bg-green-100 text-green-800' 
+                              : contact.metadata?.status?.value === 'Bounced'
+                              ? 'bg-yellow-100 text-yellow-800'
+                              : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {contact.metadata?.status?.value}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : (
