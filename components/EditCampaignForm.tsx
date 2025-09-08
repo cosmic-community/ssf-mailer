@@ -18,16 +18,13 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   const [error, setError] = useState('')
   const { addToast } = useToast()
   
-  // Get template ID from campaign metadata - handle both template_id and template object
+  // Get template ID from campaign metadata - handle the template field
   const getTemplateId = () => {
-    if (campaign.metadata?.template_id) {
-      return campaign.metadata.template_id
+    if (typeof campaign.metadata?.template === 'string') {
+      return campaign.metadata.template
     }
     if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
       return campaign.metadata.template.id
-    }
-    if (typeof campaign.metadata?.template === 'string') {
-      return campaign.metadata.template
     }
     return ''
   }

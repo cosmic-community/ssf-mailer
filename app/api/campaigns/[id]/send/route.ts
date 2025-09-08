@@ -1,3 +1,4 @@
+// app/api/campaigns/[id]/send/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { 
   getEmailCampaign, 
@@ -43,12 +44,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Get template
+    // Get template - handle the new template field structure
     let template = null
-    if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+    if (typeof campaign.metadata?.template === 'object') {
       template = campaign.metadata.template
-    } else if (campaign.metadata?.template_id) {
-      template = await getEmailTemplate(campaign.metadata.template_id)
+    } else if (typeof campaign.metadata?.template === 'string') {
+      template = await getEmailTemplate(campaign.metadata.template)
     }
 
     if (!template || !template.metadata) {

@@ -394,7 +394,7 @@ export async function createMarketingCampaign(data: CreateCampaignData): Promise
       type: 'marketing-campaigns',
       metadata: {
         name: data.name,
-        template: data.template_id,
+        template: data.template_id, // Changed: store template ID in 'template' field
         target_contacts: validContactIds, // Store only IDs in target_contacts field
         target_tags: data.target_tags || [],
         status: {
@@ -498,7 +498,7 @@ export async function updateMarketingCampaign(id: string, data: Partial<CreateCa
     const metadataUpdates: any = {}
     
     if (data.name !== undefined) metadataUpdates.name = data.name
-    if (data.template_id !== undefined) metadataUpdates.template = data.template_id
+    if (data.template_id !== undefined) metadataUpdates.template = data.template_id // Changed: use 'template' field
     if (data.target_tags !== undefined) metadataUpdates.target_tags = data.target_tags
     if (data.send_date !== undefined) metadataUpdates.send_date = data.send_date
     if (data.stats !== undefined) metadataUpdates.stats = data.stats

@@ -54,16 +54,15 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
       }
     }
 
-    // For draft campaigns, use current template (existing logic)
+    // For draft campaigns, use current template
     let templateData: EmailTemplate | null = null
     
-    // Try to get template from campaign metadata
-    if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
+    // Handle the new template field structure
+    if (typeof campaign.metadata?.template === 'object') {
       templateData = campaign.metadata.template
-    } else if (campaign.metadata?.template_id || typeof campaign.metadata?.template === 'string') {
+    } else if (typeof campaign.metadata?.template === 'string') {
       // Find template by ID from the templates array
-      const templateId = campaign.metadata.template_id || campaign.metadata.template
-      templateData = templates.find((t: EmailTemplate) => t.id === templateId) || null
+      templateData = templates.find((t: EmailTemplate) => t.id === campaign.metadata?.template) || null
     }
 
     if (!templateData?.metadata) {
@@ -127,8 +126,8 @@ export default async function CampaignDetailsPage({ params }: PageProps) {
 
   // Check if campaign has a template for test email functionality
   const hasTemplate = !!(
-    campaign.metadata?.template_id ||
-    (campaign.metadata?.template && typeof campaign.metadata.template === 'object')
+    campaign.metadata?.template &&
+    (typeof campaign.metadata.template === 'string' || typeof campaign.metadata.template === 'object')
   )
 
   return (

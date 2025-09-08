@@ -86,13 +86,12 @@ export interface CampaignProgress {
   last_updated?: string;
 }
 
-// Marketing Campaign interface - Updated to use target_contacts instead of target_contact_ids
+// Marketing Campaign interface - Updated to use template instead of template_id
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
-    template_id: string;
-    template?: EmailTemplate;
+    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
     target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
@@ -111,8 +110,7 @@ export interface EmailCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
-    template_id: string;
-    template?: EmailTemplate;
+    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
     target_contacts?: string[];
     target_tags?: string[];
@@ -191,7 +189,7 @@ export interface CreateTemplateData {
 
 export interface CreateCampaignData {
   name: string;
-  template_id: string;
+  template_id: string; // Still use template_id in form data for clarity
   contact_ids?: string[];
   target_tags?: string[];
   send_date?: string;

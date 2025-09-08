@@ -39,8 +39,14 @@ export async function GET(request: NextRequest) {
         // Update status to "Sending" to prevent duplicate processing
         await updateCampaignStatus(campaign.id, 'Sending')
 
-        // Get the template for this campaign
-        const template = await getEmailTemplate(campaign.metadata.template_id)
+        // Get the template for this campaign - handle the new template field structure
+        let template = null
+        if (typeof campaign.metadata?.template === 'object') {
+          template = campaign.metadata.template
+        } else if (typeof campaign.metadata?.template === 'string') {
+          template = await getEmailTemplate(campaign.metadata.template)
+        }
+
         if (!template) {
           console.error(`❌ Template not found for campaign ${campaign.id}`)
           // Reset campaign status back to scheduled
