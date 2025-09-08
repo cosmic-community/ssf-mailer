@@ -1,5 +1,6 @@
+// app/api/campaigns/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { updateEmailCampaign, deleteEmailCampaign, getEmailCampaign } from '@/lib/cosmic'
+import { updateEmailCampaign, deleteEmailCampaign, getEmailCampaign, updateCampaignStatus } from '@/lib/cosmic'
 
 interface RouteParams {
   params: Promise<{ id: string }>
@@ -183,6 +184,3 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     )
   }
 }
-
-// Helper function import - fix missing import
-import { updateCampaignStatus } from '@/lib/cosmic'
