@@ -507,7 +507,6 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
             >
               {isLoading ? 'Updating...' : 'Update Campaign'}
             </button>
-          </button>
           )}
         </div>
       </form>
