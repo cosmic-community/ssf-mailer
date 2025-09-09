@@ -84,15 +84,17 @@ export default function ConfirmationModal({
           </div>
 
           <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end space-y-2 space-y-reverse sm:space-y-0 sm:space-x-2">
-            <DialogClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-              >
-                {cancelText}
-              </Button>
-            </DialogClose>
+            {cancelText && (
+              <DialogClose asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                >
+                  {cancelText}
+                </Button>
+              </DialogClose>
+            )}
             <Button
               type="button"
               variant={variant === 'destructive' ? 'destructive' : 'default'}
@@ -131,15 +133,17 @@ export default function ConfirmationModal({
         </div>
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end space-y-2 space-y-reverse sm:space-y-0 sm:space-x-2">
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-          </DialogClose>
+          {cancelText && (
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+              >
+                {cancelText}
+              </Button>
+            </DialogClose>
+          )}
           <Button
             type="button"
             variant={variant === 'destructive' ? 'destructive' : 'default'}
