@@ -158,7 +158,10 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             </div>
 
             <div className="flex items-center space-x-3">
-              <TestEmailModal campaignId={campaign.id} campaignName={campaign.metadata.name} />
+              {/* Only show test email button for draft campaigns */}
+              {status === 'Draft' && (
+                <TestEmailModal campaignId={campaign.id} campaignName={campaign.metadata.name} />
+              )}
               <DeleteCampaignButton 
                 campaignId={campaign.id} 
                 campaignName={campaign.metadata.name}
