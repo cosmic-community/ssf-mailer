@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { MarketingCampaign } from '@/types'
 import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
+import ConfirmationModal from '@/components/ConfirmationModal'
 import { Send, Clock, Check, AlertCircle } from 'lucide-react'
 
 interface SendCampaignButtonProps {
@@ -15,6 +16,8 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
   const router = useRouter()
   const { addToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showSuccessModal, setShowSuccessModal] = useState(false)
 
   const status = campaign.metadata.status?.value || 'Draft'
   
@@ -22,6 +25,43 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
   const hasContacts = campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0
   const hasTags = campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0
   const hasTargets = hasContacts || hasTags
+
+  // Real-time polling for campaign status updates
+  useEffect(() => {
+    let pollInterval: NodeJS.Timeout | null = null
+    
+    // Only poll if campaign is in sending state
+    if (status === 'Sending') {
+      pollInterval = setInterval(async () => {
+        try {
+          const response = await fetch(`/api/campaigns/${campaign.id}`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success && data.campaign) {
+              // If status changed from Sending, stop polling and refresh
+              if (data.campaign.metadata.status?.value !== 'Sending') {
+                router.refresh()
+                if (pollInterval) {
+                  clearInterval(pollInterval)
+                }
+              } else {
+                // Status is still Sending, just refresh for progress updates
+                router.refresh()
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Polling error:', error)
+        }
+      }, 3000) // Poll every 3 seconds
+    }
+
+    return () => {
+      if (pollInterval) {
+        clearInterval(pollInterval)
+      }
+    }
+  }, [status, campaign.id, router])
 
   // Check if campaign is scheduled for future
   const isScheduledForFuture = () => {
@@ -59,7 +99,10 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
 
       const data = await response.json()
       
-      addToast(data.message || 'Campaign sending initiated successfully!', 'success')
+      // Show success modal instead of toast
+      setShowSuccessModal(true)
+      
+      // Refresh the page to show updated status
       router.refresh()
       
     } catch (error) {
@@ -224,22 +267,13 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
         )}
 
         <Button
-          onClick={handleSendNow}
+          onClick={() => setShowConfirmModal(true)}
           disabled={isLoading || !hasTargets}
           className="w-full"
           variant="outline"
         >
-          {isLoading ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
-              Sending Now...
-            </>
-          ) : (
-            <>
-              <Send className="h-4 w-4 mr-2" />
-              Send Now Instead
-            </>
-          )}
+          <Send className="h-4 w-4 mr-2" />
+          Send Now Instead
         </Button>
       </div>
     )
@@ -283,7 +317,7 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
 
       {/* Send Now Button */}
       <Button
-        onClick={handleSendNow}
+        onClick={() => setShowConfirmModal(true)}
         disabled={isLoading || !hasTargets || !campaign.metadata.template}
         className="w-full"
       >
@@ -325,6 +359,29 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
       <div className="text-xs text-gray-500 text-center pt-2 border-t border-gray-200">
         Emails will be sent in batches via background processing for optimal delivery.
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showConfirmModal}
+        onOpenChange={setShowConfirmModal}
+        title="Send Campaign Now?"
+        description={`Are you sure you want to send "${campaign.metadata.name}" to ${getRecipientDisplay()}? This action cannot be undone.`}
+        confirmText="Send Campaign"
+        cancelText="Cancel"
+        onConfirm={handleSendNow}
+        isLoading={isLoading}
+      />
+
+      {/* Success Modal */}
+      <ConfirmationModal
+        isOpen={showSuccessModal}
+        onOpenChange={setShowSuccessModal}
+        title="Campaign Sending Started!"
+        description="Your campaign is now being sent in batches via background processing. You can monitor the progress in real-time on this page."
+        confirmText="Got it"
+        onConfirm={() => setShowSuccessModal(false)}
+        variant="default"
+      />
     </div>
   )
 }
