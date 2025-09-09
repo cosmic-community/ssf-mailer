@@ -3,6 +3,10 @@ import { NextRequest, NextResponse } from 'next/server'
 export function middleware(request: NextRequest) {
   // Skip middleware for static assets and API routes that don't need auth
   const pathname = request.nextUrl.pathname
+
+  if (request.nextUrl.pathname.startsWith('/api/cron/')) {
+    return NextResponse.next()
+  }
   
   // Allow access to login page, static assets, and console capture script
   if (
