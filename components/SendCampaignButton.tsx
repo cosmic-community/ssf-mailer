@@ -17,7 +17,7 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
   const { addToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [showSuccessModal, setShowSuccessModal] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const status = campaign.metadata.status?.value || 'Draft'
   
@@ -99,8 +99,8 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
 
       const data = await response.json()
       
-      // Show success modal instead of toast
-      setShowSuccessModal(true)
+      // Show success state in the same modal
+      setShowSuccess(true)
       
       // Refresh the page to show updated status
       router.refresh()
@@ -191,6 +191,11 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
       return `Recipients with tag${tagCount === 1 ? '' : 's'}: ${campaign.metadata.target_tags?.join(', ')}`
     }
     return 'No recipients selected'
+  }
+
+  const handleModalClose = () => {
+    setShowConfirmModal(false)
+    setShowSuccess(false)
   }
 
   // Show different UI based on campaign status
@@ -360,27 +365,22 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
         Emails will be sent in batches via background processing for optimal delivery.
       </div>
 
-      {/* Confirmation Modal */}
+      {/* Enhanced Confirmation/Success Modal */}
       <ConfirmationModal
         isOpen={showConfirmModal}
-        onOpenChange={setShowConfirmModal}
-        title="Send Campaign Now?"
-        description={`Are you sure you want to send "${campaign.metadata.name}" to ${getRecipientDisplay()}? This action cannot be undone.`}
-        confirmText="Send Campaign"
-        cancelText="Cancel"
-        onConfirm={handleSendNow}
+        onOpenChange={handleModalClose}
+        title={showSuccess ? "✅ Campaign Sending Started!" : "Send Campaign Now?"}
+        description={
+          showSuccess 
+            ? `Your campaign "${campaign.metadata.name}" is now being sent to ${getRecipientDisplay()}! The campaign will continue processing in the background with real-time progress updates. Emails are sent in optimized batches to ensure high deliverability and avoid spam filters. You can safely navigate away from this page - no action needed.`
+            : `Are you sure you want to send "${campaign.metadata.name}" to ${getRecipientDisplay()}? This action cannot be undone.`
+        }
+        confirmText={showSuccess ? "Got it!" : "Send Campaign"}
+        cancelText={showSuccess ? "" : "Cancel"}
+        onConfirm={showSuccess ? handleModalClose : handleSendNow}
         isLoading={isLoading}
-      />
-
-      {/* Success Modal */}
-      <ConfirmationModal
-        isOpen={showSuccessModal}
-        onOpenChange={setShowSuccessModal}
-        title="Campaign Sending Started!"
-        description="Your campaign is now being sent in batches via background processing. You can monitor the progress in real-time on this page."
-        confirmText="Got it"
-        onConfirm={() => setShowSuccessModal(false)}
         variant="default"
+        preventAutoClose={true}
       />
     </div>
   )

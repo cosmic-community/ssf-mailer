@@ -18,6 +18,8 @@ interface ConfirmationModalProps {
   // Add controlled state props
   isOpen?: boolean
   onOpenChange?: Dispatch<SetStateAction<boolean>> | ((open: boolean) => void)
+  // Add option to prevent auto-close after confirm (useful for success modals)
+  preventAutoClose?: boolean
 }
 
 export default function ConfirmationModal({
@@ -31,7 +33,8 @@ export default function ConfirmationModal({
   variant = 'default',
   isLoading = false,
   isOpen: controlledIsOpen,
-  onOpenChange: controlledOnOpenChange
+  onOpenChange: controlledOnOpenChange,
+  preventAutoClose = false
 }: ConfirmationModalProps) {
   const [internalIsOpen, setInternalIsOpen] = useState(false)
   const [isProcessing, setIsProcessing] = useState(false)
@@ -44,7 +47,10 @@ export default function ConfirmationModal({
     setIsProcessing(true)
     try {
       await onConfirm()
-      setIsOpen(false)
+      // Only auto-close if preventAutoClose is false
+      if (!preventAutoClose) {
+        setIsOpen(false)
+      }
     } catch (error) {
       console.error('Confirmation action failed:', error)
     } finally {
@@ -78,15 +84,17 @@ export default function ConfirmationModal({
           </div>
 
           <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end space-y-2 space-y-reverse sm:space-y-0 sm:space-x-2">
-            <DialogClose asChild>
-              <Button
-                type="button"
-                variant="outline"
-                disabled={loading}
-              >
-                {cancelText}
-              </Button>
-            </DialogClose>
+            {cancelText && (
+              <DialogClose asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading}
+                >
+                  {cancelText}
+                </Button>
+              </DialogClose>
+            )}
             <Button
               type="button"
               variant={variant === 'destructive' ? 'destructive' : 'default'}
@@ -125,15 +133,17 @@ export default function ConfirmationModal({
         </div>
 
         <DialogFooter className="flex flex-col-reverse sm:flex-row sm:justify-end space-y-2 space-y-reverse sm:space-y-0 sm:space-x-2">
-          <DialogClose asChild>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading}
-            >
-              {cancelText}
-            </Button>
-          </DialogClose>
+          {cancelText && (
+            <DialogClose asChild>
+              <Button
+                type="button"
+                variant="outline"
+                disabled={loading}
+              >
+                {cancelText}
+              </Button>
+            </DialogClose>
+          )}
           <Button
             type="button"
             variant={variant === 'destructive' ? 'destructive' : 'default'}
