@@ -7,7 +7,7 @@ import DeleteCampaignButton from '@/components/DeleteCampaignButton'
 import TestEmailModal from '@/components/TestEmailModal'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Eye, Users, Mail, Calendar, TrendingUp, Clock, Send, FileText } from 'lucide-react'
+import { Eye, Users, Mail, Calendar, TrendingUp, Clock, Send, FileText, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 
 // Force dynamic rendering to ensure fresh data
@@ -162,11 +162,6 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
               {status === 'Draft' && (
                 <TestEmailModal campaignId={campaign.id} campaignName={campaign.metadata.name} />
               )}
-              <DeleteCampaignButton 
-                campaignId={campaign.id} 
-                campaignName={campaign.metadata.name}
-                isDraft={status === 'Draft'}
-              />
             </div>
           </div>
         </div>
@@ -248,6 +243,30 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   </div>
                 </CardContent>
               </Card>
+            )}
+
+            {/* Delete Campaign Section - Moved to bottom like template page */}
+            {status === 'Draft' && (
+              <div className="border-t pt-8 mt-8">
+                <Card className="border-red-200 bg-red-50/50">
+                  <CardHeader>
+                    <CardTitle className="text-red-800 flex items-center space-x-2">
+                      <Trash2 className="h-5 w-5" />
+                      <span>Danger Zone</span>
+                    </CardTitle>
+                    <p className="text-red-700 text-sm">
+                      Permanently delete this campaign. This action cannot be undone.
+                    </p>
+                  </CardHeader>
+                  <CardContent>
+                    <DeleteCampaignButton 
+                      campaignId={campaign.id} 
+                      campaignName={campaign.metadata.name}
+                      isDraft={status === 'Draft'}
+                    />
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </div>
 
@@ -383,7 +402,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </div>
             )}
           </div>
         </div>
