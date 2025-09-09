@@ -402,7 +402,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                     </div>
                   </div>
                 </CardContent>
-              </div>
+              </Card>
             )}
           </div>
         </div>
