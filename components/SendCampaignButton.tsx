@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { Send, Clock, Check, AlertCircle } from 'lucide-react'
+import confetti from 'canvas-confetti'
 
 interface SendCampaignButtonProps {
   campaign: MarketingCampaign
@@ -71,6 +72,40 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
     return scheduleDate > now
   }
 
+  // Trigger confetti celebration
+  const triggerConfetti = () => {
+    // Multiple bursts of confetti
+    const duration = 3000
+    const animationEnd = Date.now() + duration
+    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 }
+
+    function randomInRange(min: number, max: number) {
+      return Math.random() * (max - min) + min
+    }
+
+    const interval = setInterval(() => {
+      const timeLeft = animationEnd - Date.now()
+
+      if (timeLeft <= 0) {
+        return clearInterval(interval)
+      }
+
+      const particleCount = 50 * (timeLeft / duration)
+
+      // Since confetti falls down, start a bit higher
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+      })
+      confetti({
+        ...defaults,
+        particleCount,
+        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+      })
+    }, 250)
+  }
+
   const handleSendNow = async () => {
     if (!hasTargets) {
       addToast('Campaign has no target recipients', 'error')
@@ -99,8 +134,16 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
 
       const data = await response.json()
       
-      // Show success modal instead of toast
-      setShowSuccessModal(true)
+      // Close the confirm modal first
+      setShowConfirmModal(false)
+      
+      // Trigger confetti celebration
+      triggerConfetti()
+      
+      // Show success modal after a brief delay to let confetti start
+      setTimeout(() => {
+        setShowSuccessModal(true)
+      }, 500)
       
       // Refresh the page to show updated status
       router.refresh()
@@ -376,11 +419,12 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
       <ConfirmationModal
         isOpen={showSuccessModal}
         onOpenChange={setShowSuccessModal}
-        title="Campaign Sending Started!"
+        title="🎉 Campaign Sending Started!"
         description="Your campaign is now being sent in batches via background processing. You can monitor the progress in real-time on this page."
-        confirmText="Got it"
+        confirmText="Got it!"
         onConfirm={() => setShowSuccessModal(false)}
         variant="default"
+        preventAutoClose={true}
       />
     </div>
   )
