@@ -375,47 +375,12 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
         isLoading={isLoading}
       />
 
-      {/* Enhanced Success Modal */}
+      {/* Enhanced Success Modal - Fixed to use string description */}
       <ConfirmationModal
         isOpen={showSuccessModal}
         onOpenChange={setShowSuccessModal}
         title="✅ Campaign Sending Started!"
-        description={
-          <div className="space-y-3">
-            <div className="text-center">
-              <p className="font-medium text-green-700 mb-2">
-                Your campaign "{campaign.metadata.name}" is now being sent!
-              </p>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
-                <div className="flex items-center justify-center mb-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
-                  <span className="font-medium">Processing in background</span>
-                </div>
-                <div>Sending to: {getRecipientDisplay()}</div>
-              </div>
-            </div>
-            <div className="text-sm text-gray-600">
-              <div className="flex items-start space-x-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <strong>Real-time tracking:</strong> This page will automatically update to show sending progress and delivery statistics.
-                </div>
-              </div>
-              <div className="flex items-start space-x-2 mt-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <strong>Batch processing:</strong> Emails are sent in optimized batches to ensure high deliverability and avoid spam filters.
-                </div>
-              </div>
-              <div className="flex items-start space-x-2 mt-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
-                <div>
-                  <strong>No action needed:</strong> You can safely navigate away from this page. The campaign will continue sending automatically.
-                </div>
-              </div>
-            </div>
-          </div>
-        }
+        description={`Your campaign "${campaign.metadata.name}" is now being sent to ${getRecipientDisplay()}! The campaign will continue processing in the background with real-time progress updates. Emails are sent in optimized batches to ensure high deliverability and avoid spam filters. You can safely navigate away from this page - no action needed.`}
         confirmText="Got it!"
         onConfirm={() => setShowSuccessModal(false)}
         variant="default"
