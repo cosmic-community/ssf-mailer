@@ -7,7 +7,6 @@ import { useToast } from '@/hooks/useToast'
 import { Button } from '@/components/ui/button'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { Send, Clock, Check, AlertCircle } from 'lucide-react'
-import confetti from 'canvas-confetti'
 
 interface SendCampaignButtonProps {
   campaign: MarketingCampaign
@@ -72,40 +71,6 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
     return scheduleDate > now
   }
 
-  // Trigger confetti celebration
-  const triggerConfetti = () => {
-    // Multiple bursts of confetti
-    const duration = 3000
-    const animationEnd = Date.now() + duration
-    const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 }
-
-    function randomInRange(min: number, max: number) {
-      return Math.random() * (max - min) + min
-    }
-
-    const interval = setInterval(() => {
-      const timeLeft = animationEnd - Date.now()
-
-      if (timeLeft <= 0) {
-        return clearInterval(interval)
-      }
-
-      const particleCount = 50 * (timeLeft / duration)
-
-      // Since confetti falls down, start a bit higher
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
-      })
-      confetti({
-        ...defaults,
-        particleCount,
-        origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
-      })
-    }, 250)
-  }
-
   const handleSendNow = async () => {
     if (!hasTargets) {
       addToast('Campaign has no target recipients', 'error')
@@ -137,13 +102,8 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
       // Close the confirm modal first
       setShowConfirmModal(false)
       
-      // Trigger confetti celebration
-      triggerConfetti()
-      
-      // Show success modal after a brief delay to let confetti start
-      setTimeout(() => {
-        setShowSuccessModal(true)
-      }, 500)
+      // Show success modal immediately
+      setShowSuccessModal(true)
       
       // Refresh the page to show updated status
       router.refresh()
@@ -415,12 +375,47 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
         isLoading={isLoading}
       />
 
-      {/* Success Modal */}
+      {/* Enhanced Success Modal */}
       <ConfirmationModal
         isOpen={showSuccessModal}
         onOpenChange={setShowSuccessModal}
-        title="🎉 Campaign Sending Started!"
-        description="Your campaign is now being sent in batches via background processing. You can monitor the progress in real-time on this page."
+        title="✅ Campaign Sending Started!"
+        description={
+          <div className="space-y-3">
+            <div className="text-center">
+              <p className="font-medium text-green-700 mb-2">
+                Your campaign "{campaign.metadata.name}" is now being sent!
+              </p>
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-green-800">
+                <div className="flex items-center justify-center mb-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600 mr-2"></div>
+                  <span className="font-medium">Processing in background</span>
+                </div>
+                <div>Sending to: {getRecipientDisplay()}</div>
+              </div>
+            </div>
+            <div className="text-sm text-gray-600">
+              <div className="flex items-start space-x-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Real-time tracking:</strong> This page will automatically update to show sending progress and delivery statistics.
+                </div>
+              </div>
+              <div className="flex items-start space-x-2 mt-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>Batch processing:</strong> Emails are sent in optimized batches to ensure high deliverability and avoid spam filters.
+                </div>
+              </div>
+              <div className="flex items-start space-x-2 mt-2">
+                <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                <div>
+                  <strong>No action needed:</strong> You can safely navigate away from this page. The campaign will continue sending automatically.
+                </div>
+              </div>
+            </div>
+          </div>
+        }
         confirmText="Got it!"
         onConfirm={() => setShowSuccessModal(false)}
         variant="default"
