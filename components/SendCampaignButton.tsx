@@ -103,7 +103,9 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
       setShowSuccess(true)
       
       // Refresh the page to show updated status
-      router.refresh()
+      setTimeout(function(){
+        router.refresh()
+      }, 3000)
       
     } catch (error) {
       console.error('Campaign send error:', error)
@@ -372,7 +374,7 @@ export default function SendCampaignButton({ campaign }: SendCampaignButtonProps
         title={showSuccess ? "✅ Campaign Sending Started!" : "Send Campaign Now?"}
         description={
           showSuccess 
-            ? `Your campaign "${campaign.metadata.name}" is now being sent to ${getRecipientDisplay()}! The campaign will continue processing in the background with real-time progress updates. Emails are sent in optimized batches to ensure high deliverability and avoid spam filters. You can safely navigate away from this page - no action needed.`
+            ? `Your campaign "${campaign.metadata.name}" is now being sent to ${getRecipientDisplay()}!`
             : `Are you sure you want to send "${campaign.metadata.name}" to ${getRecipientDisplay()}? This action cannot be undone.`
         }
         confirmText={showSuccess ? "Got it!" : "Send Campaign"}
