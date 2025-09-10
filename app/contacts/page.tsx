@@ -16,6 +16,7 @@ interface ContactsPageProps {
     limit?: string;
     search?: string;
     status?: string;
+    list_id?: string;
   };
 }
 
@@ -27,12 +28,14 @@ export default async function ContactsPage({
   const skip = (page - 1) * limit;
   const search = searchParams.search || "";
   const status = searchParams.status || "all";
+  const listId = searchParams.list_id || "";
 
   const { contacts, total } = await getEmailContacts({
     limit,
     skip,
     search: search || undefined,
     status: status !== "all" ? status : undefined,
+    list_id: listId || undefined,
   });
 
   return (
@@ -67,6 +70,7 @@ export default async function ContactsPage({
           itemsPerPage={limit}
           searchTerm={search}
           statusFilter={status}
+          listFilter={listId}
         />
       </main>
     </div>
