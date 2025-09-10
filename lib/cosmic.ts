@@ -39,7 +39,21 @@ export async function getEmailLists(): Promise<EmailList[]> {
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
       .depth(1);
 
-    return objects as EmailList[];
+    // Update contact counts for all lists
+    const listsWithUpdatedCounts = await Promise.all(
+      objects.map(async (list) => {
+        const contactCount = await getListContactCount(list.id);
+        return {
+          ...list,
+          metadata: {
+            ...list.metadata,
+            total_contacts: contactCount
+          }
+        } as EmailList;
+      })
+    );
+
+    return listsWithUpdatedCounts;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return [];
@@ -56,7 +70,18 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
       .depth(1);
 
-    return object as EmailList;
+    if (!object) return null;
+
+    // Update the contact count for this list
+    const contactCount = await getListContactCount(id);
+    
+    return {
+      ...object,
+      metadata: {
+        ...object.metadata,
+        total_contacts: contactCount
+      }
+    } as EmailList;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return null;
@@ -137,10 +162,10 @@ export async function deleteEmailList(id: string): Promise<void> {
   }
 }
 
-// Update list contact count
-export async function updateListContactCount(listId: string): Promise<void> {
+// Get actual contact count for a list
+export async function getListContactCount(listId: string): Promise<number> {
   try {
-    // Count contacts that have this list
+    // Count contacts that have this list ID in their lists array
     const { objects } = await cosmic.objects
       .find({ 
         type: "email-contacts",
@@ -148,9 +173,24 @@ export async function updateListContactCount(listId: string): Promise<void> {
       })
       .props(["id"]);
 
+    return objects.length;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return 0;
+    }
+    console.error(`Error getting contact count for list ${listId}:`, error);
+    return 0;
+  }
+}
+
+// Update list contact count
+export async function updateListContactCount(listId: string): Promise<void> {
+  try {
+    const contactCount = await getListContactCount(listId);
+    
     await cosmic.objects.updateOne(listId, {
       metadata: {
-        total_contacts: objects.length,
+        total_contacts: contactCount,
       },
     });
   } catch (error) {
@@ -488,7 +528,7 @@ export async function bulkUpdateContactLists(
   return results;
 }
 
-// Get contacts by list ID
+// Get contacts by list ID - enhanced with better error handling
 export async function getContactsByListId(listId: string): Promise<EmailContact[]> {
   try {
     const { objects } = await cosmic.objects
@@ -988,7 +1028,7 @@ export async function deleteEmailCampaign(id: string): Promise<void> {
   return deleteMarketingCampaign(id);
 }
 
-// Get all contacts that would be targeted by a campaign
+// Get all contacts that would be targeted by a campaign with real-time count
 export async function getCampaignTargetContacts(campaign: MarketingCampaign): Promise<EmailContact[]> {
   try {
     const allContacts: EmailContact[] = [];
