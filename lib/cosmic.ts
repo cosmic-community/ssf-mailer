@@ -41,7 +41,7 @@ export async function getEmailLists(): Promise<EmailList[]> {
 
     // Update contact counts for all lists
     const listsWithUpdatedCounts = await Promise.all(
-      objects.map(async (list) => {
+      objects.map(async (list: EmailList) => {
         const contactCount = await getListContactCount(list.id);
         return {
           ...list,
@@ -783,7 +783,7 @@ export async function createMarketingCampaign(
     if (data.list_ids && data.list_ids.length > 0) {
       console.log("Validating lists for IDs:", data.list_ids);
 
-      const listPromises = data.list_ids.map(async (id) => {
+      const listPromises = data.list_ids.map(async (id: string) => {
         try {
           const list = await getEmailList(id);
           return list ? id : null;
@@ -807,7 +807,7 @@ export async function createMarketingCampaign(
       console.log("Validating contacts for IDs:", data.contact_ids);
 
       // Validate each contact ID exists
-      const contactPromises = data.contact_ids.map(async (id) => {
+      const contactPromises = data.contact_ids.map(async (id: string) => {
         try {
           const contact = await getEmailContact(id);
           return contact ? id : null;
@@ -977,7 +977,7 @@ export async function updateMarketingCampaign(
       let validContactIds: string[] = [];
       if (data.contact_ids.length > 0) {
         // Validate each contact ID exists
-        const contactPromises = data.contact_ids.map(async (id) => {
+        const contactPromises = data.contact_ids.map(async (id: string) => {
           try {
             const contact = await getEmailContact(id);
             return contact ? id : null;
