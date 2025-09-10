@@ -3,11 +3,14 @@ import {
   EmailContact,
   EmailTemplate,
   MarketingCampaign,
+  EmailList,
   Settings,
   CreateContactData,
+  CreateListData,
   CreateTemplateData,
   CreateCampaignData,
   UpdateSettingsData,
+  BulkListUpdateData,
   CampaignStats,
   TemplateSnapshot,
   CosmicResponse,
@@ -28,12 +31,141 @@ export const cosmic = createBucketClient({
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
 
+// Email Lists
+export async function getEmailLists(): Promise<EmailList[]> {
+  try {
+    const { objects } = await cosmic.objects
+      .find({ type: "email-lists" })
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1);
+
+    return objects as EmailList[];
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return [];
+    }
+    console.error("Error fetching email lists:", error);
+    throw new Error("Failed to fetch email lists");
+  }
+}
+
+export async function getEmailList(id: string): Promise<EmailList | null> {
+  try {
+    const { object } = await cosmic.objects
+      .findOne({ id })
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1);
+
+    return object as EmailList;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return null;
+    }
+    console.error(`Error fetching email list ${id}:`, error);
+    throw new Error("Failed to fetch email list");
+  }
+}
+
+export async function createEmailList(data: CreateListData): Promise<EmailList> {
+  try {
+    const { object } = await cosmic.objects.insertOne({
+      title: data.name,
+      type: "email-lists",
+      metadata: {
+        name: data.name,
+        description: data.description || "",
+        list_type: {
+          key: data.list_type.toLowerCase().replace(" ", "_"),
+          value: data.list_type,
+        },
+        active: data.active !== false,
+        created_date: new Date().toISOString().split('T')[0],
+        total_contacts: 0,
+      },
+    });
+
+    return object as EmailList;
+  } catch (error) {
+    console.error("Error creating email list:", error);
+    throw new Error("Failed to create email list");
+  }
+}
+
+export async function updateEmailList(
+  id: string,
+  data: Partial<CreateListData>
+): Promise<EmailList> {
+  try {
+    const updateData: any = {};
+
+    if (data.name !== undefined) {
+      updateData.title = data.name;
+    }
+
+    // Build metadata updates - ONLY include changed fields
+    const metadataUpdates: any = {};
+
+    if (data.name !== undefined) metadataUpdates.name = data.name;
+    if (data.description !== undefined) metadataUpdates.description = data.description;
+    if (data.active !== undefined) metadataUpdates.active = data.active;
+
+    if (data.list_type !== undefined) {
+      metadataUpdates.list_type = {
+        key: data.list_type.toLowerCase().replace(" ", "_"),
+        value: data.list_type,
+      };
+    }
+
+    if (Object.keys(metadataUpdates).length > 0) {
+      updateData.metadata = metadataUpdates;
+    }
+
+    const { object } = await cosmic.objects.updateOne(id, updateData);
+    return object as EmailList;
+  } catch (error) {
+    console.error(`Error updating email list ${id}:`, error);
+    throw new Error("Failed to update email list");
+  }
+}
+
+export async function deleteEmailList(id: string): Promise<void> {
+  try {
+    await cosmic.objects.deleteOne(id);
+  } catch (error) {
+    console.error(`Error deleting email list ${id}:`, error);
+    throw new Error("Failed to delete email list");
+  }
+}
+
+// Update list contact count
+export async function updateListContactCount(listId: string): Promise<void> {
+  try {
+    // Count contacts that have this list
+    const { objects } = await cosmic.objects
+      .find({ 
+        type: "email-contacts",
+        "metadata.lists": listId
+      })
+      .props(["id"]);
+
+    await cosmic.objects.updateOne(listId, {
+      metadata: {
+        total_contacts: objects.length,
+      },
+    });
+  } catch (error) {
+    console.error(`Error updating contact count for list ${listId}:`, error);
+    // Don't throw error to avoid breaking other operations
+  }
+}
+
 // Email Contacts
 export async function getEmailContacts(options?: {
   limit?: number;
   skip?: number;
   search?: string;
   status?: string;
+  list_id?: string;
 }): Promise<{
   contacts: EmailContact[];
   total: number;
@@ -45,6 +177,7 @@ export async function getEmailContacts(options?: {
     const skip = options?.skip || 0;
     const search = options?.search?.trim();
     const status = options?.status;
+    const list_id = options?.list_id;
 
     // Build query object
     let query: any = { type: "email-contacts" };
@@ -52,6 +185,11 @@ export async function getEmailContacts(options?: {
     // Add status filter if provided
     if (status && status !== "all") {
       query["metadata.status.value"] = status;
+    }
+
+    // Add list filter if provided
+    if (list_id) {
+      query["metadata.lists"] = list_id;
     }
 
     // Add search filter if provided
@@ -106,7 +244,14 @@ export async function getEmailContacts(options?: {
         const matchesStatus = !status || status === "all" || 
           contact.metadata.status?.value === status;
 
-        return matchesSearch && matchesStatus;
+        const matchesList = !list_id || 
+          (contact.metadata.lists && 
+           (Array.isArray(contact.metadata.lists) 
+             ? contact.metadata.lists.some((list: any) => 
+                 typeof list === 'string' ? list === list_id : list.id === list_id)
+             : false));
+
+        return matchesSearch && matchesStatus && matchesList;
       });
 
       // Apply pagination to filtered results
@@ -168,11 +313,19 @@ export async function createEmailContact(
           key: data.status.toLowerCase().replace(" ", "_"),
           value: data.status,
         },
+        lists: data.list_ids || [],
         tags: data.tags || [],
-        subscribe_date: data.subscribe_date || new Date().toISOString(),
+        subscribe_date: data.subscribe_date || new Date().toISOString().split('T')[0],
         notes: data.notes || "",
       },
     });
+
+    // Update contact counts for associated lists
+    if (data.list_ids && data.list_ids.length > 0) {
+      for (const listId of data.list_ids) {
+        await updateListContactCount(listId);
+      }
+    }
 
     return object as EmailContact;
   } catch (error) {
@@ -206,6 +359,18 @@ export async function updateEmailContact(
       updateData.title = `${firstName} ${lastName}`.trim();
     }
 
+    // Track old list IDs for count updates
+    let oldListIds: string[] = [];
+    if (data.list_ids !== undefined) {
+      const current = await getEmailContact(id);
+      if (current && current.metadata.lists) {
+        oldListIds = Array.isArray(current.metadata.lists) 
+          ? current.metadata.lists.map((list: any) => 
+              typeof list === 'string' ? list : list.id)
+          : [];
+      }
+    }
+
     // Build metadata updates - ONLY include changed fields
     const metadataUpdates: any = {};
 
@@ -214,6 +379,7 @@ export async function updateEmailContact(
     if (data.last_name !== undefined)
       metadataUpdates.last_name = data.last_name;
     if (data.email !== undefined) metadataUpdates.email = data.email;
+    if (data.list_ids !== undefined) metadataUpdates.lists = data.list_ids;
     if (data.tags !== undefined) metadataUpdates.tags = data.tags;
     if (data.notes !== undefined) metadataUpdates.notes = data.notes;
 
@@ -229,6 +395,17 @@ export async function updateEmailContact(
     }
 
     const { object } = await cosmic.objects.updateOne(id, updateData);
+    
+    // Update contact counts for affected lists
+    if (data.list_ids !== undefined) {
+      const newListIds = data.list_ids;
+      const allAffectedListIds = [...new Set([...oldListIds, ...newListIds])];
+      
+      for (const listId of allAffectedListIds) {
+        await updateListContactCount(listId);
+      }
+    }
+    
     return object as EmailContact;
   } catch (error) {
     console.error(`Error updating email contact ${id}:`, error);
@@ -238,10 +415,97 @@ export async function updateEmailContact(
 
 export async function deleteEmailContact(id: string): Promise<void> {
   try {
+    // Get the contact to find associated lists
+    const contact = await getEmailContact(id);
+    let affectedListIds: string[] = [];
+    
+    if (contact && contact.metadata.lists) {
+      affectedListIds = Array.isArray(contact.metadata.lists) 
+        ? contact.metadata.lists.map((list: any) => 
+            typeof list === 'string' ? list : list.id)
+        : [];
+    }
+
     await cosmic.objects.deleteOne(id);
+
+    // Update contact counts for affected lists
+    for (const listId of affectedListIds) {
+      await updateListContactCount(listId);
+    }
   } catch (error) {
     console.error(`Error deleting email contact ${id}:`, error);
     throw new Error("Failed to delete email contact");
+  }
+}
+
+// Bulk update contacts with list memberships
+export async function bulkUpdateContactLists(
+  data: BulkListUpdateData
+): Promise<{ updated: number; errors: string[] }> {
+  const results = {
+    updated: 0,
+    errors: [] as string[],
+  };
+
+  for (const contactId of data.contact_ids) {
+    try {
+      const contact = await getEmailContact(contactId);
+      if (!contact) {
+        results.errors.push(`Contact ${contactId} not found`);
+        continue;
+      }
+
+      // Get current list IDs
+      const currentListIds = contact.metadata.lists 
+        ? (Array.isArray(contact.metadata.lists) 
+            ? contact.metadata.lists.map((list: any) => 
+                typeof list === 'string' ? list : list.id)
+            : [])
+        : [];
+
+      // Calculate new list IDs
+      let newListIds = [...currentListIds];
+      
+      // Remove lists
+      newListIds = newListIds.filter(id => !data.list_ids_to_remove.includes(id));
+      
+      // Add new lists (avoid duplicates)
+      for (const listId of data.list_ids_to_add) {
+        if (!newListIds.includes(listId)) {
+          newListIds.push(listId);
+        }
+      }
+
+      // Update contact
+      await updateEmailContact(contactId, { list_ids: newListIds });
+      results.updated++;
+    } catch (error) {
+      console.error(`Error updating contact ${contactId}:`, error);
+      results.errors.push(`Failed to update contact ${contactId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  return results;
+}
+
+// Get contacts by list ID
+export async function getContactsByListId(listId: string): Promise<EmailContact[]> {
+  try {
+    const { objects } = await cosmic.objects
+      .find({ 
+        type: "email-contacts",
+        "metadata.lists": listId
+      })
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1);
+
+    return objects as EmailContact[];
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return [];
+    }
+    console.error(`Error fetching contacts for list ${listId}:`, error);
+    throw new Error("Failed to fetch contacts for list");
   }
 }
 
@@ -474,6 +738,29 @@ export async function createMarketingCampaign(
       }
     }
 
+    // Validate list IDs if provided
+    let validListIds: string[] = [];
+    if (data.list_ids && data.list_ids.length > 0) {
+      console.log("Validating lists for IDs:", data.list_ids);
+
+      const listPromises = data.list_ids.map(async (id) => {
+        try {
+          const list = await getEmailList(id);
+          return list ? id : null;
+        } catch (error) {
+          console.error(`Error validating list ${id}:`, error);
+          return null;
+        }
+      });
+
+      const validatedIds = await Promise.all(listPromises);
+      validListIds = validatedIds.filter((id): id is string => id !== null);
+
+      console.log(
+        `Found ${validListIds.length} valid lists out of ${data.list_ids.length} requested`
+      );
+    }
+
     // Validate contact IDs if provided - but don't store full contact objects
     let validContactIds: string[] = [];
     if (data.contact_ids && data.contact_ids.length > 0) {
@@ -496,27 +783,21 @@ export async function createMarketingCampaign(
       console.log(
         `Found ${validContactIds.length} valid contacts out of ${data.contact_ids.length} requested`
       );
-
-      // Only validate if we specifically requested contacts but found none
-      if (validContactIds.length === 0 && data.contact_ids.length > 0) {
-        throw new Error(
-          "None of the selected contacts could be found or are accessible"
-        );
-      }
     }
 
-    // Validate that we have targets (either contacts or tags)
+    // Validate that we have targets (lists, contacts, or tags)
+    const hasLists = validListIds.length > 0;
     const hasContacts = validContactIds.length > 0;
     const hasTags = data.target_tags && data.target_tags.length > 0;
 
-    if (!hasContacts && !hasTags) {
+    if (!hasLists && !hasContacts && !hasTags) {
       throw new Error(
-        "No valid targets found - please select contacts or tags"
+        "No valid targets found - please select lists, contacts, or tags"
       );
     }
 
     console.log(
-      `Creating campaign with ${validContactIds.length} contacts and ${
+      `Creating campaign with ${validListIds.length} lists, ${validContactIds.length} contacts and ${
         data.target_tags?.length || 0
       } tags`
     );
@@ -527,6 +808,7 @@ export async function createMarketingCampaign(
       metadata: {
         name: data.name,
         template: data.template_id, // Changed: store template ID in 'template' field
+        target_lists: validListIds, // NEW: Store list IDs
         target_contacts: validContactIds, // Store only IDs in target_contacts field
         target_tags: data.target_tags || [],
         status: {
@@ -635,6 +917,8 @@ export async function updateMarketingCampaign(
     if (data.name !== undefined) metadataUpdates.name = data.name;
     if (data.template_id !== undefined)
       metadataUpdates.template = data.template_id; // Changed: use 'template' field
+    if (data.list_ids !== undefined)
+      metadataUpdates.target_lists = data.list_ids; // NEW: Store list IDs
     if (data.target_tags !== undefined)
       metadataUpdates.target_tags = data.target_tags;
     if (data.send_date !== undefined)
@@ -702,6 +986,67 @@ export async function deleteMarketingCampaign(id: string): Promise<void> {
 // Add alias function for deleteEmailCampaign
 export async function deleteEmailCampaign(id: string): Promise<void> {
   return deleteMarketingCampaign(id);
+}
+
+// Get all contacts that would be targeted by a campaign
+export async function getCampaignTargetContacts(campaign: MarketingCampaign): Promise<EmailContact[]> {
+  try {
+    const allContacts: EmailContact[] = [];
+    const addedContactIds = new Set<string>();
+
+    // Add contacts from target lists
+    if (campaign.metadata.target_lists && campaign.metadata.target_lists.length > 0) {
+      for (const listRef of campaign.metadata.target_lists) {
+        const listId = typeof listRef === 'string' ? listRef : listRef.id;
+        const listContacts = await getContactsByListId(listId);
+        
+        for (const contact of listContacts) {
+          if (!addedContactIds.has(contact.id) && contact.metadata.status.value === 'Active') {
+            allContacts.push(contact);
+            addedContactIds.add(contact.id);
+          }
+        }
+      }
+    }
+
+    // Add individual target contacts
+    if (campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0) {
+      for (const contactId of campaign.metadata.target_contacts) {
+        if (!addedContactIds.has(contactId)) {
+          try {
+            const contact = await getEmailContact(contactId);
+            if (contact && contact.metadata.status.value === 'Active') {
+              allContacts.push(contact);
+              addedContactIds.add(contactId);
+            }
+          } catch (error) {
+            console.error(`Error fetching contact ${contactId}:`, error);
+          }
+        }
+      }
+    }
+
+    // Add contacts with matching tags
+    if (campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0) {
+      // This is a simplified implementation - in a real system you'd want more efficient querying
+      const { contacts: allContactsResult } = await getEmailContacts({ limit: 1000 });
+      
+      for (const contact of allContactsResult) {
+        if (!addedContactIds.has(contact.id) && 
+            contact.metadata.status.value === 'Active' &&
+            contact.metadata.tags &&
+            campaign.metadata.target_tags.some(tag => contact.metadata.tags?.includes(tag))) {
+          allContacts.push(contact);
+          addedContactIds.add(contact.id);
+        }
+      }
+    }
+
+    return allContacts;
+  } catch (error) {
+    console.error("Error getting campaign target contacts:", error);
+    throw new Error("Failed to get campaign target contacts");
+  }
 }
 
 // Settings

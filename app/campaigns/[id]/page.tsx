@@ -4,6 +4,7 @@ import {
   getEmailCampaign,
   getEmailTemplates,
   getEmailContacts,
+  getEmailLists,
   getEmailTemplate,
 } from "@/lib/cosmic";
 import EditCampaignForm from "@/components/EditCampaignForm";
@@ -22,6 +23,7 @@ import {
   Send,
   FileText,
   Trash2,
+  List,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -37,10 +39,11 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
   const { id } = await params;
 
   // Fetch campaign with all related data
-  const [campaign, templates, contactsResult] = await Promise.all([
+  const [campaign, templates, contactsResult, lists] = await Promise.all([
     getEmailCampaign(id),
     getEmailTemplates(),
     getEmailContacts({ limit: 1000 }),
+    getEmailLists(),
   ]);
 
   const contacts = contactsResult.contacts;
@@ -123,20 +126,26 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
   };
 
   const getRecipientCount = () => {
+    const listCount = campaign.metadata.target_lists?.length || 0;
     const contactCount = campaign.metadata.target_contacts?.length || 0;
     const tagCount = campaign.metadata.target_tags?.length || 0;
 
-    if (contactCount > 0 && tagCount > 0) {
-      return `${contactCount} contacts + ${tagCount} tag${
-        tagCount === 1 ? "" : "s"
-      }`;
-    } else if (contactCount > 0) {
-      return `${contactCount} contact${contactCount === 1 ? "" : "s"}`;
-    } else if (tagCount > 0) {
-      return `Contacts with ${tagCount} tag${tagCount === 1 ? "" : "s"}`;
-    } else {
+    const parts = [];
+    if (listCount > 0) {
+      parts.push(`${listCount} list${listCount === 1 ? '' : 's'}`);
+    }
+    if (contactCount > 0) {
+      parts.push(`${contactCount} contact${contactCount === 1 ? '' : 's'}`);
+    }
+    if (tagCount > 0) {
+      parts.push(`${tagCount} tag${tagCount === 1 ? '' : 's'}`);
+    }
+
+    if (parts.length === 0) {
       return "0 recipients";
     }
+
+    return parts.join(' + ');
   };
 
   return (
@@ -209,6 +218,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
               campaign={campaign}
               templates={templates}
               contacts={contacts}
+              lists={lists}
             />
 
             {/* Template Preview Section */}

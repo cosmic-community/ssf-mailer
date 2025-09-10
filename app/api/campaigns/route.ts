@@ -41,12 +41,13 @@ export async function POST(request: NextRequest) {
     }
     
     // Validate that at least one target is selected
+    const hasLists = data.list_ids && data.list_ids.length > 0
     const hasContacts = data.contact_ids && data.contact_ids.length > 0
     const hasTags = data.target_tags && data.target_tags.length > 0
     
-    if (!hasContacts && !hasTags) {
+    if (!hasLists && !hasContacts && !hasTags) {
       return NextResponse.json(
-        { error: 'Please select at least one contact or tag for this campaign' },
+        { error: 'Please select at least one list, contact, or tag for this campaign' },
         { status: 400 }
       )
     }

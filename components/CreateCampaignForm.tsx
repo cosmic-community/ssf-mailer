@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { EmailTemplate, EmailContact } from '@/types'
+import { EmailTemplate, EmailContact, EmailList } from '@/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
@@ -10,9 +10,10 @@ import ToastContainer from '@/components/ToastContainer'
 interface CreateCampaignFormProps {
   templates: EmailTemplate[]
   contacts: EmailContact[]
+  lists: EmailList[]
 }
 
-export default function CreateCampaignForm({ templates, contacts }: CreateCampaignFormProps) {
+export default function CreateCampaignForm({ templates, contacts, lists }: CreateCampaignFormProps) {
   const router = useRouter()
   const { toasts, addToast, removeToast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
@@ -21,7 +22,8 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
   const [formData, setFormData] = useState({
     name: '',
     template_id: '',
-    target_type: 'contacts' as 'contacts' | 'tags',
+    target_type: 'lists' as 'lists' | 'contacts' | 'tags',
+    list_ids: [] as string[],
     contact_ids: [] as string[],
     target_tags: [] as string[],
     send_date: '',
@@ -31,6 +33,11 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
   // Filter out unsubscribed contacts
   const activeContacts = contacts.filter(contact => 
     contact.metadata?.status?.value !== 'Unsubscribed'
+  )
+
+  // Filter out inactive lists
+  const activeLists = lists.filter(list => 
+    list.metadata?.active !== false
   )
 
   // Get unique tags from active contacts only
@@ -67,13 +74,17 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
     }
 
     // Validate that at least one target is selected
+    const hasLists = formData.target_type === 'lists' && formData.list_ids.length > 0
     const hasContacts = formData.target_type === 'contacts' && formData.contact_ids.length > 0
     const hasTags = formData.target_type === 'tags' && formData.target_tags.length > 0
     
-    if (!hasContacts && !hasTags) {
-      setError(formData.target_type === 'contacts' 
-        ? 'Please select at least one contact' 
-        : 'Please select at least one tag')
+    if (!hasLists && !hasContacts && !hasTags) {
+      const targetTypeMap = {
+        'lists': 'Please select at least one list',
+        'contacts': 'Please select at least one contact',
+        'tags': 'Please select at least one tag'
+      }
+      setError(targetTypeMap[formData.target_type])
       setIsLoading(false)
       scrollToTop()
       return
@@ -98,6 +109,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
         body: JSON.stringify({
           name: formData.name.trim(),
           template_id: formData.template_id,
+          list_ids: formData.target_type === 'lists' ? formData.list_ids : [],
           contact_ids: formData.target_type === 'contacts' ? formData.contact_ids : [],
           target_tags: formData.target_type === 'tags' ? formData.target_tags : [],
           send_date: formData.schedule_type === 'scheduled' ? formData.send_date : '',
@@ -158,6 +170,21 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
     }
   }
 
+  const handleListToggle = (listId: string) => {
+    console.log('Toggling list:', listId)
+    setFormData(prev => {
+      const newListIds = prev.list_ids.includes(listId)
+        ? prev.list_ids.filter(id => id !== listId)
+        : [...prev.list_ids, listId]
+      
+      console.log('Updated list_ids:', newListIds)
+      return {
+        ...prev,
+        list_ids: newListIds
+      }
+    })
+  }
+
   const handleContactToggle = (contactId: string) => {
     console.log('Toggling contact:', contactId)
     setFormData(prev => {
@@ -180,6 +207,14 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
       target_tags: prev.target_tags.includes(tag)
         ? prev.target_tags.filter(t => t !== tag)
         : [...prev.target_tags, tag]
+    }))
+  }
+
+  const handleSelectAllLists = () => {
+    const allActiveIds = activeLists.map(list => list.id)
+    setFormData(prev => ({
+      ...prev,
+      list_ids: prev.list_ids.length === allActiveIds.length ? [] : allActiveIds
     }))
   }
 
@@ -287,9 +322,21 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                 <input
                   type="radio"
                   name="target_type"
+                  value="lists"
+                  checked={formData.target_type === 'lists'}
+                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
+                  className="form-radio"
+                  disabled={isLoading}
+                />
+                <span className="ml-2 text-sm text-gray-700">Select lists (recommended for large audiences)</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="radio"
+                  name="target_type"
                   value="contacts"
                   checked={formData.target_type === 'contacts'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
                   className="form-radio"
                   disabled={isLoading}
                 />
@@ -301,7 +348,7 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
                   name="target_type"
                   value="tags"
                   checked={formData.target_type === 'tags'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                  onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
                   className="form-radio"
                   disabled={isLoading}
                 />
@@ -309,6 +356,73 @@ export default function CreateCampaignForm({ templates, contacts }: CreateCampai
               </label>
             </div>
           </div>
+
+          {/* List Selection */}
+          {formData.target_type === 'lists' && (
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  Select Lists ({formData.list_ids.length} selected)
+                </label>
+                {activeLists.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSelectAllLists}
+                    className="text-sm text-primary-600 hover:text-primary-700"
+                    disabled={isLoading}
+                  >
+                    {formData.list_ids.length === activeLists.length ? 'Deselect All' : 'Select All'}
+                  </button>
+                )}
+              </div>
+              
+              {lists.length > activeLists.length && (
+                <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                  <p className="text-sm text-blue-700">
+                    <strong>Note:</strong> {lists.length - activeLists.length} inactive list{lists.length - activeLists.length !== 1 ? 's are' : ' is'} hidden from selection.
+                  </p>
+                </div>
+              )}
+              
+              <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
+                {activeLists.length === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    {lists.length === 0 ? (
+                      <>No lists available. <a href="/lists/new" className="text-primary-600 hover:text-primary-700">Create lists first</a>.</>
+                    ) : (
+                      <>No active lists available. All lists are inactive.</>
+                    )}
+                  </p>
+                ) : (
+                  activeLists.map((list) => (
+                    <label key={list.id} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={formData.list_ids.includes(list.id)}
+                        onChange={() => handleListToggle(list.id)}
+                        className="form-checkbox"
+                        disabled={isLoading}
+                      />
+                      <span className="ml-2 text-sm text-gray-700">
+                        <span className="font-medium">{list.metadata?.name}</span>
+                        {list.metadata?.description && (
+                          <span className="text-gray-500"> - {list.metadata.description}</span>
+                        )}
+                        <span className="ml-2 inline-flex px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                          {list.metadata?.list_type?.value || 'General'}
+                        </span>
+                        {list.metadata?.total_contacts !== undefined && (
+                          <span className="ml-1 text-xs text-gray-500">
+                            ({list.metadata.total_contacts} contacts)
+                          </span>
+                        )}
+                      </span>
+                    </label>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Contact Selection */}
           {formData.target_type === 'contacts' && (
