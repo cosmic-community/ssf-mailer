@@ -26,7 +26,7 @@ import {
   X,
   List,
 } from "lucide-react";
-import { EmailContact } from "@/types";
+import { EmailContact, EmailList } from "@/types";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import EditContactModal from "@/components/EditContactModal";
 import BulkActionsModal from "@/components/BulkActionsModal";
@@ -59,12 +59,34 @@ export default function ContactsList({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [availableLists, setAvailableLists] = useState<EmailList[]>([]);
 
   // Bulk selection state
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
   const [showListManagement, setShowListManagement] = useState(false);
+
+  // Fetch available lists for filter display
+  useEffect(() => {
+    fetchLists();
+  }, []);
+
+  const fetchLists = async () => {
+    try {
+      const response = await fetch('/api/lists');
+      
+      if (response.ok) {
+        const result = await response.json();
+        setAvailableLists(result.data || []);
+      }
+    } catch (error) {
+      console.error('Error fetching lists:', error);
+    }
+  };
+
+  // Find the current list name for display
+  const currentListName = availableLists.find(list => list.id === listFilter)?.metadata.name || "List Filter Active";
 
   // Pagination handlers
   const totalPages = Math.ceil(total / itemsPerPage);
@@ -477,7 +499,7 @@ export default function ContactsList({
               )}
               {listFilter && listFilter !== "all" && (
                 <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                  <span>List Filter Active</span>
+                  <span>{currentListName}</span>
                   <button
                     onClick={() => setListFilter("")}
                     className="hover:bg-purple-200 rounded-full p-0.5"
@@ -754,7 +776,7 @@ export default function ContactsList({
               )}
               {listFilter && listFilter !== "all" && (
                 <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                  <span>List Filter Active</span>
+                  <span>{currentListName}</span>
                   <button
                     onClick={() => setListFilter("")}
                     className="hover:bg-purple-200 rounded-full p-0.5"
