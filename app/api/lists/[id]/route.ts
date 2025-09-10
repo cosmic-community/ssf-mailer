@@ -1,87 +1,90 @@
+// app/api/lists/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { updateEmailList, deleteEmailList, getEmailList } from '@/lib/cosmic'
+import { getEmailList, updateEmailList, deleteEmailList } from '@/lib/cosmic'
+import { revalidatePath } from 'next/cache'
 
-interface RouteParams {
-  params: Promise<{ id: string }>
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
     const list = await getEmailList(id)
     
     if (!list) {
       return NextResponse.json(
-        { error: 'List not found' },
+        { error: 'Email list not found' },
         { status: 404 }
       )
     }
 
-    return NextResponse.json({
-      success: true,
-      data: list
-    })
+    return NextResponse.json({ success: true, data: list })
   } catch (error) {
-    console.error('List fetch error:', error)
+    console.error('Error fetching email list:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch list' },
+      { error: 'Failed to fetch email list' },
       { status: 500 }
     )
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
-    const data = await request.json()
+    const body = await request.json()
     
-    // Validate required fields for updates
-    if (data.name && !data.name.trim()) {
+    // Validate required fields
+    if (body.name !== undefined && !body.name.trim()) {
       return NextResponse.json(
-        { error: 'List name is required' },
+        { error: 'List name cannot be empty' },
         { status: 400 }
       )
     }
 
-    const updatedList = await updateEmailList(id, data)
-
-    return NextResponse.json({
-      success: true,
-      message: 'List updated successfully',
-      data: updatedList
+    // Update the list
+    const result = await updateEmailList(id, {
+      name: body.name,
+      description: body.description,
+      list_type: body.list_type,
+      active: body.active
     })
+
+    // Revalidate relevant pages
+    revalidatePath('/contacts')
+    revalidatePath('/campaigns')
+
+    return NextResponse.json({ success: true, data: result })
   } catch (error) {
-    console.error('List update error:', error)
+    console.error('Error updating email list:', error)
     return NextResponse.json(
-      { error: 'Failed to update list' },
+      { error: 'Failed to update email list' },
       { status: 500 }
     )
   }
 }
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const { id } = await params
     
-    // Check if list exists
-    const list = await getEmailList(id)
-    if (!list) {
-      return NextResponse.json(
-        { error: 'List not found' },
-        { status: 404 }
-      )
-    }
-
+    // Delete the list
     await deleteEmailList(id)
 
-    return NextResponse.json({
-      success: true,
-      message: 'List deleted successfully'
-    })
+    // Revalidate relevant pages
+    revalidatePath('/contacts')
+    revalidatePath('/campaigns')
+
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('List deletion error:', error)
+    console.error('Error deleting email list:', error)
     return NextResponse.json(
-      { error: 'Failed to delete list' },
+      { error: 'Failed to delete email list' },
       { status: 500 }
     )
   }

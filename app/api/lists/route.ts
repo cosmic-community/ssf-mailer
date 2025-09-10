@@ -1,19 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createEmailList, getEmailLists } from '@/lib/cosmic'
-import { CreateListData } from '@/types'
+import { revalidatePath } from 'next/cache'
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const lists = await getEmailLists()
-    
-    return NextResponse.json({
-      success: true,
-      data: lists
-    })
+    return NextResponse.json({ success: true, data: lists })
   } catch (error) {
-    console.error('Lists fetch error:', error)
+    console.error('Error fetching email lists:', error)
     return NextResponse.json(
-      { error: 'Failed to fetch lists' },
+      { error: 'Failed to fetch email lists' },
       { status: 500 }
     )
   }
@@ -21,43 +17,34 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const data: CreateListData = await request.json()
-    
-    console.log('Creating list with data:', data)
+    const body = await request.json()
     
     // Validate required fields
-    if (!data.name || !data.name.trim()) {
+    if (!body.name) {
       return NextResponse.json(
         { error: 'List name is required' },
         { status: 400 }
       )
     }
-    
-    if (!data.list_type) {
-      return NextResponse.json(
-        { error: 'List type is required' },
-        { status: 400 }
-      )
-    }
-    
-    console.log('Validation passed, creating list...')
-    
+
     // Create the list
-    const list = await createEmailList(data)
-    
-    console.log('List created successfully:', list.id)
-    
-    return NextResponse.json({
-      success: true,
-      message: 'List created successfully',
-      data: list
+    const result = await createEmailList({
+      name: body.name,
+      description: body.description || '',
+      list_type: body.list_type || 'General',
+      active: body.active !== false
     })
-  } catch (error: any) {
-    console.error('List creation error:', error)
-    
-    return NextResponse.json({
-      error: 'Failed to create list',
-      details: error.message || 'Unknown error occurred'
-    }, { status: 500 })
+
+    // Revalidate the lists and contacts pages
+    revalidatePath('/contacts')
+    revalidatePath('/campaigns')
+
+    return NextResponse.json({ success: true, data: result })
+  } catch (error) {
+    console.error('Error creating email list:', error)
+    return NextResponse.json(
+      { error: 'Failed to create email list' },
+      { status: 500 }
+    )
   }
 }

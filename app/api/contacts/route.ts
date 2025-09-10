@@ -20,6 +20,7 @@ export async function POST(request: NextRequest) {
       last_name: body.last_name || '',
       email: body.email,
       status: body.status || 'Active',
+      list_ids: body.list_ids || [], // Include list_ids
       tags: body.tags || [],
       subscribe_date: body.subscribe_date || new Date().toISOString().split('T')[0],
       notes: body.notes || ''

@@ -1,46 +1,48 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { bulkUpdateContactLists } from '@/lib/cosmic'
-import { BulkListUpdateData } from '@/types'
+import { revalidatePath } from 'next/cache'
 
-export async function POST(request: NextRequest) {
+export async function PUT(request: NextRequest) {
   try {
-    const data: BulkListUpdateData = await request.json()
-    
-    console.log('Bulk updating contact lists with data:', data)
+    const body = await request.json()
     
     // Validate required fields
-    if (!data.contact_ids || data.contact_ids.length === 0) {
+    if (!body.contact_ids || !Array.isArray(body.contact_ids) || body.contact_ids.length === 0) {
       return NextResponse.json(
-        { error: 'At least one contact must be selected' },
+        { error: 'Contact IDs are required' },
         { status: 400 }
       )
     }
-    
-    if (!data.list_ids_to_add && !data.list_ids_to_remove) {
+
+    if (!body.list_ids_to_add && !body.list_ids_to_remove) {
       return NextResponse.json(
-        { error: 'At least one list operation must be specified' },
+        { error: 'At least one list operation is required' },
         { status: 400 }
       )
     }
-    
-    console.log('Validation passed, updating contacts...')
-    
+
     // Perform bulk update
-    const result = await bulkUpdateContactLists(data)
-    
-    console.log('Bulk update completed:', result)
-    
-    return NextResponse.json({
-      success: true,
-      message: `Updated ${result.updated} contacts successfully`,
-      data: result
+    const result = await bulkUpdateContactLists({
+      contact_ids: body.contact_ids,
+      list_ids_to_add: body.list_ids_to_add || [],
+      list_ids_to_remove: body.list_ids_to_remove || []
     })
-  } catch (error: any) {
-    console.error('Bulk list update error:', error)
-    
-    return NextResponse.json({
-      error: 'Failed to update contact lists',
-      details: error.message || 'Unknown error occurred'
-    }, { status: 500 })
+
+    // Revalidate the contacts page
+    revalidatePath('/contacts')
+
+    return NextResponse.json({ 
+      success: true, 
+      data: {
+        updated: result.updated,
+        errors: result.errors
+      }
+    })
+  } catch (error) {
+    console.error('Error updating contact lists:', error)
+    return NextResponse.json(
+      { error: 'Failed to update contact lists' },
+      { status: 500 }
+    )
   }
 }

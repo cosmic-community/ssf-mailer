@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger } from '@/components/ui/dialog'
 import { Pencil, Loader2 } from 'lucide-react'
-import { EmailContact } from '@/types'
+import { EmailContact, EmailList } from '@/types'
 
 interface EditContactModalProps {
   contact: EmailContact
@@ -21,28 +22,62 @@ export default function EditContactModal({ contact, onContactUpdated, children }
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [availableLists, setAvailableLists] = useState<EmailList[]>([])
+  const [loadingLists, setLoadingLists] = useState(false)
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     email: '',
     status: 'Active' as 'Active' | 'Unsubscribed' | 'Bounced',
     tags: '',
-    notes: ''
+    notes: '',
+    list_ids: [] as string[]
   })
+
+  // Fetch available lists when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      fetchLists()
+    }
+  }, [isOpen])
 
   // Initialize form data when modal opens or contact changes
   useEffect(() => {
     if (contact) {
+      // Extract list IDs from contact's lists
+      const listIds = contact.metadata.lists 
+        ? contact.metadata.lists.map(list => 
+            typeof list === 'string' ? list : list.id
+          )
+        : []
+
       setFormData({
         first_name: contact.metadata.first_name || '',
         last_name: contact.metadata.last_name || '',
         email: contact.metadata.email || '',
         status: contact.metadata.status.value || 'Active',
         tags: contact.metadata.tags ? contact.metadata.tags.join(', ') : '',
-        notes: contact.metadata.notes || ''
+        notes: contact.metadata.notes || '',
+        list_ids: listIds
       })
     }
   }, [contact, isOpen])
+
+  const fetchLists = async () => {
+    try {
+      setLoadingLists(true)
+      const response = await fetch('/api/lists')
+      
+      if (response.ok) {
+        const result = await response.json()
+        setAvailableLists(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching lists:', error)
+    } finally {
+      setLoadingLists(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,6 +91,7 @@ export default function EditContactModal({ contact, onContactUpdated, children }
           last_name: formData.last_name,
           email: formData.email,
           status: formData.status,
+          lists: formData.list_ids, // Send as list IDs
           tags: formData.tags ? formData.tags.split(',').map(tag => tag.trim()).filter(tag => tag) : [],
           notes: formData.notes
         }
@@ -97,6 +133,15 @@ export default function EditContactModal({ contact, onContactUpdated, children }
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
+  const handleListToggle = (listId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      list_ids: checked
+        ? [...prev.list_ids, listId]
+        : prev.list_ids.filter(id => id !== listId)
+    }))
+  }
+
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -110,7 +155,7 @@ export default function EditContactModal({ contact, onContactUpdated, children }
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Contact</DialogTitle>
         </DialogHeader>
@@ -162,6 +207,48 @@ export default function EditContactModal({ contact, onContactUpdated, children }
                 <SelectItem value="Bounced">Bounced</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          {/* Email Lists Section */}
+          <div className="space-y-3">
+            <Label>Email Lists</Label>
+            {loadingLists ? (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                <span className="text-sm text-gray-600">Loading lists...</span>
+              </div>
+            ) : availableLists.length === 0 ? (
+              <p className="text-sm text-gray-600">No email lists available</p>
+            ) : (
+              <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-3">
+                {availableLists.map(list => (
+                  <div key={list.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={list.id}
+                      checked={formData.list_ids.includes(list.id)}
+                      onCheckedChange={(checked) => handleListToggle(list.id, checked as boolean)}
+                      disabled={isSubmitting}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <Label 
+                        htmlFor={list.id}
+                        className="text-sm font-normal cursor-pointer"
+                      >
+                        {list.metadata.name}
+                      </Label>
+                      <div className="flex items-center space-x-2 mt-1">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                          {list.metadata.list_type.value}
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          {list.metadata.total_contacts || 0} contacts
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="space-y-2">

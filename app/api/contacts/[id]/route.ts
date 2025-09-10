@@ -24,6 +24,7 @@ export async function PUT(
     if (body.metadata.first_name) metadataUpdate.first_name = body.metadata.first_name
     if (body.metadata.last_name !== undefined) metadataUpdate.last_name = body.metadata.last_name
     if (body.metadata.email) metadataUpdate.email = body.metadata.email
+    if (body.metadata.lists !== undefined) metadataUpdate.lists = body.metadata.lists // Handle lists
     if (body.metadata.tags !== undefined) metadataUpdate.tags = body.metadata.tags
     if (body.metadata.subscribe_date) metadataUpdate.subscribe_date = body.metadata.subscribe_date
     if (body.metadata.notes !== undefined) metadataUpdate.notes = body.metadata.notes
