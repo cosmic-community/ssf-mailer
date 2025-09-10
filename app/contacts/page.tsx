@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, Upload } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
+import CreateListModal from "@/components/CreateListModal";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = "force-dynamic";
@@ -48,7 +49,8 @@ export default async function ContactsPage({
                 Manage your subscriber list ({total.toLocaleString()} total)
               </p>
             </div>
-            <div className="flex space-x-4">
+            <div className="flex space-x-3">
+              <CreateListModal />
               <CSVUploadModal />
               <CreateContactModal />
             </div>

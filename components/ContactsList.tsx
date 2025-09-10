@@ -24,11 +24,13 @@ import {
   Users,
   AlertTriangle,
   X,
+  List,
 } from "lucide-react";
 import { EmailContact } from "@/types";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import EditContactModal from "@/components/EditContactModal";
 import BulkActionsModal from "@/components/BulkActionsModal";
+import ListManagementModal from "@/components/ListManagementModal";
 import Pagination from "@/components/ui/pagination";
 
 interface ContactsListProps {
@@ -59,6 +61,7 @@ export default function ContactsList({
   const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
   const [bulkActionLoading, setBulkActionLoading] = useState(false);
   const [showBulkActions, setShowBulkActions] = useState(false);
+  const [showListManagement, setShowListManagement] = useState(false);
 
   // Pagination handlers
   const totalPages = Math.ceil(total / itemsPerPage);
@@ -268,6 +271,47 @@ export default function ContactsList({
     }
   };
 
+  // List management handlers
+  const handleListManagement = async (updates: {
+    list_ids_to_add: string[];
+    list_ids_to_remove: string[];
+  }) => {
+    setBulkActionLoading(true);
+    try {
+      const response = await fetch("/api/contacts/bulk-lists", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contact_ids: selectedContacts,
+          ...updates,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update contact lists");
+      }
+
+      const result = await response.json();
+      console.log("List management result:", result);
+
+      if (result.data.errors.length > 0) {
+        console.warn("Some contacts failed to update:", result.data.errors);
+      }
+
+      setSelectedContacts([]);
+      setShowListManagement(false);
+      router.refresh();
+    } catch (error) {
+      console.error("Error updating contact lists:", error);
+      alert(
+        error instanceof Error ? error.message : "Failed to update contact lists"
+      );
+    } finally {
+      setBulkActionLoading(false);
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case "Active":
@@ -284,6 +328,11 @@ export default function ContactsList({
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
+
+  // Get selected contacts for list management
+  const selectedContactObjects = filteredContacts.filter(contact =>
+    selectedContacts.includes(contact.id)
+  );
 
   // Only show "No contacts yet" if there are truly no contacts and no active search/filters
   if (
@@ -421,6 +470,16 @@ export default function ContactsList({
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setShowListManagement(true)}
+                disabled={bulkActionLoading}
+                className="bg-white"
+              >
+                <List className="h-4 w-4 mr-2" />
+                Manage Lists
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setShowBulkActions(true)}
                 disabled={bulkActionLoading}
                 className="bg-white"
@@ -495,6 +554,9 @@ export default function ContactsList({
                   Status
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Lists
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tags
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -536,7 +598,28 @@ export default function ContactsList({
                     </span>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-wrap gap-1">
+                    <div className="flex flex-wrap gap-1 max-w-32">
+                      {contact.metadata.lists &&
+                      contact.metadata.lists.length > 0 ? (
+                        contact.metadata.lists.map((list, index) => {
+                          const listName = typeof list === 'string' ? list : list.metadata?.name || list.title;
+                          return (
+                            <Badge
+                              key={index}
+                              variant="outline"
+                              className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                            >
+                              {listName}
+                            </Badge>
+                          );
+                        })
+                      ) : (
+                        <span className="text-gray-400 text-sm">No lists</span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-wrap gap-1 max-w-32">
                       {contact.metadata.tags &&
                       contact.metadata.tags.length > 0 ? (
                         contact.metadata.tags.map((tag, index) => (
@@ -657,6 +740,15 @@ export default function ContactsList({
         onClose={() => setShowBulkActions(false)}
         selectedCount={selectedContacts.length}
         onUpdate={handleBulkUpdate}
+        isLoading={bulkActionLoading}
+      />
+
+      {/* List Management Modal */}
+      <ListManagementModal
+        isOpen={showListManagement}
+        onClose={() => setShowListManagement(false)}
+        selectedContacts={selectedContactObjects}
+        onUpdate={handleListManagement}
         isLoading={bulkActionLoading}
       />
     </div>

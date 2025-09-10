@@ -13,7 +13,23 @@ interface CosmicObject {
 // Template type union
 export type TemplateType = 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
 
-// Email Contact interface
+// Email List interface
+export interface EmailList extends CosmicObject {
+  type: 'email-lists';
+  metadata: {
+    name: string;
+    description?: string;
+    list_type: {
+      key: string;
+      value: 'General' | 'Newsletter' | 'Promotional' | 'Transactional' | 'VIP';
+    };
+    active?: boolean;
+    created_date?: string;
+    total_contacts?: number;
+  };
+}
+
+// Email Contact interface - Updated to include lists
 export interface EmailContact extends CosmicObject {
   type: 'email-contacts';
   metadata: {
@@ -24,6 +40,7 @@ export interface EmailContact extends CosmicObject {
       key: string;
       value: 'Active' | 'Unsubscribed' | 'Bounced';
     };
+    lists?: EmailList[] | string[]; // Can be full objects or IDs
     tags?: string[] | null;
     subscribe_date?: string;
     notes?: string | null;
@@ -86,13 +103,14 @@ export interface CampaignProgress {
   last_updated?: string;
 }
 
-// Marketing Campaign interface - Updated to use template instead of template_id
+// Marketing Campaign interface - Updated to include lists
 export interface MarketingCampaign extends CosmicObject {
   type: 'marketing-campaigns';
   metadata: {
     name: string;
     template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
+    target_lists?: EmailList[] | string[]; // NEW: target lists for sending
     target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
     status: {
@@ -112,6 +130,7 @@ export interface EmailCampaign extends CosmicObject {
     name: string;
     template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
     template_snapshot?: TemplateSnapshot;
+    target_lists?: EmailList[] | string[];
     target_contacts?: string[];
     target_tags?: string[];
     status: {
@@ -174,9 +193,17 @@ export interface CreateContactData {
   last_name?: string;
   email: string;
   status: 'Active' | 'Unsubscribed' | 'Bounced';
+  list_ids?: string[]; // NEW: for list membership
   tags?: string[];
   subscribe_date?: string;
   notes?: string;
+}
+
+export interface CreateListData {
+  name: string;
+  description?: string;
+  list_type: 'General' | 'Newsletter' | 'Promotional' | 'Transactional' | 'VIP';
+  active?: boolean;
 }
 
 export interface CreateTemplateData {
@@ -190,6 +217,7 @@ export interface CreateTemplateData {
 export interface CreateCampaignData {
   name: string;
   template_id: string; // Still use template_id in form data for clarity
+  list_ids?: string[]; // NEW: target lists
   contact_ids?: string[];
   target_tags?: string[];
   send_date?: string;
@@ -214,7 +242,18 @@ export interface UpdateSettingsData {
   test_emails?: string; // Changed from string[] to string for comma-separated format
 }
 
+// List management data types
+export interface BulkListUpdateData {
+  contact_ids: string[];
+  list_ids_to_add: string[];
+  list_ids_to_remove: string[];
+}
+
 // Type guards
+export function isEmailList(obj: CosmicObject): obj is EmailList {
+  return obj.type === 'email-lists';
+}
+
 export function isEmailContact(obj: CosmicObject): obj is EmailContact {
   return obj.type === 'email-contacts';
 }
@@ -234,6 +273,7 @@ export function isSettings(obj: CosmicObject): obj is Settings {
 // Utility types
 export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
 export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
+export type CreateListFormData = Omit<EmailList, 'id' | 'created_at' | 'modified_at'>;
 export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;
 export type CreateCampaignFormData = Omit<MarketingCampaign, 'id' | 'created_at' | 'modified_at'>;
 export type CreateSettingsFormData = Omit<Settings, 'id' | 'created_at' | 'modified_at'>;

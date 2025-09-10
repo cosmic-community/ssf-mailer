@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { MarketingCampaign, EmailTemplate, EmailContact } from '@/types'
+import { MarketingCampaign, EmailTemplate, EmailContact, EmailList } from '@/types'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/useToast'
 
@@ -10,9 +10,10 @@ interface EditCampaignFormProps {
   campaign: MarketingCampaign
   templates: EmailTemplate[]
   contacts: EmailContact[]
+  lists: EmailList[]
 }
 
-export default function EditCampaignForm({ campaign, templates, contacts }: EditCampaignFormProps) {
+export default function EditCampaignForm({ campaign, templates, contacts, lists }: EditCampaignFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
@@ -29,6 +30,22 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     return ''
   }
 
+  // Get target list IDs from campaign metadata
+  const getTargetListIds = (): string[] => {
+    if (campaign.metadata?.target_lists && Array.isArray(campaign.metadata.target_lists)) {
+      return campaign.metadata.target_lists.map((list: any) => {
+        if (typeof list === 'object' && list !== null && 'id' in list) {
+          return list.id as string
+        }
+        if (typeof list === 'string') {
+          return list
+        }
+        return ''
+      }).filter((id: string) => id !== '')
+    }
+    return []
+  }
+
   // Get target contact IDs from campaign metadata - handle both full objects and IDs with proper typing
   const getTargetContactIds = (): string[] => {
     if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
@@ -43,14 +60,26 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
         return ''
       }).filter((id: string) => id !== '')
     }
-    
     return []
+  }
+
+  // Determine initial target type based on campaign data
+  const getInitialTargetType = () => {
+    const listIds = getTargetListIds()
+    const contactIds = getTargetContactIds()
+    const tags = campaign.metadata?.target_tags || []
+
+    if (listIds.length > 0) return 'lists'
+    if (contactIds.length > 0) return 'contacts'
+    if (tags.length > 0) return 'tags'
+    return 'lists' // default
   }
   
   const [formData, setFormData] = useState({
     name: campaign.metadata?.name || '',
     template_id: getTemplateId(),
-    target_type: (getTargetContactIds().length > 0) ? 'contacts' as const : 'tags' as const,
+    target_type: getInitialTargetType() as 'lists' | 'contacts' | 'tags',
+    list_ids: getTargetListIds(),
     contact_ids: getTargetContactIds(),
     target_tags: campaign.metadata?.target_tags || [],
     send_date: campaign.metadata?.send_date || '',
@@ -58,12 +87,18 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
   })
 
   console.log('Campaign metadata:', campaign.metadata)
+  console.log('Target list IDs:', getTargetListIds())
   console.log('Target contact IDs:', getTargetContactIds())
   console.log('Form data initialized:', formData)
 
   // Filter out unsubscribed contacts
   const activeContacts = contacts.filter(contact => 
     contact.metadata?.status?.value !== 'Unsubscribed'
+  )
+
+  // Filter out inactive lists
+  const activeLists = lists.filter(list => 
+    list.metadata?.active !== false
   )
 
   // Get unique tags from active contacts only
@@ -89,6 +124,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
         body: JSON.stringify({
           name: formData.name,
           template_id: formData.template_id,
+          list_ids: formData.target_type === 'lists' ? formData.list_ids : [],
           contact_ids: formData.target_type === 'contacts' ? formData.contact_ids : [],
           target_tags: formData.target_type === 'tags' ? formData.target_tags : [],
           send_date: formData.schedule_type === 'scheduled' ? formData.send_date : '',
@@ -109,6 +145,15 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleListToggle = (listId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      list_ids: prev.list_ids.includes(listId)
+        ? prev.list_ids.filter(id => id !== listId)
+        : [...prev.list_ids, listId]
+    }))
   }
 
   const handleContactToggle = (contactId: string) => {
@@ -258,9 +303,21 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
               <input
                 type="radio"
                 name="target_type"
+                value="lists"
+                checked={formData.target_type === 'lists'}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
+                className="form-radio"
+                disabled={!canEdit}
+              />
+              <span className="ml-2 text-sm text-gray-700">Select lists (recommended for large audiences)</span>
+            </label>
+            <label className="flex items-center">
+              <input
+                type="radio"
+                name="target_type"
                 value="contacts"
                 checked={formData.target_type === 'contacts'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -272,7 +329,7 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                 name="target_type"
                 value="tags"
                 checked={formData.target_type === 'tags'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'contacts' | 'tags' }))}
+                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -280,6 +337,79 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
             </label>
           </div>
         </div>
+
+        {/* List Selection */}
+        {formData.target_type === 'lists' && (
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Select Lists ({formData.list_ids.length} selected)
+            </label>
+            {lists.length > activeLists.length && (
+              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <p className="text-sm text-blue-700">
+                  <strong>Note:</strong> {lists.length - activeLists.length} inactive list{lists.length - activeLists.length !== 1 ? 's are' : ' is'} hidden from selection.
+                </p>
+              </div>
+            )}
+            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
+              {activeLists.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  {lists.length === 0 ? (
+                    <>No lists available. <a href="/lists/new" className="text-primary-600 hover:text-primary-700">Create lists first</a>.</>
+                  ) : (
+                    <>No active lists available. All lists are inactive.</>
+                  )}
+                </p>
+              ) : (
+                activeLists.map((list) => (
+                  <label key={list.id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={formData.list_ids.includes(list.id)}
+                      onChange={() => handleListToggle(list.id)}
+                      className="form-checkbox"
+                      disabled={!canEdit}
+                    />
+                    <span className="ml-2 text-sm text-gray-700">
+                      <span className="font-medium">{list.metadata?.name}</span>
+                      {list.metadata?.description && (
+                        <span className="text-gray-500"> - {list.metadata.description}</span>
+                      )}
+                      <span className="ml-2 inline-flex px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                        {list.metadata?.list_type?.value || 'General'}
+                      </span>
+                      {list.metadata?.total_contacts !== undefined && (
+                        <span className="ml-1 text-xs text-gray-500">
+                          ({list.metadata.total_contacts} contacts)
+                        </span>
+                      )}
+                    </span>
+                  </label>
+                ))
+              )}
+            </div>
+            
+            {/* Show selected lists summary */}
+            {formData.list_ids.length > 0 && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-700">
+                  <strong>Selected Lists ({formData.list_ids.length}):</strong>
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {formData.list_ids.map(listId => {
+                    const list = activeLists.find(l => l.id === listId)
+                    if (!list) return null
+                    return (
+                      <span key={listId} className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                        {list.metadata?.name}
+                      </span>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Contact Selection */}
         {formData.target_type === 'contacts' && (
@@ -323,7 +453,6 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
                       )}
                       {contact.metadata?.status?.value === 'Bounced' && (
                         <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          Bounced
                         </span>
                       )}
                     </span>
@@ -477,7 +606,9 @@ export default function EditCampaignForm({ campaign, templates, contacts }: Edit
             <div>
               <p className="text-sm font-medium text-gray-700">Target Recipients:</p>
               <p className="text-sm text-gray-600 mt-1">
-                {formData.target_type === 'contacts' 
+                {formData.target_type === 'lists' 
+                  ? `${formData.list_ids.length} lists selected`
+                  : formData.target_type === 'contacts' 
                   ? `${formData.contact_ids.length} specific contacts`
                   : `${formData.target_tags.length} tags selected`
                 }

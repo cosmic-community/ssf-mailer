@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { Input } from '@/components/ui/input'
@@ -9,8 +9,10 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
+import { EmailList } from '@/types'
 
 interface ContactFormData {
   first_name: string;
@@ -30,6 +32,9 @@ export default function CreateContactForm() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedTags, setSelectedTags] = useState<string[]>([])
   const [selectedStatus, setSelectedStatus] = useState<'Active' | 'Unsubscribed' | 'Bounced'>('Active')
+  const [availableLists, setAvailableLists] = useState<EmailList[]>([])
+  const [selectedLists, setSelectedLists] = useState<string[]>([])
+  const [loadingLists, setLoadingLists] = useState(true)
   
   const { register, handleSubmit, formState: { errors }, setValue } = useForm<ContactFormData>({
     defaultValues: {
@@ -37,6 +42,27 @@ export default function CreateContactForm() {
       subscribe_date: new Date().toISOString().split('T')[0]
     }
   })
+
+  // Fetch available lists
+  useEffect(() => {
+    fetchLists()
+  }, [])
+
+  const fetchLists = async () => {
+    try {
+      setLoadingLists(true)
+      const response = await fetch('/api/lists')
+      
+      if (response.ok) {
+        const result = await response.json()
+        setAvailableLists(result.data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching lists:', error)
+    } finally {
+      setLoadingLists(false)
+    }
+  }
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -54,7 +80,8 @@ export default function CreateContactForm() {
         body: JSON.stringify({
           ...data,
           status: selectedStatus,
-          tags: selectedTags
+          tags: selectedTags,
+          list_ids: selectedLists // Include selected lists
         })
       })
 
@@ -91,6 +118,14 @@ export default function CreateContactForm() {
     const status = value as 'Active' | 'Unsubscribed' | 'Bounced'
     setSelectedStatus(status)
     setValue('status', status)
+  }
+
+  const handleListToggle = (listId: string) => {
+    setSelectedLists(prev => 
+      prev.includes(listId)
+        ? prev.filter(id => id !== listId)
+        : [...prev, listId]
+    )
   }
 
   return (
@@ -167,6 +202,47 @@ export default function CreateContactForm() {
               {...register('subscribe_date')}
             />
           </div>
+        </div>
+
+        {/* Email Lists */}
+        <div className="space-y-3">
+          <Label>Email Lists</Label>
+          {loadingLists ? (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              <span className="text-sm text-gray-600">Loading lists...</span>
+            </div>
+          ) : availableLists.length === 0 ? (
+            <p className="text-sm text-gray-600">No email lists available. Create a list first.</p>
+          ) : (
+            <div className="space-y-2 max-h-40 overflow-y-auto border rounded-lg p-3">
+              {availableLists.map(list => (
+                <div key={list.id} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={list.id}
+                    checked={selectedLists.includes(list.id)}
+                    onCheckedChange={() => handleListToggle(list.id)}
+                  />
+                  <div className="flex-1">
+                    <Label 
+                      htmlFor={list.id}
+                      className="text-sm font-normal cursor-pointer"
+                    >
+                      {list.metadata.name}
+                    </Label>
+                    <div className="flex items-center space-x-2 mt-1">
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-800">
+                        {list.metadata.list_type.value}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {list.metadata.total_contacts || 0} contacts
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tags */}
