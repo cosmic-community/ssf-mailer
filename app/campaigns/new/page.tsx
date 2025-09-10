@@ -1,16 +1,18 @@
-import Link from 'next/link'
-import { getEmailTemplates, getEmailContacts } from '@/lib/cosmic'
-import CreateCampaignForm from '@/components/CreateCampaignForm'
+import Link from "next/link";
+import { getEmailTemplates, getEmailContacts } from "@/lib/cosmic";
+import CreateCampaignForm from "@/components/CreateCampaignForm";
 
 // Force dynamic rendering
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export default async function NewCampaignPage() {
-  const [templates, contacts] = await Promise.all([
+  const [templates, contactsResult] = await Promise.all([
     getEmailTemplates(),
-    getEmailContacts()
-  ])
+    getEmailContacts({ limit: 1000 }), // Get up to 1000 contacts for campaign creation
+  ]);
+
+  const contacts = contactsResult.contacts;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -19,11 +21,18 @@ export default async function NewCampaignPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <Link href="/campaigns" className="text-primary-600 hover:text-primary-700 mb-2 inline-block">
+              <Link
+                href="/campaigns"
+                className="text-primary-600 hover:text-primary-700 mb-2 inline-block"
+              >
                 ← Back to Campaigns
               </Link>
-              <h1 className="text-3xl font-bold text-gray-900">Create New Campaign</h1>
-              <p className="text-gray-600 mt-1">Set up your email marketing campaign</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Create New Campaign
+              </h1>
+              <p className="text-gray-600 mt-1">
+                Set up your email marketing campaign
+              </p>
             </div>
           </div>
         </div>
@@ -34,5 +43,5 @@ export default async function NewCampaignPage() {
         <CreateCampaignForm templates={templates} contacts={contacts} />
       </main>
     </div>
-  )
+  );
 }
