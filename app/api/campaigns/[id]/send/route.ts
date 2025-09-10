@@ -37,11 +37,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       )
     }
 
-    // Validate campaign has targets
+    // Validate campaign has targets - FIXED: Include target_lists check
+    const hasLists = campaign.metadata.target_lists && campaign.metadata.target_lists.length > 0
     const hasContacts = campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0
     const hasTags = campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0
     
-    if (!hasContacts && !hasTags) {
+    if (!hasLists && !hasContacts && !hasTags) {
       return NextResponse.json(
         { error: 'Campaign has no target recipients' },
         { status: 400 }
