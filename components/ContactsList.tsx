@@ -40,6 +40,7 @@ interface ContactsListProps {
   itemsPerPage: number;
   searchTerm: string;
   statusFilter: string;
+  listFilter?: string;
 }
 
 export default function ContactsList({
@@ -49,10 +50,12 @@ export default function ContactsList({
   itemsPerPage,
   searchTerm: initialSearchTerm,
   statusFilter: initialStatusFilter,
+  listFilter: initialListFilter,
 }: ContactsListProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter);
+  const [listFilter, setListFilter] = useState<string>(initialListFilter || "");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
@@ -81,7 +84,7 @@ export default function ContactsList({
 
   // Search handlers with proper debouncing
   const updateSearchParams = useCallback(
-    (search: string, status: string) => {
+    (search: string, status: string, listId: string = "") => {
       const params = new URLSearchParams(window.location.search);
 
       // Update search parameter
@@ -98,6 +101,13 @@ export default function ContactsList({
         params.delete("status");
       }
 
+      // Update list parameter
+      if (listId && listId !== "all") {
+        params.set("list_id", listId);
+      } else {
+        params.delete("list_id");
+      }
+
       // Reset to first page when searching
       params.set("page", "1");
 
@@ -111,7 +121,8 @@ export default function ContactsList({
     // Skip the initial render to avoid unnecessary navigation
     if (
       searchTerm === initialSearchTerm &&
-      statusFilter === initialStatusFilter
+      statusFilter === initialStatusFilter &&
+      listFilter === initialListFilter
     ) {
       return;
     }
@@ -120,22 +131,24 @@ export default function ContactsList({
     setIsSearching(true);
 
     const timeoutId = setTimeout(() => {
-      updateSearchParams(searchTerm, statusFilter);
+      updateSearchParams(searchTerm, statusFilter, listFilter);
     }, 300);
 
     return () => clearTimeout(timeoutId);
   }, [
     searchTerm,
     statusFilter,
+    listFilter,
     updateSearchParams,
     initialSearchTerm,
     initialStatusFilter,
+    initialListFilter,
   ]);
 
   // Reset loading state when search params change (component re-renders with new data)
   useEffect(() => {
     setIsSearching(false);
-  }, [initialSearchTerm, initialStatusFilter]);
+  }, [initialSearchTerm, initialStatusFilter, initialListFilter]);
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -145,9 +158,20 @@ export default function ContactsList({
     setStatusFilter(value);
   };
 
+  const handleListFilterChange = (value: string) => {
+    setListFilter(value);
+  };
+
   const clearSearch = () => {
     setSearchTerm("");
     setStatusFilter("all");
+    setListFilter("");
+  };
+
+  // Handle list badge clicks
+  const handleListBadgeClick = (listId: string) => {
+    // Set the list filter and trigger a search
+    setListFilter(listId);
   };
 
   // Since we're now doing server-side search and filtering,
@@ -339,7 +363,8 @@ export default function ContactsList({
     contacts.length === 0 &&
     total === 0 &&
     !searchTerm &&
-    statusFilter === "all"
+    statusFilter === "all" &&
+    !listFilter
   ) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
@@ -412,7 +437,7 @@ export default function ContactsList({
           </div>
         </div>
 
-        {searchTerm || statusFilter !== "all" ? (
+        {searchTerm || statusFilter !== "all" || listFilter ? (
           <div className="mt-4 space-y-3">
             <div className="flex items-center justify-between">
               <div className="text-sm text-gray-600">
@@ -445,6 +470,17 @@ export default function ContactsList({
                   <button
                     onClick={() => setStatusFilter("all")}
                     className="hover:bg-green-200 rounded-full p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {listFilter && listFilter !== "all" && (
+                <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                  <span>List Filter Active</span>
+                  <button
+                    onClick={() => setListFilter("")}
+                    className="hover:bg-purple-200 rounded-full p-0.5"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -603,14 +639,20 @@ export default function ContactsList({
                       contact.metadata.lists.length > 0 ? (
                         contact.metadata.lists.map((list, index) => {
                           const listName = typeof list === 'string' ? list : list.metadata?.name || list.title;
+                          const listId = typeof list === 'string' ? list : list.id;
                           return (
-                            <Badge
+                            <button
                               key={index}
-                              variant="outline"
-                              className="text-xs bg-blue-50 text-blue-700 border-blue-200"
+                              onClick={() => handleListBadgeClick(listId)}
+                              className="group"
                             >
-                              {listName}
-                            </Badge>
+                              <Badge
+                                variant="outline"
+                                className="text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:border-blue-300 cursor-pointer transition-colors"
+                              >
+                                {listName}
+                              </Badge>
+                            </button>
                           );
                         })
                       ) : (
@@ -676,7 +718,7 @@ export default function ContactsList({
         </div>
       </div>
 
-      {contacts.length === 0 && (searchTerm || statusFilter !== "all") && (
+      {contacts.length === 0 && (searchTerm || statusFilter !== "all" || listFilter) && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
           <h3 className="text-lg font-medium text-gray-900 mb-2">
             No contacts found
@@ -705,6 +747,17 @@ export default function ContactsList({
                   <button
                     onClick={() => setStatusFilter("all")}
                     className="hover:bg-green-200 rounded-full p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )}
+              {listFilter && listFilter !== "all" && (
+                <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                  <span>List Filter Active</span>
+                  <button
+                    onClick={() => setListFilter("")}
+                    className="hover:bg-purple-200 rounded-full p-0.5"
                   >
                     <X className="h-3 w-3" />
                   </button>
