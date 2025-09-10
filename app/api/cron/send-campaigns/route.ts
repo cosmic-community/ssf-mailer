@@ -5,6 +5,7 @@ import {
   updateCampaignStatus,
   updateCampaignProgress,
   getSettings,
+  getContactsByListId,
 } from "@/lib/cosmic";
 import { sendEmail } from "@/lib/resend";
 import { createUnsubscribeUrl } from "@/lib/email-tracking";
@@ -116,6 +117,33 @@ async function processCampaignBatch(
   // Get all target recipients for this campaign
   let targetRecipients: EmailContact[] = [];
 
+  // Get recipients from target lists
+  if (
+    campaign.metadata.target_lists &&
+    campaign.metadata.target_lists.length > 0
+  ) {
+    for (const listRef of campaign.metadata.target_lists) {
+      const listId = typeof listRef === "string" ? listRef : listRef.id;
+      try {
+        const listContacts = await getContactsByListId(listId);
+        const activeListContacts = listContacts.filter(
+          (contact) => contact.metadata.status?.value === "Active"
+        );
+
+        // Merge with existing recipients (avoid duplicates)
+        for (const contact of activeListContacts) {
+          if (
+            !targetRecipients.find((existing) => existing.id === contact.id)
+          ) {
+            targetRecipients.push(contact);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to get contacts for list ${listId}:`, error);
+      }
+    }
+  }
+
   // Get recipients by contact IDs
   if (
     campaign.metadata.target_contacts &&
@@ -132,7 +160,12 @@ async function processCampaignBatch(
         contact.metadata.status?.value === "Active" // Only send to active contacts
     );
 
-    targetRecipients = [...targetRecipients, ...contactRecipients];
+    // Merge with existing recipients (avoid duplicates)
+    for (const contact of contactRecipients) {
+      if (!targetRecipients.find((existing) => existing.id === contact.id)) {
+        targetRecipients.push(contact);
+      }
+    }
   }
 
   // Get recipients by tags
