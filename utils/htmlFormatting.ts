@@ -15,7 +15,8 @@ export interface FormatOptions {
 export function applyFormat(
   contentElement: HTMLElement,
   format: string,
-  value?: string
+  value?: string,
+  primaryColor?: string
 ): string {
   const selection = window.getSelection();
   if (!selection || !contentElement.contains(selection.anchorNode)) {
@@ -46,7 +47,8 @@ export function applyFormat(
       case "link":
         if (value) {
           const linkData = JSON.parse(value);
-          applyLinkFormat(range, linkData.url, linkData.text);
+          const linkColor = linkData.color || primaryColor;
+          applyLinkFormat(range, linkData.url, linkData.text, linkColor);
         }
         break;
       case "image":
@@ -283,12 +285,30 @@ function applyHeadingStyles(element: HTMLElement, tagName: string) {
 /**
  * Apply link formatting to selected text or insert new link
  */
-function applyLinkFormat(range: Range, url: string, text: string) {
+function applyLinkFormat(
+  range: Range,
+  url: string,
+  text: string,
+  primaryColor?: string
+) {
   const link = document.createElement("a");
   link.href = url;
   link.textContent = text;
-  link.style.color = "#3b82f6";
-  link.style.textDecoration = "underline";
+
+  // Use primary color for links
+  link.style.color = primaryColor || "#3b82f6"; // Use provided primary color or default
+
+  // Add click handler to prevent default navigation and allow editing
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Dispatch custom event for link editing
+    const editEvent = new CustomEvent("editLink", {
+      detail: { element: link, url: link.href, text: link.textContent },
+    });
+    document.dispatchEvent(editEvent);
+  });
 
   // Add external link attributes for external URLs
   if (!url.startsWith("/") && !url.includes(window.location.hostname)) {
@@ -317,6 +337,30 @@ function insertImage(range: Range, url: string, alt: string) {
   img.style.height = "auto";
   img.style.display = "block";
   img.style.margin = "16px auto";
+  img.style.cursor = "pointer";
+  img.style.border = "2px solid transparent";
+  img.style.borderRadius = "4px";
+
+  // Add hover effect
+  img.addEventListener("mouseenter", () => {
+    img.style.border = "2px solid #3b82f6";
+  });
+
+  img.addEventListener("mouseleave", () => {
+    img.style.border = "2px solid transparent";
+  });
+
+  // Add click handler to allow editing
+  img.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Dispatch custom event for image editing
+    const editEvent = new CustomEvent("editImage", {
+      detail: { element: img, url: img.src, alt: img.alt },
+    });
+    document.dispatchEvent(editEvent);
+  });
 
   // If there's a selection, replace it
   if (!range.collapsed) {
@@ -368,19 +412,98 @@ function getPlaceholderText(tagName: string): string {
 }
 
 /**
+ * Apply click handlers to existing links and images
+ */
+function applyInteractiveHandlers(
+  container: HTMLElement,
+  primaryColor?: string
+) {
+  // Handle existing links
+  const links = container.querySelectorAll("a");
+  links.forEach((link) => {
+    // Remove existing event listeners to avoid duplicates
+    const newLink = link.cloneNode(true) as HTMLAnchorElement;
+
+    // Apply only primary color to existing links (don't override AI-generated styles)
+    newLink.style.color = primaryColor || "#3b82f6";
+
+    // Add click handler
+    newLink.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const editEvent = new CustomEvent("editLink", {
+        detail: {
+          element: newLink,
+          url: newLink.href,
+          text: newLink.textContent,
+        },
+      });
+      document.dispatchEvent(editEvent);
+    });
+
+    link.parentNode?.replaceChild(newLink, link);
+  });
+
+  // Handle existing images
+  const images = container.querySelectorAll("img");
+  images.forEach((img) => {
+    // Remove existing event listeners to avoid duplicates
+    const newImg = img.cloneNode(true) as HTMLImageElement;
+
+    // Apply image styling
+    newImg.style.maxWidth = "100%";
+    newImg.style.height = "auto";
+    newImg.style.display = "block";
+    newImg.style.margin = "16px auto";
+    newImg.style.cursor = "pointer";
+    newImg.style.border = "2px solid transparent";
+    newImg.style.borderRadius = "4px";
+
+    // Add hover effects
+    newImg.addEventListener("mouseenter", () => {
+      newImg.style.border = "2px solid #3b82f6";
+    });
+
+    newImg.addEventListener("mouseleave", () => {
+      newImg.style.border = "2px solid transparent";
+    });
+
+    // Add click handler
+    newImg.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const editEvent = new CustomEvent("editImage", {
+        detail: { element: newImg, url: newImg.src, alt: newImg.alt },
+      });
+      document.dispatchEvent(editEvent);
+    });
+
+    img.parentNode?.replaceChild(newImg, img);
+  });
+}
+
+/**
  * Apply styles to all heading and paragraph elements in a container
  */
-export function applyStylesToContent(container: HTMLElement) {
+export function applyStylesToContent(
+  container: HTMLElement,
+  primaryColor?: string
+) {
   const headings = container.querySelectorAll("h1, h2, h3, p");
   headings.forEach((element) => {
     applyHeadingStyles(element as HTMLElement, element.tagName);
   });
+
+  // Also apply interactive handlers to links and images
+  applyInteractiveHandlers(container, primaryColor);
 }
 
 /**
  * Clean up HTML content by removing empty elements and normalizing structure
  */
-export function cleanupHtml(html: string): string {
+export function cleanupHtml(html: string, primaryColor?: string): string {
   // Create a temporary div to work with the HTML
   const temp = document.createElement("div");
   temp.innerHTML = html;
@@ -392,7 +515,7 @@ export function cleanupHtml(html: string): string {
   emptyElements.forEach((el) => el.remove());
 
   // Apply styles to all headings and paragraphs
-  applyStylesToContent(temp);
+  applyStylesToContent(temp, primaryColor);
 
   // Normalize whitespace
   const textNodes = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT, null);

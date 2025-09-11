@@ -22,7 +22,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { EmailTemplate, TemplateType } from "@/types";
+import { EmailTemplate, TemplateType, Settings } from "@/types";
 import {
   AlertCircle,
   Sparkles,
@@ -86,6 +86,26 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Simple editing states - default to editing mode
   const [isMainEditing, setIsMainEditing] = useState(true);
   const [isModalEditing, setIsModalEditing] = useState(true);
+
+  // Settings state for primary color
+  const [settings, setSettings] = useState<Settings | null>(null);
+
+  // Fetch settings on component mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch("/api/settings");
+        if (response.ok) {
+          const data = await response.json();
+          setSettings(data.settings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
 
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
@@ -243,14 +263,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     if (mainPreviewRef.current && !mainPreviewRef.current.innerHTML) {
       mainPreviewRef.current.innerHTML =
         formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(mainPreviewRef.current);
+      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+      applyStylesToContent(mainPreviewRef.current, primaryColor);
     }
     if (modalPreviewRef.current && !modalPreviewRef.current.innerHTML) {
       modalPreviewRef.current.innerHTML =
         formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(modalPreviewRef.current);
+      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+      applyStylesToContent(modalPreviewRef.current, primaryColor);
     }
-  }, [formData.content]);
+  }, [formData.content, settings]);
 
   // Update contentEditable divs when content changes externally (like from AI)
   useEffect(() => {
@@ -262,7 +284,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       if (document.activeElement !== mainPreviewRef.current) {
         mainPreviewRef.current.innerHTML =
           formData.content || "<p>Start typing your email content here...</p>";
-        applyStylesToContent(mainPreviewRef.current);
+        const primaryColor =
+          settings?.metadata?.primary_brand_color || "#3b82f6";
+        applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
     if (
@@ -273,10 +297,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       if (document.activeElement !== modalPreviewRef.current) {
         modalPreviewRef.current.innerHTML =
           formData.content || "<p>Start typing your email content here...</p>";
-        applyStylesToContent(modalPreviewRef.current);
+        const primaryColor =
+          settings?.metadata?.primary_brand_color || "#3b82f6";
+        applyStylesToContent(modalPreviewRef.current, primaryColor);
       }
     }
-  }, [formData.content]);
+  }, [formData.content, settings]);
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -292,8 +318,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const previewDiv = mainPreviewRef.current || modalPreviewRef.current;
     if (!previewDiv) return;
 
+    // Get primary color from settings
+    const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+
     // Apply formatting directly to the contentEditable div
-    applyFormat(previewDiv, format, value);
+    applyFormat(previewDiv, format, value, primaryColor);
 
     // Update React state with the new content
     const updatedContent = previewDiv.innerHTML;
@@ -597,7 +626,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       setIsModalEditing(false);
 
       // Update content if there were changes
-      const updatedContent = cleanupHtml(modalPreviewRef.current.innerHTML);
+      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+      const updatedContent = cleanupHtml(
+        modalPreviewRef.current.innerHTML,
+        primaryColor
+      );
       setTimeout(() => {
         setFormData((prev) => ({
           ...prev,
@@ -619,7 +652,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       setIsModalEditing(false);
 
       // Update content with final changes
-      const updatedContent = cleanupHtml(modalPreviewRef.current.innerHTML);
+      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+      const updatedContent = cleanupHtml(
+        modalPreviewRef.current.innerHTML,
+        primaryColor
+      );
       setTimeout(() => {
         setFormData((prev) => ({
           ...prev,
@@ -931,6 +968,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     <HtmlEditingToolbar
                       onFormatApply={handleFormatApply}
                       className=""
+                      primaryColor={
+                        settings?.metadata?.primary_brand_color || "#3b82f6"
+                      }
                     />
                   </div>
 
@@ -1277,6 +1317,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                           <HtmlEditingToolbar
                             onFormatApply={handleFormatApply}
                             className=""
+                            primaryColor={
+                              settings?.metadata?.primary_brand_color ||
+                              "#3b82f6"
+                            }
                           />
                         </div>
 
