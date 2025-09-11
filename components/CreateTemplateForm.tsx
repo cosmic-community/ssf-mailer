@@ -195,7 +195,10 @@ export default function CreateTemplateForm() {
     text: string;
     element?: HTMLElement;
   }>({ url: "", text: "" });
-  const [savedSelection, setSavedSelection] = useState<Selection | null>(null);
+  const [savedSelection, setSavedSelection] = useState<{
+    range: Range | null;
+    selection: string;
+  } | null>(null);
 
   // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
@@ -331,16 +334,28 @@ export default function CreateTemplateForm() {
   // Link management functions
   const saveCurrentSelection = () => {
     const selection = window.getSelection();
+    let range: Range | null = null;
+    let selectedText = "";
+
     if (selection && selection.rangeCount > 0) {
-      setSavedSelection(selection);
+      range = selection.getRangeAt(0).cloneRange();
+      selectedText = selection.toString();
     }
+
+    setSavedSelection({
+      range: range,
+      selection: selectedText,
+    });
   };
 
   const restoreSelection = () => {
-    if (savedSelection && savedSelection.rangeCount > 0) {
+    if (savedSelection?.range) {
       try {
-        window.getSelection()?.removeAllRanges();
-        window.getSelection()?.addRange(savedSelection.getRangeAt(0));
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(savedSelection.range);
+        }
       } catch (e) {
         console.warn("Could not restore selection:", e);
       }
@@ -422,6 +437,9 @@ export default function CreateTemplateForm() {
         content: previewDiv.innerHTML,
       }));
     }
+
+    // Clear saved selection
+    setSavedSelection(null);
 
     addToast("Link updated successfully", "success");
   };
