@@ -37,6 +37,7 @@ import {
   cleanupHtml,
   applyStylesToContent,
 } from "@/utils/htmlFormatting";
+import { useTemplateSettings } from "@/hooks/useTemplateSettings";
 
 interface ContextItem {
   id: string;
@@ -69,25 +70,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Simple editing states - default to editing mode
   const [isMainEditing, setIsMainEditing] = useState(true);
 
-  // Settings state for primary color
-  const [settings, setSettings] = useState<Settings | null>(null);
-
-  // Fetch settings on component mount
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const response = await fetch("/api/settings");
-        if (response.ok) {
-          const data = await response.json();
-          setSettings(data.settings);
-        }
-      } catch (error) {
-        console.error("Failed to fetch settings:", error);
-      }
-    };
-
-    fetchSettings();
-  }, []);
+  // Use shared settings hook
+  const { settings, primaryColor } = useTemplateSettings();
 
   // Context items state for AI editing
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
@@ -227,10 +211,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     if (mainPreviewRef.current && !mainPreviewRef.current.innerHTML) {
       mainPreviewRef.current.innerHTML =
         formData.content || "<p>Start typing your email content here...</p>";
-      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
       applyStylesToContent(mainPreviewRef.current, primaryColor);
     }
-  }, [formData.content, settings]);
+  }, [formData.content, primaryColor]);
 
   // Update contentEditable divs when content changes externally (like from AI)
   useEffect(() => {
@@ -242,12 +225,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       if (document.activeElement !== mainPreviewRef.current) {
         mainPreviewRef.current.innerHTML =
           formData.content || "<p>Start typing your email content here...</p>";
-        const primaryColor =
-          settings?.metadata?.primary_brand_color || "#3b82f6";
         applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
-  }, [formData.content, settings]);
+  }, [formData.content, primaryColor]);
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -264,7 +245,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     if (!previewDiv) return;
 
     // Get primary color from settings
-    const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+    // primaryColor is now provided by useTemplateSettings hook
 
     // Apply formatting directly to the contentEditable div
     applyFormat(previewDiv, format, value, primaryColor);
@@ -1015,9 +996,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   <HtmlEditingToolbar
                     onFormatApply={handleFormatApply}
                     className=""
-                    primaryColor={
-                      settings?.metadata?.primary_brand_color || "#3b82f6"
-                    }
+                    primaryColor={primaryColor}
                   />
                 </div>
 

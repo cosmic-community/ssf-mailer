@@ -46,6 +46,8 @@ import {
   applyStylesToContent,
 } from "@/utils/htmlFormatting";
 import { Settings } from "@/types";
+import { useTemplateSettings } from "@/hooks/useTemplateSettings";
+import { useSelectionManager } from "@/hooks/useSelectionManager";
 
 interface ContextItem {
   id: string;
@@ -195,10 +197,13 @@ export default function CreateTemplateForm() {
     text: string;
     element?: HTMLElement;
   }>({ url: "", text: "" });
-  const [savedSelection, setSavedSelection] = useState<{
-    range: Range | null;
-    selection: string;
-  } | null>(null);
+  // Use shared selection manager hook
+  const {
+    saveCurrentSelection,
+    restoreSelection,
+    clearSelection,
+    hasValidSelection,
+  } = useSelectionManager();
 
   // Context items state - maintain separate contexts but allow sharing
   const [contextItems, setContextItems] = useState<ContextItem[]>([]);
@@ -223,8 +228,8 @@ export default function CreateTemplateForm() {
     active: true,
   });
 
-  // Settings state for primary color
-  const [settings, setSettings] = useState<Settings | null>(null);
+  // Use shared settings hook
+  const { settings, primaryColor } = useTemplateSettings();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -268,32 +273,14 @@ export default function CreateTemplateForm() {
     });
   }, []);
 
-  // Fetch settings on component mount
-  useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const response = await fetch("/api/settings");
-        if (response.ok) {
-          const data = await response.json();
-          setSettings(data.settings);
-        }
-      } catch (error) {
-        console.error("Failed to fetch settings:", error);
-      }
-    };
-
-    fetchSettings();
-  }, []);
-
   // Initialize content in contentEditable divs
   useEffect(() => {
     if (previewRef.current && !previewRef.current.innerHTML) {
       previewRef.current.innerHTML =
         formData.content || "<p>Start typing your email content here...</p>";
-      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
       applyStylesToContent(previewRef.current, primaryColor);
     }
-  }, [formData.content, settings]);
+  }, [formData.content, primaryColor]);
 
   // Update contentEditable divs when content changes externally (like from AI)
   useEffect(() => {
@@ -305,12 +292,10 @@ export default function CreateTemplateForm() {
       if (document.activeElement !== previewRef.current) {
         previewRef.current.innerHTML =
           formData.content || "<p>Start typing your email content here...</p>";
-        const primaryColor =
-          settings?.metadata?.primary_brand_color || "#3b82f6";
         applyStylesToContent(previewRef.current, primaryColor);
       }
     }
-  }, [formData.content, settings]);
+  }, [formData.content, primaryColor]);
 
   // Handle format application from toolbar
   const handleFormatApply = (format: string, value?: string) => {
@@ -318,7 +303,7 @@ export default function CreateTemplateForm() {
     if (!previewDiv) return;
 
     // Get primary color from settings
-    const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+    // primaryColor is now provided by useTemplateSettings hook
 
     // Apply formatting directly to the contentEditable div
     applyFormat(previewDiv, format, value, primaryColor);
@@ -331,47 +316,15 @@ export default function CreateTemplateForm() {
     }));
   };
 
-  // Link management functions
-  const saveCurrentSelection = () => {
-    const selection = window.getSelection();
-    let range: Range | null = null;
-    let selectedText = "";
-
-    if (selection && selection.rangeCount > 0) {
-      range = selection.getRangeAt(0).cloneRange();
-      selectedText = selection.toString();
-    }
-
-    setSavedSelection({
-      range: range,
-      selection: selectedText,
-    });
-  };
-
-  const restoreSelection = () => {
-    if (savedSelection?.range) {
-      try {
-        const selection = window.getSelection();
-        if (selection) {
-          selection.removeAllRanges();
-          selection.addRange(savedSelection.range);
-        }
-      } catch (e) {
-        console.warn("Could not restore selection:", e);
-      }
-    }
-  };
+  // Link management functions - now using shared hook
 
   const handleAddLink = () => {
-    const selection = window.getSelection();
-    if (!selection || selection.isCollapsed) {
+    if (!hasValidSelection()) {
       addToast("Please select some text to convert to a link", "error");
       return;
     }
 
-    const selectedText = selection.toString();
-    saveCurrentSelection();
-
+    const { selectedText } = saveCurrentSelection();
     setLinkDialogData({ url: "", text: selectedText });
     setShowLinkDialog(true);
   };
@@ -404,7 +357,7 @@ export default function CreateTemplateForm() {
         link.href = url;
         link.textContent = text;
         // Apply default link styling for new links
-        link.style.color = settings?.metadata?.primary_brand_color || "#3b82f6";
+        link.style.color = primaryColor;
         link.style.textDecoration = "underline";
 
         // Add external link icon for external links
@@ -439,7 +392,7 @@ export default function CreateTemplateForm() {
     }
 
     // Clear saved selection
-    setSavedSelection(null);
+    clearSelection();
 
     addToast("Link updated successfully", "success");
   };
@@ -1818,9 +1771,7 @@ export default function CreateTemplateForm() {
                     <HtmlEditingToolbar
                       onFormatApply={handleFormatApply}
                       className=""
-                      primaryColor={
-                        settings?.metadata?.primary_brand_color || "#3b82f6"
-                      }
+                      primaryColor={primaryColor}
                     />
                   </div>
 
