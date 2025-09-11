@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect, useCallback } from "react";
+import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,32 +15,19 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { EmailTemplate, TemplateType, Settings } from "@/types";
 import {
   AlertCircle,
-  Sparkles,
   CheckCircle,
   Info,
   Trash2,
-  Upload,
   X,
   FileText,
   Image,
   File,
   Plus,
   Globe,
-  Edit,
   Wand2,
-  ArrowRight,
-  ExternalLink,
-  Link,
 } from "lucide-react";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import HtmlEditingToolbar from "./HtmlEditingToolbar";
@@ -79,13 +66,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [editingSessionActive, setEditingSessionActive] = useState(false);
   const { addToast } = useToast();
 
-  // Modal states
-  const [showAIModal, setShowAIModal] = useState(false);
-  const [modalActiveTab, setModalActiveTab] = useState("preview");
-
   // Simple editing states - default to editing mode
   const [isMainEditing, setIsMainEditing] = useState(true);
-  const [isModalEditing, setIsModalEditing] = useState(true);
 
   // Settings state for primary color
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -116,7 +98,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const aiPromptRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const mainPreviewRef = useRef<HTMLDivElement>(null);
-  const modalPreviewRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -154,16 +135,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Update unsaved changes state whenever form data changes
   useEffect(() => {
     // Don't show unsaved changes warning during active editing
-    setHasUnsavedChanges(
-      hasFormChanges() && !isSubmitting && !isMainEditing && !isModalEditing
-    );
-  }, [formData, isSubmitting, isMainEditing, isModalEditing]);
+    setHasUnsavedChanges(hasFormChanges() && !isSubmitting && !isMainEditing);
+  }, [formData, isSubmitting, isMainEditing]);
 
   // Prevent navigation away with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
       // Don't show warning during active editing
-      if (hasUnsavedChanges && !isMainEditing && !isModalEditing) {
+      if (hasUnsavedChanges && !isMainEditing) {
         e.preventDefault();
         e.returnValue =
           "You have unsaved changes. Are you sure you want to leave?";
@@ -178,12 +157,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const originalReplace = router.replace;
 
     router.push = (...args) => {
-      if (
-        hasUnsavedChanges &&
-        !isSubmitting &&
-        !isMainEditing &&
-        !isModalEditing
-      ) {
+      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -193,12 +167,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.back = () => {
-      if (
-        hasUnsavedChanges &&
-        !isSubmitting &&
-        !isMainEditing &&
-        !isModalEditing
-      ) {
+      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -208,12 +177,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.replace = (...args) => {
-      if (
-        hasUnsavedChanges &&
-        !isSubmitting &&
-        !isMainEditing &&
-        !isModalEditing
-      ) {
+      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -228,7 +192,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       router.back = originalBack;
       router.replace = originalReplace;
     };
-  }, [hasUnsavedChanges, isSubmitting, isMainEditing, isModalEditing, router]);
+  }, [hasUnsavedChanges, isSubmitting, isMainEditing, router]);
 
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -266,12 +230,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
       applyStylesToContent(mainPreviewRef.current, primaryColor);
     }
-    if (modalPreviewRef.current && !modalPreviewRef.current.innerHTML) {
-      modalPreviewRef.current.innerHTML =
-        formData.content || "<p>Start typing your email content here...</p>";
-      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
-      applyStylesToContent(modalPreviewRef.current, primaryColor);
-    }
   }, [formData.content, settings]);
 
   // Update contentEditable divs when content changes externally (like from AI)
@@ -289,19 +247,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
-    if (
-      modalPreviewRef.current &&
-      modalPreviewRef.current.innerHTML !== formData.content
-    ) {
-      // Only update if the content is different and we're not currently typing
-      if (document.activeElement !== modalPreviewRef.current) {
-        modalPreviewRef.current.innerHTML =
-          formData.content || "<p>Start typing your email content here...</p>";
-        const primaryColor =
-          settings?.metadata?.primary_brand_color || "#3b82f6";
-        applyStylesToContent(modalPreviewRef.current, primaryColor);
-      }
-    }
   }, [formData.content, settings]);
 
   // Auto-focus AI prompt when AI section is shown
@@ -315,7 +260,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Handle format application from toolbar
   const handleFormatApply = (format: string, value?: string) => {
-    const previewDiv = mainPreviewRef.current || modalPreviewRef.current;
+    const previewDiv = mainPreviewRef.current;
     if (!previewDiv) return;
 
     // Get primary color from settings
@@ -467,14 +412,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         mainPreviewRef.current.style.backgroundColor = "transparent";
       }
     }
-    if (isModalEditing) {
-      setIsModalEditing(false);
-      if (modalPreviewRef.current) {
-        modalPreviewRef.current.contentEditable = "false";
-        modalPreviewRef.current.style.outline = "none";
-        modalPreviewRef.current.style.backgroundColor = "transparent";
-      }
-    }
 
     try {
       const requestBody = {
@@ -599,80 +536,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setEditingSessionActive(false);
     setAiPrompt("");
     setContextItems([]);
-    setShowAIModal(false);
 
     // Reset editing states
     setIsMainEditing(false);
-    setIsModalEditing(false);
     if (mainPreviewRef.current) {
       mainPreviewRef.current.contentEditable = "false";
       mainPreviewRef.current.style.outline = "none";
       mainPreviewRef.current.style.backgroundColor = "transparent";
     }
-    if (modalPreviewRef.current) {
-      modalPreviewRef.current.contentEditable = "false";
-      modalPreviewRef.current.style.outline = "none";
-      modalPreviewRef.current.style.backgroundColor = "transparent";
-    }
-  };
-
-  const handleModalCancel = () => {
-    // Finish any active editing before closing
-    if (isModalEditing && modalPreviewRef.current) {
-      modalPreviewRef.current.contentEditable = "false";
-      modalPreviewRef.current.style.outline = "none";
-      modalPreviewRef.current.style.backgroundColor = "transparent";
-
-      setIsModalEditing(false);
-
-      // Update content if there were changes
-      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
-      const updatedContent = cleanupHtml(
-        modalPreviewRef.current.innerHTML,
-        primaryColor
-      );
-      setTimeout(() => {
-        setFormData((prev) => ({
-          ...prev,
-          content: updatedContent,
-        }));
-      }, 10);
-    }
-
-    setShowAIModal(false);
-  };
-
-  const handleModalSave = () => {
-    // Finish any active editing and save changes
-    if (isModalEditing && modalPreviewRef.current) {
-      modalPreviewRef.current.contentEditable = "false";
-      modalPreviewRef.current.style.outline = "none";
-      modalPreviewRef.current.style.backgroundColor = "transparent";
-
-      setIsModalEditing(false);
-
-      // Update content with final changes
-      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
-      const updatedContent = cleanupHtml(
-        modalPreviewRef.current.innerHTML,
-        primaryColor
-      );
-      setTimeout(() => {
-        setFormData((prev) => ({
-          ...prev,
-          content: updatedContent,
-        }));
-      }, 10);
-    }
-
-    setShowAIModal(false);
-    setSuccess(
-      'Template content updated! Click "Update Template" to save your changes.'
-    );
-    addToast(
-      'Template content updated! Click "Update Template" to save your changes.',
-      "success"
-    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -826,221 +697,395 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         </div>
       )}
 
-      {/* 2-Column Layout - Switched: Template Details on Left, Preview on Right */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left Column: Template Details Section */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Template Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* Template Name */}
-              <div className="space-y-2">
-                <Label htmlFor="name">Template Name *</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
-                  placeholder="Enter template name"
-                  disabled={isPending}
-                  required
-                />
-              </div>
+      {/* Template Details Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Template Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Template Name */}
+          <div className="space-y-2">
+            <Label htmlFor="name">Template Name *</Label>
+            <Input
+              id="name"
+              type="text"
+              value={formData.name}
+              onChange={(e) => handleInputChange("name", e.target.value)}
+              placeholder="Enter template name"
+              disabled={isPending}
+              required
+            />
+          </div>
 
-              {/* Template Type */}
-              <div className="space-y-2">
-                <Label htmlFor="template_type">Template Type</Label>
-                <Select
-                  value={formData.template_type}
-                  onValueChange={(value) =>
-                    handleInputChange("template_type", value)
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select template type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Welcome Email">Welcome Email</SelectItem>
-                    <SelectItem value="Newsletter">Newsletter</SelectItem>
-                    <SelectItem value="Promotional">Promotional</SelectItem>
-                    <SelectItem value="Transactional">Transactional</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+          {/* Template Type */}
+          <div className="space-y-2">
+            <Label htmlFor="template_type">Template Type</Label>
+            <Select
+              value={formData.template_type}
+              onValueChange={(value) =>
+                handleInputChange("template_type", value)
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Select template type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                <SelectItem value="Newsletter">Newsletter</SelectItem>
+                <SelectItem value="Promotional">Promotional</SelectItem>
+                <SelectItem value="Transactional">Transactional</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-              {/* Subject Line */}
-              <div className="space-y-2">
-                <Label htmlFor="subject">Email Subject *</Label>
-                <Input
-                  id="subject"
-                  type="text"
-                  value={formData.subject}
-                  onChange={(e) => handleInputChange("subject", e.target.value)}
-                  placeholder="Enter email subject line"
-                  disabled={isPending}
-                  required
-                />
-              </div>
+          {/* Subject Line */}
+          <div className="space-y-2">
+            <Label htmlFor="subject">Email Subject *</Label>
+            <Input
+              id="subject"
+              type="text"
+              value={formData.subject}
+              onChange={(e) => handleInputChange("subject", e.target.value)}
+              placeholder="Enter email subject line"
+              disabled={isPending}
+              required
+            />
+          </div>
 
-              {/* Active Toggle */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="space-y-1">
-                  <Label htmlFor="active" className="text-base font-medium">
-                    Active Template
-                  </Label>
-                  <p className="text-sm text-gray-600">
-                    Active templates are available for creating campaigns
+          {/* Active Toggle */}
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div className="space-y-1">
+              <Label htmlFor="active" className="text-base font-medium">
+                Active Template
+              </Label>
+              <p className="text-sm text-gray-600">
+                Active templates are available for creating campaigns
+              </p>
+            </div>
+            <Switch
+              id="active"
+              checked={formData.active}
+              onCheckedChange={(checked) =>
+                handleInputChange("active", checked)
+              }
+              disabled={isPending}
+            />
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex space-x-4 pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCancel}
+              disabled={isPending}
+              className="flex-1"
+            >
+              {editingSessionActive ? "End Editing" : "Cancel"}
+            </Button>
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isPending}
+              className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
+            >
+              {isPending ? "Updating..." : "Update Template"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Template Content Section - 2 Column Layout */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle>Template Content</CardTitle>
+        </CardHeader>
+        <CardContent className="px-6 pb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Left Column: Edit Content with AI */}
+            <div className="space-y-6">
+              <Card className="border-purple-200 bg-purple-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2 text-purple-800">
+                    <Wand2 className="h-5 w-5" />
+                    <span>Edit Content with AI</span>
+                  </CardTitle>
+                  <p className="text-purple-700 text-sm">
+                    How should we improve the current content?
                   </p>
-                </div>
-                <Switch
-                  id="active"
-                  checked={formData.active}
-                  onCheckedChange={(checked) =>
-                    handleInputChange("active", checked)
-                  }
-                  disabled={isPending}
-                />
-              </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Textarea
+                      ref={aiPromptRef}
+                      placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
+                      value={aiPrompt}
+                      onChange={(e) => {
+                        setAiPrompt(e.target.value);
+                        autoResize(e.target);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onFocus={handleAISectionFocus}
+                      className="min-h-[100px] resize-none"
+                      disabled={isAIEditing}
+                    />
+                    <p className="text-xs text-purple-600">
+                      💡 Tip: Press{" "}
+                      <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">
+                        Cmd+Enter
+                      </kbd>{" "}
+                      to edit
+                    </p>
+                  </div>
 
-              {/* Form Actions */}
-              <div className="flex space-x-4 pt-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCancel}
-                  disabled={isPending}
-                  className="flex-1"
-                >
-                  {editingSessionActive ? "End Editing" : "Cancel"}
-                </Button>
-                <Button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={isPending}
-                  className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
-                >
-                  {isPending ? "Updating..." : "Update Template"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Right Column: Template Preview/Content Section */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader className="pb-4">
-              <div className="flex items-center justify-between">
-                <CardTitle>Template Content</CardTitle>
-                <div className="flex space-x-2">
-                  <Button
-                    type="button"
-                    onClick={() => setShowAIModal(true)}
-                    size="sm"
-                    className="bg-purple-600 hover:bg-purple-700 text-white"
-                  >
-                    <Wand2 className="h-4 w-4 mr-2" />
-                    Edit with AI
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="px-6 pb-6">
-              <div className="space-y-4">
-                <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  {/* Context Items */}
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <div className="text-sm text-gray-600">
-                        <strong>Subject:</strong>{" "}
-                        {formData.subject || "No subject"}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {formData.template_type}
-                      </div>
+                      <Label className="text-sm font-medium text-purple-800">
+                        Context (Optional)
+                      </Label>
+                      <Button
+                        type="button"
+                        onClick={() => setShowContextInput(true)}
+                        disabled={isAIEditing}
+                        size="sm"
+                        variant="outline"
+                        className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Context
+                      </Button>
                     </div>
-                  </div>
 
-                  {/* Sticky formatting toolbar */}
-                  <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
-                    <HtmlEditingToolbar
-                      onFormatApply={handleFormatApply}
-                      className=""
-                      primaryColor={
-                        settings?.metadata?.primary_brand_color || "#3b82f6"
-                      }
-                    />
-                  </div>
-
-                  <div className="p-4 max-h-80 overflow-y-auto">
-                    <div
-                      ref={mainPreviewRef}
-                      className="prose max-w-none text-sm cursor-text"
-                      contentEditable={!isAIEditing}
-                      style={{
-                        pointerEvents: isAIEditing ? "none" : "auto",
-                        userSelect: isAIEditing ? "none" : "text",
-                        outline: "none",
-                        minHeight: "200px",
-                      }}
-                      onInput={(e) => {
-                        // Update content in real-time for AI to see changes
-                        const updatedContent = e.currentTarget.innerHTML;
-                        setFormData((prev) => ({
-                          ...prev,
-                          content: updatedContent,
-                        }));
-                      }}
-                    />
-                    {/* Preview unsubscribe footer */}
-                    {formData.content && (
-                      <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
-                        <p>
-                          You received this email because you subscribed to our
-                          mailing list.
-                          <br />
-                          <span className="underline cursor-pointer">
-                            Unsubscribe
-                          </span>{" "}
-                          from future emails.
-                        </p>
-                        <p className="text-xs text-gray-400 mt-1">
-                          ↑ This unsubscribe link will be added automatically to
-                          all campaign emails
+                    {/* Context Input */}
+                    {showContextInput && (
+                      <div className="p-3 border border-purple-200 rounded-lg bg-white">
+                        <div className="flex space-x-2">
+                          <Input
+                            type="url"
+                            value={contextUrl}
+                            onChange={(e) => setContextUrl(e.target.value)}
+                            placeholder="Enter style reference, brand guide, or example URL..."
+                            onKeyDown={handleContextUrlKeyDown}
+                            className="flex-1"
+                            autoFocus
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => addContextItem(contextUrl)}
+                            disabled={!contextUrl.trim()}
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700"
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setShowContextInput(false);
+                              setContextUrl("");
+                            }}
+                            size="sm"
+                            variant="outline"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <p className="text-xs text-purple-600 mt-2">
+                          📎 Add style guides, brand references, or web pages
+                          for AI to follow
                         </p>
                       </div>
                     )}
+
+                    {/* Context Items List */}
+                    {contextItems.length > 0 && (
+                      <div className="space-y-2">
+                        {contextItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md"
+                          >
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              {getContextIcon(item)}
+                              <span className="text-sm text-purple-700 truncate">
+                                {item.title ||
+                                  new URL(item.url).pathname.split("/").pop() ||
+                                  item.url}
+                              </span>
+                              <span className="text-xs text-purple-500 capitalize">
+                                ({item.type})
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={() => removeContextItem(item.id)}
+                              disabled={isAIEditing}
+                              size="sm"
+                              variant="ghost"
+                              className="text-purple-400 hover:text-red-600 p-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-xs text-purple-600">
+                      📎 AI will use context items as reference for improvements
+                    </p>
                   </div>
-                </div>
-                {formData.content && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-start space-x-2">
-                      <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-blue-800">
-                        <p className="font-medium mb-1">✨ Enhanced Editing</p>
-                        <p className="text-xs">
-                          {isAIEditing ? (
-                            <span className="text-purple-700 font-medium">
-                              AI is editing content...
-                            </span>
-                          ) : (
-                            <>
-                              Ready to edit! Type directly in the content area
-                              and select text to use the formatting toolbar.
-                            </>
-                          )}
-                        </p>
+
+                  {/* AI Edit Status Display */}
+                  {isAIEditing && aiStatus && (
+                    <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-purple-800">
+                          {aiStatus}
+                        </span>
+                        <span className="text-xs text-purple-600">
+                          {aiProgress}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-purple-200 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${aiProgress}%` }}
+                        ></div>
                       </div>
                     </div>
+                  )}
+
+                  <Button
+                    onClick={handleAIEdit}
+                    disabled={isAIEditing || !aiPrompt.trim()}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {isAIEditing ? (
+                      <>Editing with AI...</>
+                    ) : (
+                      <>
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Edit with AI
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Editing session help */}
+                  {editingSessionActive && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start space-x-2">
+                        <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-blue-800">
+                          <p className="font-medium mb-1">
+                            Iterative Editing Mode
+                          </p>
+                          <p className="text-xs">
+                            Keep adding refinement instructions to perfect your
+                            template. Context and previous changes are
+                            preserved.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Right Column: Template Content with Toolbar */}
+            <div className="space-y-4">
+              <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-gray-600">
+                      <strong>Subject:</strong>{" "}
+                      {formData.subject || "No subject"}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {formData.template_type}
+                    </div>
                   </div>
-                )}
+                </div>
+
+                {/* Sticky formatting toolbar */}
+                <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
+                  <HtmlEditingToolbar
+                    onFormatApply={handleFormatApply}
+                    className=""
+                    primaryColor={
+                      settings?.metadata?.primary_brand_color || "#3b82f6"
+                    }
+                  />
+                </div>
+
+                <div className="p-4 max-h-80 overflow-y-auto">
+                  <div
+                    ref={mainPreviewRef}
+                    className="prose max-w-none text-sm cursor-text"
+                    contentEditable={!isAIEditing}
+                    style={{
+                      pointerEvents: isAIEditing ? "none" : "auto",
+                      userSelect: isAIEditing ? "none" : "text",
+                      outline: "none",
+                      minHeight: "200px",
+                    }}
+                    onInput={(e) => {
+                      // Update content in real-time for AI to see changes
+                      const updatedContent = e.currentTarget.innerHTML;
+                      setFormData((prev) => ({
+                        ...prev,
+                        content: updatedContent,
+                      }));
+                    }}
+                  />
+                  {/* Preview unsubscribe footer */}
+                  {formData.content && (
+                    <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                      <p>
+                        You received this email because you subscribed to our
+                        mailing list.
+                        <br />
+                        <span className="underline cursor-pointer">
+                          Unsubscribe
+                        </span>{" "}
+                        from future emails.
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        ↑ This unsubscribe link will be added automatically to
+                        all campaign emails
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
+              {formData.content && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">✨ Enhanced Editing</p>
+                      <p className="text-xs">
+                        {isAIEditing ? (
+                          <span className="text-purple-700 font-medium">
+                            AI is editing content...
+                          </span>
+                        ) : (
+                          <>
+                            Ready to edit! Type directly in the content area and
+                            select text to use the formatting toolbar.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Delete Template Section */}
       <div className="border-t pt-8 mt-8">
@@ -1068,392 +1113,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </CardContent>
         </Card>
       </div>
-
-      {/* AI Modal with Fixed Footer */}
-      <Dialog open={showAIModal} onOpenChange={setShowAIModal}>
-        <DialogContent className="max-w-7xl w-full h-[90vh] max-h-[90vh] p-0 flex flex-col">
-          <DialogHeader className="px-6 py-4 border-b flex-shrink-0">
-            <DialogTitle className="flex items-center space-x-2">
-              <Wand2 className="h-5 w-5 text-purple-600" />
-              <span>AI Content Editor</span>
-            </DialogTitle>
-          </DialogHeader>
-
-          <div className="flex flex-1 overflow-hidden">
-            {/* Left Side: AI Interface */}
-            <div className="w-1/2 p-6 overflow-y-auto border-r">
-              <div className="space-y-6">
-                <Card className="border-purple-200 bg-purple-50/50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center space-x-2 text-purple-800">
-                      <Wand2 className="h-5 w-5" />
-                      <span>Edit Content</span>
-                    </CardTitle>
-                    <p className="text-purple-700 text-sm">
-                      How should we improve the current content?
-                    </p>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                      <Textarea
-                        ref={aiPromptRef}
-                        placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
-                        value={aiPrompt}
-                        onChange={(e) => {
-                          setAiPrompt(e.target.value);
-                          autoResize(e.target);
-                        }}
-                        onKeyDown={handleKeyDown}
-                        onFocus={handleAISectionFocus}
-                        className="min-h-[100px] resize-none"
-                        disabled={isAIEditing}
-                      />
-                      <p className="text-xs text-purple-600">
-                        💡 Tip: Press{" "}
-                        <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">
-                          Cmd+Enter
-                        </kbd>{" "}
-                        to edit
-                      </p>
-                    </div>
-
-                    {/* Context Items */}
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Label className="text-sm font-medium text-purple-800">
-                          Context (Optional)
-                        </Label>
-                        <Button
-                          type="button"
-                          onClick={() => setShowContextInput(true)}
-                          disabled={isAIEditing}
-                          size="sm"
-                          variant="outline"
-                          className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                        >
-                          <Plus className="h-4 w-4 mr-1" />
-                          Add Context
-                        </Button>
-                      </div>
-
-                      {/* Context Input */}
-                      {showContextInput && (
-                        <div className="p-3 border border-purple-200 rounded-lg bg-white">
-                          <div className="flex space-x-2">
-                            <Input
-                              type="url"
-                              value={contextUrl}
-                              onChange={(e) => setContextUrl(e.target.value)}
-                              placeholder="Enter style reference, brand guide, or example URL..."
-                              onKeyDown={handleContextUrlKeyDown}
-                              className="flex-1"
-                              autoFocus
-                            />
-                            <Button
-                              type="button"
-                              onClick={() => addContextItem(contextUrl)}
-                              disabled={!contextUrl.trim()}
-                              size="sm"
-                              className="bg-purple-600 hover:bg-purple-700"
-                            >
-                              Add
-                            </Button>
-                            <Button
-                              type="button"
-                              onClick={() => {
-                                setShowContextInput(false);
-                                setContextUrl("");
-                              }}
-                              size="sm"
-                              variant="outline"
-                            >
-                              Cancel
-                            </Button>
-                          </div>
-                          <p className="text-xs text-purple-600 mt-2">
-                            📎 Add style guides, brand references, or web pages
-                            for AI to follow
-                          </p>
-                        </div>
-                      )}
-
-                      {/* Context Items List */}
-                      {contextItems.length > 0 && (
-                        <div className="space-y-2">
-                          {contextItems.map((item) => (
-                            <div
-                              key={item.id}
-                              className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md"
-                            >
-                              <div className="flex items-center space-x-2 flex-1 min-w-0">
-                                {getContextIcon(item)}
-                                <span className="text-sm text-purple-700 truncate">
-                                  {item.title ||
-                                    new URL(item.url).pathname
-                                      .split("/")
-                                      .pop() ||
-                                    item.url}
-                                </span>
-                                <span className="text-xs text-purple-500 capitalize">
-                                  ({item.type})
-                                </span>
-                              </div>
-                              <Button
-                                type="button"
-                                onClick={() => removeContextItem(item.id)}
-                                disabled={isAIEditing}
-                                size="sm"
-                                variant="ghost"
-                                className="text-purple-400 hover:text-red-600 p-1"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <p className="text-xs text-purple-600">
-                        📎 AI will use context items as reference for
-                        improvements
-                      </p>
-                    </div>
-
-                    {/* AI Edit Status Display */}
-                    {isAIEditing && aiStatus && (
-                      <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm text-purple-800">
-                            {aiStatus}
-                          </span>
-                          <span className="text-xs text-purple-600">
-                            {aiProgress}%
-                          </span>
-                        </div>
-                        <div className="w-full bg-purple-200 rounded-full h-2">
-                          <div
-                            className="bg-purple-600 h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${aiProgress}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    )}
-
-                    <Button
-                      onClick={handleAIEdit}
-                      disabled={isAIEditing || !aiPrompt.trim()}
-                      className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                    >
-                      {isAIEditing ? (
-                        <>Editing with AI...</>
-                      ) : (
-                        <>
-                          <Wand2 className="mr-2 h-4 w-4" />
-                          Edit with AI
-                        </>
-                      )}
-                    </Button>
-
-                    {/* Editing session help */}
-                    {editingSessionActive && (
-                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <div className="flex items-start space-x-2">
-                          <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                          <div className="text-sm text-blue-800">
-                            <p className="font-medium mb-1">
-                              Iterative Editing Mode
-                            </p>
-                            <p className="text-xs">
-                              Keep adding refinement instructions to perfect
-                              your template. Context and previous changes are
-                              preserved.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            </div>
-
-            {/* Right Side: Preview/Edit Tabs */}
-            <div className="w-1/2 p-6 overflow-y-auto">
-              <Tabs
-                value={modalActiveTab}
-                onValueChange={setModalActiveTab}
-                className="w-full h-full"
-              >
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                  <TabsTrigger value="edit">Edit</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="preview" className="mt-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Email Preview</CardTitle>
-                      <p className="text-sm text-gray-600">
-                        How your email will appear to recipients - Click to edit
-                        content directly
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
-                        <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                          <div className="flex items-center justify-between">
-                            <div className="text-sm text-gray-600">
-                              <strong>Subject:</strong>{" "}
-                              {formData.subject || "No subject"}
-                            </div>
-                            <div className="text-xs text-gray-500">
-                              {formData.template_type}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Sticky formatting toolbar */}
-                        <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
-                          <HtmlEditingToolbar
-                            onFormatApply={handleFormatApply}
-                            className=""
-                            primaryColor={
-                              settings?.metadata?.primary_brand_color ||
-                              "#3b82f6"
-                            }
-                          />
-                        </div>
-
-                        <div className="p-4 max-h-80 overflow-y-auto">
-                          <div
-                            ref={modalPreviewRef}
-                            className="prose max-w-none text-sm cursor-text"
-                            contentEditable={!isAIEditing}
-                            style={{
-                              pointerEvents: isAIEditing ? "none" : "auto",
-                              userSelect: isAIEditing ? "none" : "text",
-                              outline: "none",
-                              minHeight: "200px",
-                            }}
-                            onInput={(e) => {
-                              // Update content in real-time for AI to see changes
-                              const updatedContent = e.currentTarget.innerHTML;
-                              setFormData((prev) => ({
-                                ...prev,
-                                content: updatedContent,
-                              }));
-                            }}
-                          />
-                          {/* Preview unsubscribe footer */}
-                          {formData.content && (
-                            <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
-                              <p>
-                                You received this email because you subscribed
-                                to our mailing list.
-                                <br />
-                                <span className="underline cursor-pointer">
-                                  Unsubscribe
-                                </span>{" "}
-                                from future emails.
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      {formData.content && (
-                        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-start space-x-2">
-                            <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <div className="text-sm text-blue-800">
-                              <p className="font-medium mb-1">
-                                Enhanced Editing
-                              </p>
-                              <p className="text-xs">
-                                {isModalEditing ? (
-                                  <span className="text-blue-700 font-medium">
-                                    Editing mode active - Select text and use
-                                    the toolbar to format, press Escape to
-                                    finish
-                                  </span>
-                                ) : isAIEditing ? (
-                                  <span className="text-purple-700 font-medium">
-                                    AI is editing content...
-                                  </span>
-                                ) : (
-                                  <>
-                                    Ready to edit! Type directly in the content
-                                    area and select text to use the formatting
-                                    toolbar.
-                                  </>
-                                )}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-
-                <TabsContent value="edit" className="mt-6">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Edit Content</CardTitle>
-                      <p className="text-sm text-gray-600">
-                        Direct HTML editing with live preview
-                      </p>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="modal-content">Email Content</Label>
-                          <Textarea
-                            ref={contentRef}
-                            id="modal-content"
-                            value={formData.content}
-                            onChange={(e) => {
-                              handleInputChange("content", e.target.value);
-                              autoResize(e.target);
-                            }}
-                            placeholder="Enter email content (HTML supported)"
-                            rows={12}
-                            className="font-mono text-sm"
-                          />
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </div>
-
-          {/* Fixed Footer */}
-          <div className="border-t bg-white px-6 py-4 flex-shrink-0">
-            <div className="flex items-center justify-between">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleModalCancel}
-                disabled={isAIEditing}
-              >
-                Cancel
-              </Button>
-
-              <div className="flex items-center space-x-3">
-                <Button
-                  type="button"
-                  onClick={handleModalSave}
-                  disabled={isAIEditing}
-                  className="bg-slate-800 hover:bg-slate-900 text-white"
-                >
-                  Save Changes
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* Delete Confirmation Modal */}
       <ConfirmationModal
