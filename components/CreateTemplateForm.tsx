@@ -39,6 +39,13 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/useToast";
 import ToastContainer from "@/components/ToastContainer";
+import HtmlEditingToolbar from "./HtmlEditingToolbar";
+import {
+  applyFormat,
+  cleanupHtml,
+  applyStylesToContent,
+} from "@/utils/htmlFormatting";
+import { Settings } from "@/types";
 
 interface ContextItem {
   id: string;
@@ -213,6 +220,9 @@ export default function CreateTemplateForm() {
     active: true,
   });
 
+  // Settings state for primary color
+  const [settings, setSettings] = useState<Settings | null>(null);
+
   // Track if form has unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -352,6 +362,69 @@ export default function CreateTemplateForm() {
       return () => textarea.removeEventListener("input", handleInput);
     });
   }, []);
+
+  // Fetch settings on component mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch("/api/settings");
+        if (response.ok) {
+          const data = await response.json();
+          setSettings(data.settings);
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings:", error);
+      }
+    };
+
+    fetchSettings();
+  }, []);
+
+  // Initialize content in contentEditable divs
+  useEffect(() => {
+    if (previewRef.current && !previewRef.current.innerHTML) {
+      previewRef.current.innerHTML =
+        formData.content || "<p>Start typing your email content here...</p>";
+      const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+      applyStylesToContent(previewRef.current, primaryColor);
+    }
+  }, [formData.content, settings]);
+
+  // Update contentEditable divs when content changes externally (like from AI)
+  useEffect(() => {
+    if (
+      previewRef.current &&
+      previewRef.current.innerHTML !== formData.content
+    ) {
+      // Only update if the content is different and we're not currently typing
+      if (document.activeElement !== previewRef.current) {
+        previewRef.current.innerHTML =
+          formData.content || "<p>Start typing your email content here...</p>";
+        const primaryColor =
+          settings?.metadata?.primary_brand_color || "#3b82f6";
+        applyStylesToContent(previewRef.current, primaryColor);
+      }
+    }
+  }, [formData.content, settings]);
+
+  // Handle format application from toolbar
+  const handleFormatApply = (format: string, value?: string) => {
+    const previewDiv = previewRef.current;
+    if (!previewDiv) return;
+
+    // Get primary color from settings
+    const primaryColor = settings?.metadata?.primary_brand_color || "#3b82f6";
+
+    // Apply formatting directly to the contentEditable div
+    applyFormat(previewDiv, format, value, primaryColor);
+
+    // Update React state with the new content
+    const updatedContent = previewDiv.innerHTML;
+    setFormData((prev) => ({
+      ...prev,
+      content: updatedContent,
+    }));
+  };
 
   // Link management functions
   const saveCurrentSelection = () => {
@@ -1823,7 +1896,7 @@ export default function CreateTemplateForm() {
                 )}
               </div>
 
-              {/* Right Column: Template Content with Preview */}
+              {/* Right Column: Template Content with Toolbar */}
               <div className="space-y-4">
                 <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
@@ -1838,89 +1911,79 @@ export default function CreateTemplateForm() {
                     </div>
                   </div>
 
+                  {/* Sticky formatting toolbar */}
+                  <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
+                    <HtmlEditingToolbar
+                      onFormatApply={handleFormatApply}
+                      className=""
+                      primaryColor={
+                        settings?.metadata?.primary_brand_color || "#3b82f6"
+                      }
+                    />
+                  </div>
+
                   <div className="p-4 max-h-80 overflow-y-auto">
-                    {formData.content ? (
-                      <>
-                        <div
-                          ref={previewRef}
-                          className={`prose max-w-none text-sm transition-all duration-200 ${
-                            isEditing
-                              ? "cursor-text"
-                              : "cursor-pointer hover:bg-blue-50/30"
-                          }`}
-                          onClick={() =>
-                            !isEditing &&
-                            !isAIGenerating &&
-                            !isAIEditing &&
-                            startEditMode(previewRef)
-                          }
-                          dangerouslySetInnerHTML={{
-                            __html: formData.content,
-                          }}
-                          style={{
-                            pointerEvents:
-                              isAIGenerating || isAIEditing ? "none" : "auto",
-                            userSelect:
-                              isAIGenerating || isAIEditing ? "none" : "text",
-                            outline: "none",
-                            minHeight: "200px",
-                          }}
-                        />
-                        {/* Preview unsubscribe footer */}
-                        <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
-                          <p>
-                            You received this email because you subscribed to
-                            our mailing list.
-                            <br />
-                            <span className="underline cursor-pointer">
-                              Unsubscribe
-                            </span>{" "}
-                            from future emails.
-                          </p>
-                          <p className="text-xs text-gray-400 mt-1">
-                            ↑ This unsubscribe link will be added automatically
-                            to all campaign emails
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-center py-12 text-gray-500">
-                        <Sparkles className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <p className="font-medium mb-2">No content yet</p>
-                        <p className="text-sm mb-4">
-                          Use the AI generator to create content
+                    <div
+                      ref={previewRef}
+                      className="prose max-w-none text-sm cursor-text"
+                      contentEditable={!isAIGenerating && !isAIEditing}
+                      style={{
+                        pointerEvents:
+                          isAIGenerating || isAIEditing ? "none" : "auto",
+                        userSelect:
+                          isAIGenerating || isAIEditing ? "none" : "text",
+                        outline: "none",
+                        minHeight: "200px",
+                      }}
+                      onInput={(e) => {
+                        // Update content in real-time for AI to see changes
+                        const updatedContent = e.currentTarget.innerHTML;
+                        setFormData((prev) => ({
+                          ...prev,
+                          content: updatedContent,
+                        }));
+                      }}
+                    />
+                    {/* Preview unsubscribe footer */}
+                    {formData.content && (
+                      <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
+                        <p>
+                          You received this email because you subscribed to our
+                          mailing list.
+                          <br />
+                          <span className="underline cursor-pointer">
+                            Unsubscribe
+                          </span>{" "}
+                          from future emails.
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1">
+                          ↑ This unsubscribe link will be added automatically to
+                          all campaign emails
                         </p>
                       </div>
                     )}
                   </div>
                 </div>
-                {formData.content && (
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                    <div className="flex items-start space-x-2">
-                      <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                      <div className="text-sm text-blue-800">
-                        <p className="font-medium mb-1">✨ Enhanced Editing</p>
-                        <p className="text-xs">
-                          {isEditing ? (
-                            <span className="text-blue-700 font-medium">
-                              Editing mode active - Select text to add links,
-                              click links to edit, press Escape to finish
-                            </span>
-                          ) : isAIGenerating || isAIEditing ? (
-                            <span className="text-purple-700 font-medium">
-                              AI is processing content...
-                            </span>
-                          ) : (
-                            <>
-                              Click anywhere in the preview above to edit the
-                              content directly. Select text to add links!
-                            </>
-                          )}
-                        </p>
-                      </div>
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-2">
+                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="text-sm text-blue-800">
+                      <p className="font-medium mb-1">✨ Enhanced Editing</p>
+                      <p className="text-xs">
+                        {isAIGenerating || isAIEditing ? (
+                          <span className="text-purple-700 font-medium">
+                            AI is processing content...
+                          </span>
+                        ) : (
+                          <>
+                            Ready to edit! Type directly in the content area and
+                            select text to use the formatting toolbar.
+                          </>
+                        )}
+                      </p>
                     </div>
                   </div>
-                )}
+                </div>
               </div>
             </div>
           </CardContent>
