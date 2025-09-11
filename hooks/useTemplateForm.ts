@@ -80,7 +80,7 @@ export function useTemplateForm({
   const handleSubmit = useCallback(async () => {
     const validationErrors = validate();
     if (validationErrors.length > 0) {
-      setError(validationErrors[0]);
+      setError(validationErrors[0] || "Validation error occurred");
       return false;
     }
 
