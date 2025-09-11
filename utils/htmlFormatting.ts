@@ -57,6 +57,16 @@ export function applyFormat(
           insertImage(range, imageData.url, imageData.alt);
         }
         break;
+      case "align":
+        if (value) {
+          applyAlignment(range, value);
+        }
+        break;
+      case "font-size":
+        if (value) {
+          applyFontSize(range, value);
+        }
+        break;
     }
   } catch (error) {
     console.warn("Format application failed:", error);
@@ -373,6 +383,101 @@ function insertImage(range: Range, url: string, alt: string) {
   const br = document.createElement("br");
   range.collapse(false);
   range.insertNode(br);
+}
+
+/**
+ * Apply text alignment to selected content
+ */
+function applyAlignment(range: Range, alignment: string) {
+  const startContainer = range.startContainer;
+  const endContainer = range.endContainer;
+
+  // Find the block element containing the selection
+  let blockElement =
+    startContainer.nodeType === Node.TEXT_NODE
+      ? startContainer.parentElement
+      : (startContainer as Element);
+
+  // Traverse up to find a block-level element
+  while (
+    blockElement &&
+    !isBlockElement(blockElement) &&
+    blockElement.parentElement
+  ) {
+    blockElement = blockElement.parentElement;
+  }
+
+  if (blockElement) {
+    // Apply text-align style
+    (blockElement as HTMLElement).style.textAlign = alignment;
+  }
+}
+
+/**
+ * Apply font size to selected text
+ */
+function applyFontSize(range: Range, size: string) {
+  if (range.collapsed) {
+    // If no selection, create a span at cursor position for future typing
+    const span = document.createElement("span");
+    span.style.fontSize = `${size}px`;
+    span.innerHTML = "&#8203;"; // Zero-width space to make it selectable
+
+    try {
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.setEndAfter(span);
+
+      // Set cursor position after the span
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    } catch (error) {
+      console.warn("Failed to apply font size:", error);
+    }
+  } else {
+    // If there's a selection, check if it's already wrapped in a font-size span
+    const selectedContent = range.cloneContents();
+    const tempDiv = document.createElement("div");
+    tempDiv.appendChild(selectedContent);
+
+    // Check if the selection is entirely within a span with font-size
+    const parentSpan =
+      range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+        ? range.commonAncestorContainer.parentElement
+        : (range.commonAncestorContainer as Element);
+
+    if (
+      parentSpan &&
+      parentSpan.tagName === "SPAN" &&
+      (parentSpan as HTMLElement).style.fontSize
+    ) {
+      // Update existing span
+      (parentSpan as HTMLElement).style.fontSize = `${size}px`;
+    } else {
+      // Create new span with font-size
+      const span = document.createElement("span");
+      span.style.fontSize = `${size}px`;
+
+      try {
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        range.insertNode(span);
+
+        // Select the new span content
+        range.selectNodeContents(span);
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } catch (error) {
+        console.warn("Failed to apply font size:", error);
+      }
+    }
+  }
 }
 
 /**

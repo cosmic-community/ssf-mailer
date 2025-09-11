@@ -5,23 +5,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Bold,
-  Italic,
-  Heading1,
-  Heading2,
-  Heading3,
-  Link,
-  Image,
-  Type,
-  ExternalLink,
-  Palette,
-} from "lucide-react";
+import { Bold, Italic, Link, Image, ExternalLink, Palette } from "lucide-react";
 
 interface HtmlEditingToolbarProps {
   onFormatApply: (format: string, value?: string) => void;
@@ -73,6 +69,13 @@ export default function HtmlEditingToolbar({
     selection: string;
   } | null>(null);
 
+  // Undo/Redo state
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+
+  // Font size state
+  const [fontSize, setFontSize] = useState<string>("16");
+
   // Listen for edit events from links and images
   React.useEffect(() => {
     const handleEditLink = (event: CustomEvent) => {
@@ -108,7 +111,35 @@ export default function HtmlEditingToolbar({
     };
   }, []);
 
-  const handleFormat = (format: string) => {
+  // Add keyboard shortcuts for undo/redo
+  React.useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey) {
+        if (event.key === "z" && !event.shiftKey) {
+          event.preventDefault();
+          handleUndo();
+        } else if (event.key === "z" && event.shiftKey) {
+          event.preventDefault();
+          handleRedo();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [undoStack, redoStack]);
+
+  const handleFormat = (format: string, value?: string) => {
+    // Save current state to undo stack before making changes
+    const editableDiv = document.querySelector(
+      '[contenteditable="true"]'
+    ) as HTMLElement;
+    if (editableDiv) {
+      saveToUndoStack(editableDiv.innerHTML);
+    }
+
     const selection = window.getSelection();
     if (!selection || selection.rangeCount === 0) {
       return;
@@ -132,6 +163,15 @@ export default function HtmlEditingToolbar({
         break;
       case "paragraph":
         onFormatApply("heading", "p");
+        break;
+      case "align-left":
+        onFormatApply("align", "left");
+        break;
+      case "align-center":
+        onFormatApply("align", "center");
+        break;
+      case "align-right":
+        onFormatApply("align", "right");
         break;
       case "link":
         handleLinkClick();
@@ -186,6 +226,52 @@ export default function HtmlEditingToolbar({
       alt: "",
       isOpen: true,
     });
+  };
+
+  // Save current content to undo stack
+  const saveToUndoStack = (content: string) => {
+    setUndoStack((prev) => [...prev, content]);
+    setRedoStack([]); // Clear redo stack when new action is performed
+  };
+
+  // Undo function
+  const handleUndo = () => {
+    if (undoStack.length > 0) {
+      const lastState = undoStack[undoStack.length - 1];
+      const currentContent =
+        document.querySelector('[contenteditable="true"]')?.innerHTML || "";
+
+      setRedoStack((prev) => [...prev, currentContent]);
+      setUndoStack((prev) => prev.slice(0, -1));
+
+      // Apply the previous state
+      const editableDiv = document.querySelector(
+        '[contenteditable="true"]'
+      ) as HTMLElement;
+      if (editableDiv && lastState) {
+        editableDiv.innerHTML = lastState;
+      }
+    }
+  };
+
+  // Redo function
+  const handleRedo = () => {
+    if (redoStack.length > 0) {
+      const nextState = redoStack[redoStack.length - 1];
+      const currentContent =
+        document.querySelector('[contenteditable="true"]')?.innerHTML || "";
+
+      setUndoStack((prev) => [...prev, currentContent]);
+      setRedoStack((prev) => prev.slice(0, -1));
+
+      // Apply the next state
+      const editableDiv = document.querySelector(
+        '[contenteditable="true"]'
+      ) as HTMLElement;
+      if (editableDiv && nextState) {
+        editableDiv.innerHTML = nextState;
+      }
+    }
   };
 
   const handleLinkSave = () => {
@@ -295,52 +381,23 @@ export default function HtmlEditingToolbar({
         className={`toolbar-container flex items-center space-x-1 p-2 bg-white border border-gray-300 rounded-lg shadow-sm ${className}`}
         onMouseDown={(e) => e.preventDefault()} // Prevent focus loss when clicking toolbar
       >
-        {/* Text Style Buttons */}
+        {/* Text Styles Dropdown */}
         <div className="flex items-center space-x-1 pr-2 border-r border-gray-200">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("paragraph")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Normal text"
+          <Select
+            onValueChange={(value) => {
+              handleFormat(value);
+            }}
           >
-            <Type className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("h1")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Heading 1"
-          >
-            <Heading1 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("h2")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Heading 2"
-          >
-            <Heading2 className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("h3")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Heading 3"
-          >
-            <Heading3 className="h-4 w-4" />
-          </Button>
+            <SelectTrigger className="h-8 w-20 text-xs">
+              <SelectValue placeholder="Style" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="paragraph">Normal</SelectItem>
+              <SelectItem value="h1">Heading 1</SelectItem>
+              <SelectItem value="h2">Heading 2</SelectItem>
+              <SelectItem value="h3">Heading 3</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Text Formatting */}
@@ -367,6 +424,58 @@ export default function HtmlEditingToolbar({
           >
             <Italic className="h-4 w-4" />
           </Button>
+        </div>
+
+        {/* Text Alignment Dropdown */}
+        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
+          <Select
+            onValueChange={(value) => {
+              handleFormat(value);
+            }}
+          >
+            <SelectTrigger className="h-8 w-16 text-xs">
+              <SelectValue placeholder="Align" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="align-left">Left</SelectItem>
+              <SelectItem value="align-center">Center</SelectItem>
+              <SelectItem value="align-right">Right</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Font Size */}
+        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
+          <Select
+            value={fontSize}
+            onValueChange={(value) => {
+              // Save current state before applying font size
+              const editableDiv = document.querySelector(
+                '[contenteditable="true"]'
+              ) as HTMLElement;
+              if (editableDiv) {
+                saveToUndoStack(editableDiv.innerHTML);
+              }
+
+              setFontSize(value);
+              onFormatApply("font-size", value);
+            }}
+          >
+            <SelectTrigger className="h-8 w-16 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="12">12px</SelectItem>
+              <SelectItem value="14">14px</SelectItem>
+              <SelectItem value="16">16px</SelectItem>
+              <SelectItem value="18">18px</SelectItem>
+              <SelectItem value="20">20px</SelectItem>
+              <SelectItem value="24">24px</SelectItem>
+              <SelectItem value="28">28px</SelectItem>
+              <SelectItem value="32">32px</SelectItem>
+              <SelectItem value="36">36px</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Links and Images */}
