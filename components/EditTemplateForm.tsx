@@ -700,7 +700,29 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       {/* Template Details Section */}
       <Card>
         <CardHeader>
-          <CardTitle>Template Details</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Template Details</CardTitle>
+            <div className="flex space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCancel}
+                disabled={isPending}
+                size="sm"
+              >
+                {editingSessionActive ? "End Editing" : "Cancel"}
+              </Button>
+              <Button
+                type="button"
+                onClick={handleSubmit}
+                disabled={isPending}
+                className="bg-slate-800 hover:bg-slate-900 text-white"
+                size="sm"
+              >
+                {isPending ? "Updating..." : "Update Template"}
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Template Name */}
@@ -770,27 +792,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               }
               disabled={isPending}
             />
-          </div>
-
-          {/* Form Actions */}
-          <div className="flex space-x-4 pt-4">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCancel}
-              disabled={isPending}
-              className="flex-1"
-            >
-              {editingSessionActive ? "End Editing" : "Cancel"}
-            </Button>
-            <Button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="bg-slate-800 hover:bg-slate-900 text-white flex-1"
-            >
-              {isPending ? "Updating..." : "Update Template"}
-            </Button>
           </div>
         </CardContent>
       </Card>
