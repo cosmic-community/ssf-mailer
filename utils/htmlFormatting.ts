@@ -54,7 +54,7 @@ export function applyFormat(
       case "image":
         if (value) {
           const imageData = JSON.parse(value);
-          insertImage(range, imageData.url, imageData.alt);
+          insertImage(range, imageData.url, imageData.alt, imageData.link);
         }
         break;
       case "align":
@@ -305,8 +305,7 @@ function applyLinkFormat(
   link.href = url;
   link.textContent = text;
 
-  // Use primary color for links
-  link.style.color = primaryColor || "#3b82f6"; // Use provided primary color or default
+  // Don't force color - let CSS or existing styles handle it
 
   // Add click handler to prevent default navigation and allow editing
   link.addEventListener("click", (e) => {
@@ -339,7 +338,7 @@ function applyLinkFormat(
 /**
  * Insert image at cursor position
  */
-function insertImage(range: Range, url: string, alt: string) {
+function insertImage(range: Range, url: string, alt: string, link?: string) {
   const img = document.createElement("img");
   img.src = url;
   img.alt = alt;
@@ -377,7 +376,25 @@ function insertImage(range: Range, url: string, alt: string) {
     range.deleteContents();
   }
 
-  range.insertNode(img);
+  // Wrap in link if provided
+  if (link && link.trim()) {
+    const linkElement = document.createElement("a");
+    linkElement.href = link.trim();
+
+    // Add external link attributes for external URLs
+    if (
+      !link.trim().startsWith("/") &&
+      !link.trim().includes(window.location.hostname)
+    ) {
+      linkElement.target = "_blank";
+      linkElement.rel = "noopener noreferrer";
+    }
+
+    linkElement.appendChild(img);
+    range.insertNode(linkElement);
+  } else {
+    range.insertNode(img);
+  }
 
   // Add some space after the image
   const br = document.createElement("br");
@@ -529,8 +546,7 @@ function applyInteractiveHandlers(
     // Remove existing event listeners to avoid duplicates
     const newLink = link.cloneNode(true) as HTMLAnchorElement;
 
-    // Apply only primary color to existing links (don't override AI-generated styles)
-    newLink.style.color = primaryColor || "#3b82f6";
+    // Don't force color on existing links - preserve AI-generated styles
 
     // Add click handler
     newLink.addEventListener("click", (e) => {

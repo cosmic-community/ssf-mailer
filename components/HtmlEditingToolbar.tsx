@@ -41,6 +41,7 @@ interface LinkDialogData {
 interface ImageDialogData {
   url: string;
   alt: string;
+  link: string; // URL to link the image to
   isOpen: boolean;
   element?: HTMLImageElement; // For editing existing images
 }
@@ -60,6 +61,7 @@ export default function HtmlEditingToolbar({
   const [imageDialog, setImageDialog] = useState<ImageDialogData>({
     url: "",
     alt: "",
+    link: "",
     isOpen: false,
   });
 
@@ -91,9 +93,14 @@ export default function HtmlEditingToolbar({
 
     const handleEditImage = (event: CustomEvent) => {
       const { element, url, alt } = event.detail;
+      // Check if image is wrapped in a link
+      const parentLink = element.closest("a");
+      const linkUrl = parentLink ? parentLink.href : "";
+
       setImageDialog({
         url: url || "",
         alt: alt || "",
+        link: linkUrl,
         isOpen: true,
         element: element,
       });
@@ -224,6 +231,7 @@ export default function HtmlEditingToolbar({
     setImageDialog({
       url: "",
       alt: "",
+      link: "",
       isOpen: true,
     });
   };
@@ -331,6 +339,9 @@ export default function HtmlEditingToolbar({
 
     if (imageDialog.element) {
       // Editing existing image
+      const currentParentLink = imageDialog.element.closest("a");
+
+      // Update image properties
       imageDialog.element.src = imageDialog.url.trim();
       imageDialog.element.alt = imageDialog.alt.trim() || "Image";
 
@@ -339,6 +350,51 @@ export default function HtmlEditingToolbar({
       imageDialog.element.style.height = "auto";
       imageDialog.element.style.display = "block";
       imageDialog.element.style.margin = "16px auto";
+
+      // Handle link changes
+      if (imageDialog.link.trim()) {
+        if (currentParentLink) {
+          // Update existing link
+          currentParentLink.href = imageDialog.link.trim();
+          // Add external link attributes for external URLs
+          if (
+            !imageDialog.link.trim().startsWith("/") &&
+            !imageDialog.link.trim().includes(window.location.hostname)
+          ) {
+            currentParentLink.target = "_blank";
+            currentParentLink.rel = "noopener noreferrer";
+          } else {
+            currentParentLink.removeAttribute("target");
+            currentParentLink.removeAttribute("rel");
+          }
+        } else {
+          // Wrap image in new link
+          const link = document.createElement("a");
+          link.href = imageDialog.link.trim();
+          if (
+            !imageDialog.link.trim().startsWith("/") &&
+            !imageDialog.link.trim().includes(window.location.hostname)
+          ) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+
+          const parent = imageDialog.element.parentNode;
+          if (parent) {
+            parent.insertBefore(link, imageDialog.element);
+            link.appendChild(imageDialog.element);
+          }
+        }
+      } else {
+        // Remove link if empty and one exists
+        if (currentParentLink) {
+          const parent = currentParentLink.parentNode;
+          if (parent) {
+            parent.insertBefore(imageDialog.element, currentParentLink);
+            parent.removeChild(currentParentLink);
+          }
+        }
+      }
     } else {
       // Creating new image - restore selection if available
       if (savedSelection?.range) {
@@ -354,6 +410,7 @@ export default function HtmlEditingToolbar({
         JSON.stringify({
           url: imageDialog.url.trim(),
           alt: imageDialog.alt.trim() || "Image",
+          link: imageDialog.link.trim(),
         })
       );
     }
@@ -361,6 +418,7 @@ export default function HtmlEditingToolbar({
     setImageDialog({
       url: "",
       alt: "",
+      link: "",
       isOpen: false,
     });
 
@@ -647,11 +705,23 @@ export default function HtmlEditingToolbar({
                 placeholder="Describe the image"
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="image-link">Link URL (optional)</Label>
+              <Input
+                id="image-link"
+                value={imageDialog.link}
+                onChange={(e) =>
+                  setImageDialog((prev) => ({ ...prev, link: e.target.value }))
+                }
+                onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
+                placeholder="https://example.com"
+              />
+            </div>
             <div className="flex justify-end space-x-2 pt-4">
               <Button
                 variant="outline"
                 onClick={() =>
-                  setImageDialog({ url: "", alt: "", isOpen: false })
+                  setImageDialog({ url: "", alt: "", link: "", isOpen: false })
                 }
               >
                 Cancel
