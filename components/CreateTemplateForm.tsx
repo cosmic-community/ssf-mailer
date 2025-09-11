@@ -388,7 +388,9 @@ export default function CreateTemplateForm() {
         const link = document.createElement("a");
         link.href = url;
         link.textContent = text;
-        // Don't force color - let CSS handle styling
+        // Apply default link styling for new links
+        link.style.color = settings?.metadata?.primary_brand_color || "#3b82f6";
+        link.style.textDecoration = "underline";
 
         // Add external link icon for external links
         if (!url.startsWith("/") && !url.includes(window.location.hostname)) {

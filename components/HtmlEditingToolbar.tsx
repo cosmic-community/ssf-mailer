@@ -46,6 +46,26 @@ interface ImageDialogData {
   element?: HTMLImageElement; // For editing existing images
 }
 
+// Utility function to convert RGB color to hex
+function rgbToHex(rgb: string): string {
+  // Extract RGB values from rgb(r, g, b) format
+  const result = rgb.match(/\d+/g);
+  if (!result || result.length < 3 || !result[0] || !result[1] || !result[2])
+    return rgb;
+
+  const r = parseInt(result[0], 10);
+  const g = parseInt(result[1], 10);
+  const b = parseInt(result[2], 10);
+
+  // Convert to hex
+  const toHex = (n: number) => {
+    const hex = n.toString(16);
+    return hex.length === 1 ? "0" + hex : hex;
+  };
+
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 export default function HtmlEditingToolbar({
   onFormatApply,
   className = "",
@@ -82,11 +102,20 @@ export default function HtmlEditingToolbar({
   React.useEffect(() => {
     const handleEditLink = (event: CustomEvent) => {
       const { element, url, text } = event.detail;
+      // Get the actual computed color of the link
+      const computedStyle = window.getComputedStyle(element);
+      let currentColor = element.style.color || computedStyle.color;
+
+      // Convert RGB color to hex if needed for color picker compatibility
+      if (currentColor && currentColor.startsWith("rgb")) {
+        currentColor = rgbToHex(currentColor);
+      }
+
       setLinkDialog({
         url: url || "",
         text: text || "",
         isOpen: true,
-        color: element.style.color || primaryColor,
+        color: currentColor || primaryColor,
         element: element,
       });
     };

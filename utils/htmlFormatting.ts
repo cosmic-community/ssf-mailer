@@ -305,7 +305,10 @@ function applyLinkFormat(
   link.href = url;
   link.textContent = text;
 
-  // Don't force color - let CSS or existing styles handle it
+  // Apply default color for new links, but don't override existing styles
+  if (primaryColor && !link.style.color) {
+    link.style.color = primaryColor;
+  }
 
   // Add click handler to prevent default navigation and allow editing
   link.addEventListener("click", (e) => {
