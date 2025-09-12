@@ -1,6 +1,6 @@
 # Email Marketing Platform
 
-![Email Marketing Platform](https://imgix.cosmicjs.com/d3068d10-8e5d-11f0-aa3f-8b3701190189-CleanShot-2025-09-10-at-08-49-492x.png?w=1200&h=600&fit=crop&auto=format,compress)
+![Email Marketing Platform](https://imgix.cosmicjs.com/98808eb0-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-23-552x.png?w=1200&h=600&fit=crop&auto=format,compress)
 
 A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic CMS. Create, manage, and send professional email campaigns with intelligent content generation and comprehensive analytics.
 
@@ -73,26 +73,6 @@ A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic C
 - **Real-time Updates**: Live progress indicators and status updates
 - **Accessibility**: WCAG compliant design patterns
 
-## 💼 Business Value
-
-### For Marketing Teams
-- **Reduced Creation Time**: AI assistance cuts template creation time by 80%
-- **Improved Engagement**: Smart content optimization increases open rates
-- **Streamlined Workflow**: Unified platform for all email marketing needs
-- **Professional Results**: Consistent, brand-aligned communications
-
-### For Developers
-- **Modern Architecture**: Built with latest Next.js and TypeScript best practices
-- **Headless CMS**: Flexible content management with Cosmic CMS
-- **Scalable Design**: Modular components and efficient data handling
-- **Easy Customization**: Well-documented codebase with clear patterns
-
-### For Businesses
-- **Cost Effective**: All-in-one solution reduces tool sprawl
-- **Compliance Ready**: Built-in unsubscribe and data management
-- **Growth Friendly**: Scales from startup to enterprise needs
-- **Time to Market**: Deploy quickly with pre-built functionality
-
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -121,12 +101,25 @@ A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic C
    
    Update the following variables:
    ```env
-   COSMIC_BUCKET_SLUG=your-bucket-slug
-   COSMIC_READ_KEY=your-read-key
-   COSMIC_WRITE_KEY=your-write-key
-   RESEND_API_KEY=your-resend-key
-   OPENAI_API_KEY=your-openai-key
-   JWT_SECRET=your-jwt-secret
+   # Cosmic CMS Configuration
+   COSMIC_BUCKET_SLUG=your-bucket-slug-here
+   COSMIC_READ_KEY=your-cosmic-read-key-here
+   COSMIC_WRITE_KEY=your-cosmic-write-key-here
+
+   # Email Service (Resend) - Required for sending emails
+   RESEND_API_KEY=your-resend-api-key-here
+
+   # Authentication - Required for dashboard access
+   ACCESS_CODE=your-secret-access-code-here
+
+   # Application URL - Required for email tracking and unsubscribe links
+   NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+   # Optional: Cron job security for automated campaign sending
+   CRON_SECRET=your-cron-secret-for-automated-sending
+
+   # Optional: Development/Production environment
+   NODE_ENV=development
    ```
 
 4. **Set up Cosmic CMS content models**
