@@ -1,6 +1,6 @@
 # Email Marketing Platform
 
-![Email Marketing Platform](https://imgix.cosmicjs.com/98808eb0-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-23-552x.png?w=2000&auto=format,compress)
+![Email Marketing Platform](https://imgix.cosmicjs.com/cae23390-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-25-032x.png?w=2000&auto=format,compress)
 
 A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic CMS. Create, manage, and send professional email campaigns with intelligent content generation and comprehensive analytics.
 
