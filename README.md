@@ -1,3 +1,4 @@
+# README.md
 # Email Marketing Platform
 
 ![Email Marketing Platform](https://imgix.cosmicjs.com/cae23390-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-25-032x.png?w=2000&auto=format,compress)
@@ -48,7 +49,7 @@ A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic C
 - **Styling**: Tailwind CSS with custom design system
 - **CMS**: Cosmic CMS for content management
 - **Email Service**: Resend for reliable email delivery
-- **AI Integration**: OpenAI GPT for content generation
+- **AI Integration**: Cosmic AI for content generation
 - **Authentication**: Custom JWT-based auth system
 - **Deployment**: Vercel with automatic deployments
 
@@ -79,7 +80,6 @@ A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic C
 - Node.js 18+ or Bun runtime
 - Cosmic CMS account
 - Resend account for email delivery
-- OpenAI API key (optional, for AI features)
 
 ### Installation
 
@@ -172,10 +172,10 @@ Configure Resend for reliable email delivery:
 - Configure webhook endpoints for tracking
 
 ### AI Integration
-Enable AI features by adding your OpenAI API key:
-- Supports GPT-3.5 and GPT-4 models
+AI features are powered by Cosmic AI and automatically available with your Cosmic CMS account:
 - Configurable AI personality and tone
 - Context-aware content generation
+- Built-in content optimization
 
 ### Customization Options
 - **Branding**: Upload logos and set brand colors
