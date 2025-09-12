@@ -1,4 +1,3 @@
-# README.md
 # Email Marketing Platform
 
 ![Email Marketing Platform](https://imgix.cosmicjs.com/cae23390-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-25-032x.png?w=2000&auto=format,compress)
@@ -45,7 +44,7 @@ A powerful, AI-enhanced email marketing platform built with Next.js and Cosmic C
 
 ## 🛠️ Technology Stack
 
-- **Frontend**: Next.js 14 with TypeScript
+- **Frontend**: Next.js with TypeScript
 - **Styling**: Tailwind CSS with custom design system
 - **CMS**: Cosmic CMS for content management
 - **Email Service**: Resend for reliable email delivery
