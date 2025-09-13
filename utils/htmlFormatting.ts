@@ -302,6 +302,7 @@ function applyLinkFormat(
   primaryColor?: string
 ) {
   const link = document.createElement("a");
+  // Set href directly without HTML encoding to preserve query parameters
   link.href = url;
   link.textContent = text;
 
@@ -382,6 +383,7 @@ function insertImage(range: Range, url: string, alt: string, link?: string) {
   // Wrap in link if provided
   if (link && link.trim()) {
     const linkElement = document.createElement("a");
+    // Set href directly without HTML encoding to preserve query parameters
     linkElement.href = link.trim();
 
     // Add external link attributes for external URLs
@@ -626,6 +628,7 @@ export function applyStylesToContent(
 
 /**
  * Clean up HTML content by removing empty elements and normalizing structure
+ * CRITICAL: Preserve URL query parameters by avoiding HTML entity encoding
  */
 export function cleanupHtml(html: string, primaryColor?: string): string {
   // Create a temporary div to work with the HTML
@@ -641,9 +644,18 @@ export function cleanupHtml(html: string, primaryColor?: string): string {
   // Apply styles to all headings and paragraphs
   applyStylesToContent(temp, primaryColor);
 
-  // Normalize whitespace
-  const textNodes = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT, null);
+  // Fix any HTML entity encoding in href attributes that may have occurred
+  const links = temp.querySelectorAll("a[href]");
+  links.forEach((link) => {
+    const href = link.getAttribute("href");
+    if (href && href.includes("&amp;")) {
+      // Decode HTML entities in href attributes to preserve query parameters
+      link.setAttribute("href", href.replace(/&amp;/g, "&"));
+    }
+  });
 
+  // Normalize whitespace in text nodes only
+  const textNodes = document.createTreeWalker(temp, NodeFilter.SHOW_TEXT, null);
   let node;
   while ((node = textNodes.nextNode())) {
     if (node.textContent) {
