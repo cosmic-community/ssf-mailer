@@ -315,7 +315,7 @@ export default function HtmlEditingToolbar({
     if (!linkDialog.url.trim()) return;
 
     if (linkDialog.element) {
-      // Editing existing link
+      // Editing existing link - directly set the href without HTML encoding
       linkDialog.element.href = linkDialog.url.trim();
       linkDialog.element.textContent =
         linkDialog.text.trim() || linkDialog.url.trim();
@@ -383,7 +383,7 @@ export default function HtmlEditingToolbar({
       // Handle link changes
       if (imageDialog.link.trim()) {
         if (currentParentLink) {
-          // Update existing link
+          // Update existing link - directly set href without HTML encoding
           currentParentLink.href = imageDialog.link.trim();
           // Add external link attributes for external URLs
           if (
