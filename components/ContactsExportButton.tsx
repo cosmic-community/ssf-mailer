@@ -81,7 +81,7 @@ export default function ContactsExportButton({
       
       if (contentDisposition) {
         const match = contentDisposition.match(/filename="([^"]*)"/)
-        if (match) {
+        if (match && match[1]) {
           filename = match[1]
         }
       }
