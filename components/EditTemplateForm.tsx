@@ -271,23 +271,39 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100);
   };
 
-  // Handle format application from toolbar
+  // Handle format application from toolbar - FIXED VERSION
   const handleFormatApply = (format: string, value?: string) => {
     const previewDiv = mainPreviewRef.current;
     if (!previewDiv) return;
 
-    // Get primary color from settings
-    // primaryColor is now provided by useTemplateSettings hook
-
     // Apply formatting directly to the contentEditable div
     applyFormat(previewDiv, format, value, primaryColor);
 
-    // Update React state with the new content
+    // Get the updated content and sync with React state immediately
     const updatedContent = previewDiv.innerHTML;
+    
+    // Update form data state to ensure it's saved
     setFormData((prev) => ({
       ...prev,
       content: updatedContent,
     }));
+
+    // Trigger a slight delay to ensure DOM changes are captured
+    setTimeout(() => {
+      if (previewDiv) {
+        const finalContent = previewDiv.innerHTML;
+        // Double-check that state is in sync with DOM
+        setFormData((prev) => {
+          if (prev.content !== finalContent) {
+            return {
+              ...prev,
+              content: finalContent,
+            };
+          }
+          return prev;
+        });
+      }
+    }, 100);
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -681,6 +697,17 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     router.back();
   };
 
+  // FIXED: ContentEditable input handler to properly sync state
+  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
+    const updatedContent = e.currentTarget.innerHTML;
+    
+    // Immediately update form data state to ensure changes are captured
+    setFormData((prev) => ({
+      ...prev,
+      content: updatedContent,
+    }));
+  };
+
   // Full screen content preview component
   const FullScreenPreview = () => (
     <div className="fixed inset-0 z-50 bg-white">
@@ -741,13 +768,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 minHeight: "400px",
                 lineHeight: "1.6",
               }}
-              onInput={(e) => {
-                const updatedContent = e.currentTarget.innerHTML;
-                setFormData((prev) => ({
-                  ...prev,
-                  content: updatedContent,
-                }));
-              }}
+              onInput={handleContentEditableInput}
             />
             
             {/* Preview unsubscribe footer in full screen */}
@@ -1175,14 +1196,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       outline: "none",
                       minHeight: "200px",
                     }}
-                    onInput={(e) => {
-                      // Update content in real-time for AI to see changes
-                      const updatedContent = e.currentTarget.innerHTML;
-                      setFormData((prev) => ({
-                        ...prev,
-                        content: updatedContent,
-                      }));
-                    }}
+                    onInput={handleContentEditableInput}
                   />
                   {/* Preview unsubscribe footer */}
                   {formData.content && (

@@ -68,6 +68,13 @@ export function applyFormat(
         }
         break;
     }
+    
+    // CRITICAL: Trigger mutation event to notify parent components
+    const mutationEvent = new CustomEvent('contentChanged', {
+      detail: { content: contentElement.innerHTML }
+    });
+    contentElement.dispatchEvent(mutationEvent);
+    
   } catch (error) {
     console.warn("Format application failed:", error);
   }
@@ -294,6 +301,7 @@ function applyHeadingStyles(element: HTMLElement, tagName: string) {
 
 /**
  * Apply link formatting to selected text or insert new link
+ * CRITICAL: This function now properly saves link data and triggers content updates
  */
 function applyLinkFormat(
   range: Range,
@@ -337,10 +345,20 @@ function applyLinkFormat(
     range.deleteContents();
     range.insertNode(link);
   }
+
+  // CRITICAL: Force content update after link insertion
+  const parentElement = link.closest('[contenteditable="true"]') as HTMLElement;
+  if (parentElement) {
+    const contentChangeEvent = new CustomEvent('contentChanged', {
+      detail: { content: parentElement.innerHTML }
+    });
+    parentElement.dispatchEvent(contentChangeEvent);
+  }
 }
 
 /**
  * Insert image at cursor position
+ * CRITICAL: This function now properly saves image data and triggers content updates
  */
 function insertImage(range: Range, url: string, alt: string, link?: string) {
   const img = document.createElement("img");
@@ -397,8 +415,26 @@ function insertImage(range: Range, url: string, alt: string, link?: string) {
 
     linkElement.appendChild(img);
     range.insertNode(linkElement);
+    
+    // CRITICAL: Force content update after image with link insertion
+    const parentElement = linkElement.closest('[contenteditable="true"]') as HTMLElement;
+    if (parentElement) {
+      const contentChangeEvent = new CustomEvent('contentChanged', {
+        detail: { content: parentElement.innerHTML }
+      });
+      parentElement.dispatchEvent(contentChangeEvent);
+    }
   } else {
     range.insertNode(img);
+    
+    // CRITICAL: Force content update after image insertion
+    const parentElement = img.closest('[contenteditable="true"]') as HTMLElement;
+    if (parentElement) {
+      const contentChangeEvent = new CustomEvent('contentChanged', {
+        detail: { content: parentElement.innerHTML }
+      });
+      parentElement.dispatchEvent(contentChangeEvent);
+    }
   }
 
   // Add some space after the image
@@ -540,6 +576,7 @@ function getPlaceholderText(tagName: string): string {
 
 /**
  * Apply click handlers to existing links and images
+ * CRITICAL: Now also ensures content change events are properly fired
  */
 function applyInteractiveHandlers(
   container: HTMLElement,
