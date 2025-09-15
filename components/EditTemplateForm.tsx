@@ -28,6 +28,8 @@ import {
   Plus,
   Globe,
   Wand2,
+  Maximize,
+  Minimize,
 } from "lucide-react";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import HtmlEditingToolbar from "./HtmlEditingToolbar";
@@ -69,6 +71,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Simple editing states - default to editing mode
   const [isMainEditing, setIsMainEditing] = useState(true);
+
+  // Full screen state
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   // Use shared settings hook
   const { settings, primaryColor } = useTemplateSettings();
@@ -191,6 +196,33 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       handleAIEdit();
     }
   };
+
+  // Handle full screen toggle
+  const toggleFullScreen = () => {
+    setIsFullScreen(!isFullScreen);
+  };
+
+  // Handle ESC key to exit full screen
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isFullScreen) {
+        setIsFullScreen(false);
+      }
+    };
+
+    if (isFullScreen) {
+      document.addEventListener("keydown", handleKeyDown);
+      // Prevent body scroll when in full screen
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.body.style.overflow = "";
+    };
+  }, [isFullScreen]);
 
   // Set up auto-resize for textareas
   useEffect(() => {
@@ -649,8 +681,116 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     router.back();
   };
 
+  // Full screen content preview component
+  const FullScreenPreview = () => (
+    <div className="fixed inset-0 z-50 bg-white">
+      <div className="flex flex-col h-full">
+        {/* Full screen header */}
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gray-50">
+          <div className="flex items-center space-x-4">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Template Content - Full Screen
+            </h2>
+            <div className="text-sm text-gray-600">
+              <strong>Subject:</strong> {formData.subject || "No subject"}
+            </div>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Button
+              type="button"
+              onClick={handleSubmit}
+              disabled={isPending}
+              className="bg-slate-800 hover:bg-slate-900 text-white"
+              size="sm"
+            >
+              {isPending ? "Updating..." : "Update Template"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={toggleFullScreen}
+              size="sm"
+              className="flex items-center space-x-2"
+            >
+              <Minimize className="h-4 w-4" />
+              <span>Exit Full Screen</span>
+            </Button>
+          </div>
+        </div>
+
+        {/* Full screen toolbar */}
+        <div className="p-4 border-b border-gray-200 bg-gray-50">
+          <HtmlEditingToolbar
+            onFormatApply={handleFormatApply}
+            className=""
+            primaryColor={primaryColor}
+          />
+        </div>
+
+        {/* Full screen content */}
+        <div className="flex-1 p-6 overflow-y-auto bg-white">
+          <div className="max-w-4xl mx-auto">
+            <div
+              ref={mainPreviewRef}
+              className="prose max-w-none text-base cursor-text min-h-96"
+              contentEditable={!isAIEditing}
+              style={{
+                pointerEvents: isAIEditing ? "none" : "auto",
+                userSelect: isAIEditing ? "none" : "text",
+                outline: "none",
+                minHeight: "400px",
+                lineHeight: "1.6",
+              }}
+              onInput={(e) => {
+                const updatedContent = e.currentTarget.innerHTML;
+                setFormData((prev) => ({
+                  ...prev,
+                  content: updatedContent,
+                }));
+              }}
+            />
+            
+            {/* Preview unsubscribe footer in full screen */}
+            {formData.content && (
+              <div className="mt-8 pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
+                <p>
+                  You received this email because you subscribed to our
+                  mailing list.
+                  <br />
+                  <span className="underline cursor-pointer">
+                    Unsubscribe
+                  </span>{" "}
+                  from future emails.
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  ↑ This unsubscribe link will be added automatically to
+                  all campaign emails
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Full screen footer */}
+        <div className="p-4 border-t border-gray-200 bg-gray-50">
+          <div className="flex items-center justify-between max-w-4xl mx-auto">
+            <div className="text-sm text-gray-600">
+              Press <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">ESC</kbd> to exit full screen
+            </div>
+            <div className="text-sm text-gray-600">
+              Template: {formData.template_type} • {formData.active ? 'Active' : 'Inactive'}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6">
+      {/* Full Screen Overlay */}
+      {isFullScreen && <FullScreenPreview />}
+
       {/* Unsaved Changes Warning */}
       {hasUnsavedChanges && (
         <div className="flex items-center space-x-2 p-4 bg-amber-50 border border-amber-200 rounded-md">
@@ -780,7 +920,19 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       {/* Template Content Section - 2 Column Layout */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle>Template Content</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Template Content</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={toggleFullScreen}
+              size="sm"
+              className="flex items-center space-x-2"
+            >
+              <Maximize className="h-4 w-4" />
+              <span>Full Screen</span>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="px-6 pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -985,8 +1137,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <strong>Subject:</strong>{" "}
                       {formData.subject || "No subject"}
                     </div>
-                    <div className="text-xs text-gray-500">
-                      {formData.template_type}
+                    <div className="flex items-center space-x-2">
+                      <div className="text-xs text-gray-500">
+                        {formData.template_type}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={toggleFullScreen}
+                        size="sm"
+                        className="p-1 h-6 w-6"
+                        title="Open in full screen"
+                      >
+                        <Maximize className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1054,7 +1218,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                         ) : (
                           <>
                             Ready to edit! Type directly in the content area and
-                            select text to use the formatting toolbar.
+                            select text to use the formatting toolbar. Click{" "}
+                            <strong>Full Screen</strong> for a larger editing view.
                           </>
                         )}
                       </p>
