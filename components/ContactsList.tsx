@@ -25,12 +25,14 @@ import {
   AlertTriangle,
   X,
   List,
+  Download,
 } from "lucide-react";
 import { EmailContact, EmailList } from "@/types";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import EditContactModal from "@/components/EditContactModal";
 import BulkActionsModal from "@/components/BulkActionsModal";
 import ListManagementModal from "@/components/ListManagementModal";
+import ContactsExportButton from "@/components/ContactsExportButton";
 import Pagination from "@/components/ui/pagination";
 
 interface ContactsListProps {
@@ -443,6 +445,13 @@ export default function ContactsList({
                 <SelectItem value="Bounced">Bounced</SelectItem>
               </SelectContent>
             </Select>
+            <ContactsExportButton
+              searchTerm={searchTerm}
+              statusFilter={statusFilter}
+              listFilter={listFilter}
+              totalContacts={total}
+              className="outline"
+            />
             <Button
               variant="outline"
               size="sm"
@@ -525,6 +534,13 @@ export default function ContactsList({
               </span>
             </div>
             <div className="flex items-center space-x-2">
+              <ContactsExportButton
+                searchTerm=""
+                statusFilter="all"
+                listFilter=""
+                totalContacts={selectedContacts.length}
+                className="outline bg-white"
+              />
               <Button
                 variant="outline"
                 size="sm"
