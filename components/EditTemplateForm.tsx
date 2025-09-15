@@ -69,8 +69,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [editingSessionActive, setEditingSessionActive] = useState(false);
   const { addToast } = useToast();
 
-  // Simple editing states - default to editing mode
-  const [isMainEditing, setIsMainEditing] = useState(true);
+  // Simple editing states - start in view mode
+  const [isMainEditing, setIsMainEditing] = useState(false);
 
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -89,7 +89,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const mainPreviewRef = useRef<HTMLDivElement>(null);
   const fullScreenPreviewRef = useRef<HTMLDivElement>(null);
 
-  // Form state
+  // Form state - SINGLE SOURCE OF TRUTH
   const [formData, setFormData] = useState({
     name: template.metadata.name,
     subject: template.metadata.subject,
@@ -111,6 +111,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // CRITICAL: Track which editor is currently being used to prevent conflicts
+  const [activeEditor, setActiveEditor] = useState<'main' | 'fullscreen' | null>(null);
+
   // Check if form has changes
   const hasFormChanges = () => {
     return (
@@ -124,18 +127,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Update unsaved changes state whenever form data changes
   useEffect(() => {
-    // Don't show unsaved changes warning during active editing
-    setHasUnsavedChanges(hasFormChanges() && !isSubmitting && !isMainEditing);
-  }, [formData, isSubmitting, isMainEditing]);
+    setHasUnsavedChanges(hasFormChanges() && !isSubmitting);
+  }, [formData, isSubmitting]);
 
   // Prevent navigation away with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Don't show warning during active editing
-      if (hasUnsavedChanges && !isMainEditing) {
+      if (hasUnsavedChanges) {
         e.preventDefault();
-        e.returnValue =
-          "You have unsaved changes. Are you sure you want to leave?";
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
         return "You have unsaved changes. Are you sure you want to leave?";
       }
     };
@@ -147,7 +147,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const originalReplace = router.replace;
 
     router.push = (...args) => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -157,7 +157,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.back = () => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -167,7 +167,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.replace = (...args) => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -182,7 +182,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       router.back = originalBack;
       router.replace = originalReplace;
     };
-  }, [hasUnsavedChanges, isSubmitting, isMainEditing, router]);
+  }, [hasUnsavedChanges, isSubmitting, router]);
 
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -213,7 +213,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     if (isFullScreen) {
       document.addEventListener("keydown", handleKeyDown);
-      // Prevent body scroll when in full screen
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -239,52 +238,32 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     });
   }, []);
 
-  // Initialize content in contentEditable divs
+  // FIXED: Initialize content in contentEditable divs - SINGLE DIRECTION SYNC
   useEffect(() => {
-    if (mainPreviewRef.current && !mainPreviewRef.current.innerHTML) {
-      mainPreviewRef.current.innerHTML =
-        formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(mainPreviewRef.current, primaryColor);
-    }
-  }, [formData.content, primaryColor]);
-
-  // FIXED: Initialize full screen preview content when opened
-  useEffect(() => {
-    if (isFullScreen && fullScreenPreviewRef.current) {
-      fullScreenPreviewRef.current.innerHTML =
-        formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-    }
-  }, [isFullScreen, formData.content, primaryColor]);
-
-  // Update contentEditable divs when content changes externally (like from AI)
-  useEffect(() => {
-    // Update main preview
-    if (
-      mainPreviewRef.current &&
-      mainPreviewRef.current.innerHTML !== formData.content
-    ) {
-      // Only update if the content is different and we're not currently typing
-      if (document.activeElement !== mainPreviewRef.current) {
-        mainPreviewRef.current.innerHTML =
-          formData.content || "<p>Start typing your email content here...</p>";
+    // Initialize main preview
+    if (mainPreviewRef.current) {
+      const currentMainContent = mainPreviewRef.current.innerHTML;
+      const expectedContent = formData.content || "<p>Start typing your email content here...</p>";
+      
+      // Only update if content is actually different and we're not actively editing
+      if (currentMainContent !== expectedContent && activeEditor !== 'main') {
+        mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
 
-    // Update full screen preview if open
-    if (
-      isFullScreen &&
-      fullScreenPreviewRef.current &&
-      fullScreenPreviewRef.current.innerHTML !== formData.content
-    ) {
-      if (document.activeElement !== fullScreenPreviewRef.current) {
-        fullScreenPreviewRef.current.innerHTML =
-          formData.content || "<p>Start typing your email content here...</p>";
+    // Initialize full screen preview if it's open
+    if (isFullScreen && fullScreenPreviewRef.current) {
+      const currentFullScreenContent = fullScreenPreviewRef.current.innerHTML;
+      const expectedContent = formData.content || "<p>Start typing your email content here...</p>";
+      
+      // Only update if content is actually different and we're not actively editing
+      if (currentFullScreenContent !== expectedContent && activeEditor !== 'fullscreen') {
+        fullScreenPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
       }
     }
-  }, [formData.content, primaryColor, isFullScreen]);
+  }, [formData.content, primaryColor, isFullScreen, activeEditor]);
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -295,55 +274,49 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100);
   };
 
-  // Handle format application from toolbar - FIXED VERSION
+  // FIXED: Handle format application from toolbar with proper conflict prevention
   const handleFormatApply = (format: string, value?: string, targetRef?: React.RefObject<HTMLDivElement>) => {
-    // Determine which preview div to use based on full screen state or explicit target
-    const previewDiv = targetRef?.current || (isFullScreen ? fullScreenPreviewRef.current : mainPreviewRef.current);
-    if (!previewDiv) return;
+    let previewDiv: HTMLDivElement | null = null;
+    let editorType: 'main' | 'fullscreen' = 'main';
 
-    // Apply formatting directly to the contentEditable div
-    applyFormat(previewDiv, format, value, primaryColor);
-
-    // Get the updated content and sync with React state immediately
-    const updatedContent = previewDiv.innerHTML;
-    
-    // Update form data state to ensure it's saved
-    setFormData((prev) => ({
-      ...prev,
-      content: updatedContent,
-    }));
-
-    // Sync content between both preview divs
-    if (isFullScreen) {
-      // If we're in full screen, sync content to main preview
-      if (mainPreviewRef.current && mainPreviewRef.current !== previewDiv) {
-        mainPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(mainPreviewRef.current, primaryColor);
-      }
-    } else {
-      // If we're in normal view, sync content to full screen preview for when it opens
-      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== previewDiv) {
-        fullScreenPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-      }
+    // Determine which preview div to use
+    if (targetRef?.current) {
+      previewDiv = targetRef.current;
+      editorType = targetRef === fullScreenPreviewRef ? 'fullscreen' : 'main';
+    } else if (isFullScreen && fullScreenPreviewRef.current) {
+      previewDiv = fullScreenPreviewRef.current;
+      editorType = 'fullscreen';
+    } else if (mainPreviewRef.current) {
+      previewDiv = mainPreviewRef.current;
+      editorType = 'main';
     }
 
-    // Trigger a slight delay to ensure DOM changes are captured
-    setTimeout(() => {
-      if (previewDiv) {
-        const finalContent = previewDiv.innerHTML;
-        // Double-check that state is in sync with DOM
-        setFormData((prev) => {
-          if (prev.content !== finalContent) {
-            return {
-              ...prev,
-              content: finalContent,
-            };
-          }
-          return prev;
-        });
-      }
-    }, 100);
+    if (!previewDiv) return;
+
+    // Mark this editor as active to prevent conflicts
+    setActiveEditor(editorType);
+
+    try {
+      // Apply formatting directly to the contentEditable div
+      applyFormat(previewDiv, format, value, primaryColor);
+
+      // Get the updated content and sync with React state immediately
+      const updatedContent = previewDiv.innerHTML;
+      
+      // Update form data state IMMEDIATELY
+      setFormData((prev) => ({
+        ...prev,
+        content: updatedContent,
+      }));
+
+    } catch (error) {
+      console.error('Format application error:', error);
+    } finally {
+      // Clear active editor after a brief delay to allow for proper state sync
+      setTimeout(() => {
+        setActiveEditor(null);
+      }, 100);
+    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -369,24 +342,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   const detectContentType = (url: string): "file" | "webpage" => {
     const fileExtensions = [
-      "jpg",
-      "jpeg",
-      "png",
-      "gif",
-      "bmp",
-      "webp",
-      "svg",
-      "pdf",
-      "doc",
-      "docx",
-      "txt",
-      "rtf",
-      "md",
-      "xls",
-      "xlsx",
-      "csv",
-      "ppt",
-      "pptx",
+      "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg",
+      "pdf", "doc", "docx", "txt", "rtf", "md",
+      "xls", "xlsx", "csv", "ppt", "pptx",
     ];
 
     const extension = url.split(".").pop()?.toLowerCase();
@@ -417,8 +375,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const documentTypes = ["pdf", "doc", "docx", "txt", "rtf", "md"];
 
     if (imageTypes.includes(extension)) return <Image className="h-4 w-4" />;
-    if (documentTypes.includes(extension))
-      return <FileText className="h-4 w-4" />;
+    if (documentTypes.includes(extension)) return <FileText className="h-4 w-4" />;
     return <File className="h-4 w-4" />;
   };
 
@@ -441,9 +398,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setContextItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleContextUrlKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>
-  ) => {
+  const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       addContextItem(contextUrl);
@@ -471,21 +426,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setStreamingContent("");
     setAiStatus("Starting AI editing...");
     setAiProgress(0);
-
-    // Exit editing mode if active
-    if (isMainEditing) {
-      setIsMainEditing(false);
-      if (mainPreviewRef.current) {
-        mainPreviewRef.current.contentEditable = "false";
-        mainPreviewRef.current.style.outline = "none";
-        mainPreviewRef.current.style.backgroundColor = "transparent";
-      }
-      if (fullScreenPreviewRef.current) {
-        fullScreenPreviewRef.current.contentEditable = "false";
-        fullScreenPreviewRef.current.style.outline = "none";
-        fullScreenPreviewRef.current.style.backgroundColor = "transparent";
-      }
-    }
 
     try {
       const requestBody = {
@@ -538,7 +478,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 } else if (data.type === "content") {
                   accumulatedContent += data.text;
                   setStreamingContent(accumulatedContent);
-                  // Update form data in real-time during streaming
+                  
+                  // CRITICAL: Update form data during streaming but prevent editor conflicts
+                  // Don't set activeEditor to 'ai' as it's not part of the valid union type
                   setFormData((prev) => ({
                     ...prev,
                     content: accumulatedContent,
@@ -565,16 +507,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     if (contentRef.current) {
                       autoResize(contentRef.current);
                     }
-
                     if (aiPromptRef.current) {
                       aiPromptRef.current.focus();
                     }
                   }, 100);
 
                   setTimeout(() => {
-                    setSuccess(
-                      "Ready for more edits! Add another instruction or save template."
-                    );
+                    setSuccess("Ready for more edits! Add another instruction or save template.");
                   }, 2000);
                 } else if (data.type === "error") {
                   throw new Error(data.error);
@@ -591,9 +530,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     } catch (error) {
       console.error("AI edit error:", error);
       setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to edit template with AI"
+        error instanceof Error ? error.message : "Failed to edit template with AI"
       );
       setAiStatus("Editing failed");
       setEditingSessionActive(false);
@@ -610,19 +547,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setEditingSessionActive(false);
     setAiPrompt("");
     setContextItems([]);
-
-    // Reset editing states
-    setIsMainEditing(false);
-    if (mainPreviewRef.current) {
-      mainPreviewRef.current.contentEditable = "false";
-      mainPreviewRef.current.style.outline = "none";
-      mainPreviewRef.current.style.backgroundColor = "transparent";
-    }
-    if (fullScreenPreviewRef.current) {
-      fullScreenPreviewRef.current.contentEditable = "false";
-      fullScreenPreviewRef.current.style.outline = "none";
-      fullScreenPreviewRef.current.style.backgroundColor = "transparent";
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -682,10 +606,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         });
 
         setHasUnsavedChanges(false);
-
         setSuccess("Template updated successfully!");
         addToast("Template updated successfully!", "success");
-
         setEditingSessionActive(false);
       } catch (error) {
         console.error("Update error:", error);
@@ -747,33 +669,30 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     router.back();
   };
 
-  // FIXED: ContentEditable input handler to properly sync state
-  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>, isFullScreen: boolean = false) => {
+  // FIXED: ContentEditable input handler with proper conflict prevention
+  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>, isFullScreenEditor: boolean = false) => {
+    const targetEditor = isFullScreenEditor ? 'fullscreen' : 'main';
+    
+    // Set this editor as active to prevent conflicts
+    setActiveEditor(targetEditor);
+    
     const updatedContent = e.currentTarget.innerHTML;
     
-    // Immediately update form data state to ensure changes are captured
+    // CRITICAL: Update form data immediately to ensure changes are captured
     setFormData((prev) => ({
       ...prev,
       content: updatedContent,
     }));
 
-    // Sync content between both preview divs
-    if (isFullScreen) {
-      // Update main preview when editing in full screen
-      if (mainPreviewRef.current && mainPreviewRef.current !== e.currentTarget) {
-        mainPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(mainPreviewRef.current, primaryColor);
+    // Clear active editor after state update
+    setTimeout(() => {
+      if (activeEditor === targetEditor) {
+        setActiveEditor(null);
       }
-    } else {
-      // Update full screen preview when editing in normal view
-      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== e.currentTarget) {
-        fullScreenPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-      }
-    }
+    }, 100);
   };
 
-  // Full screen content preview component
+  // FIXED: Full screen content preview component with better state management
   const FullScreenPreview = () => (
     <div className="fixed inset-0 z-50 bg-white">
       <div className="flex flex-col h-full">
@@ -810,56 +729,273 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           </div>
         </div>
 
-        {/* Full screen toolbar */}
-        <div className="p-4 border-b border-gray-200 bg-gray-50">
-          <HtmlEditingToolbar
-            onFormatApply={(format, value) => handleFormatApply(format, value, fullScreenPreviewRef)}
-            className=""
-            primaryColor={primaryColor}
-          />
-        </div>
-
-        {/* Full screen content */}
-        <div className="flex-1 p-6 overflow-y-auto bg-white">
-          <div className="max-w-4xl mx-auto">
-            <div
-              ref={fullScreenPreviewRef}
-              className="prose max-w-none text-base cursor-text min-h-96"
-              contentEditable={!isAIEditing}
-              style={{
-                pointerEvents: isAIEditing ? "none" : "auto",
-                userSelect: isAIEditing ? "none" : "text",
-                outline: "none",
-                minHeight: "400px",
-                lineHeight: "1.6",
-              }}
-              onInput={(e) => handleContentEditableInput(e, true)}
-            />
+        {/* Full screen content - 2 COLUMN LAYOUT */}
+        <div className="flex-1 flex overflow-hidden">
+          {/* Left Column: AI Editor */}
+          <div className="w-1/2 border-r border-gray-200 bg-gray-50 flex flex-col">
+            <div className="p-4 border-b border-gray-200 bg-gray-100">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center space-x-2">
+                <Wand2 className="h-5 w-5 text-purple-600" />
+                <span>Edit Content with AI</span>
+              </h3>
+            </div>
             
-            {/* Preview unsubscribe footer in full screen */}
-            {formData.content && (
-              <div className="mt-8 pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
-                <p>
-                  You received this email because you subscribed to our
-                  mailing list.
-                  <br />
-                  <span className="underline cursor-pointer">
-                    Unsubscribe
-                  </span>{" "}
-                  from future emails.
-                </p>
-                <p className="text-xs text-gray-400 mt-1">
-                  ↑ This unsubscribe link will be added automatically to
-                  all campaign emails
-                </p>
+            <div className="flex-1 p-6 overflow-y-auto">
+              <Card className="border-purple-200 bg-purple-50/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2 text-purple-800">
+                    <Wand2 className="h-5 w-5" />
+                    <span>AI Instructions</span>
+                  </CardTitle>
+                  <p className="text-purple-700 text-sm">
+                    How should we improve the current content?
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Textarea
+                      ref={aiPromptRef}
+                      placeholder="e.g., 'Add a call-to-action button', 'Change the tone to be more casual'"
+                      value={aiPrompt}
+                      onChange={(e) => {
+                        setAiPrompt(e.target.value);
+                        autoResize(e.target);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      onFocus={handleAISectionFocus}
+                      className="min-h-[100px] resize-none"
+                      disabled={isAIEditing}
+                    />
+                    <p className="text-xs text-purple-600">
+                      💡 Tip: Press{" "}
+                      <kbd className="px-1.5 py-0.5 text-xs bg-purple-200 rounded">
+                        Cmd+Enter
+                      </kbd>{" "}
+                      to edit
+                    </p>
+                  </div>
+
+                  {/* Context Items */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-sm font-medium text-purple-800">
+                        Context (Optional)
+                      </Label>
+                      <Button
+                        type="button"
+                        onClick={() => setShowContextInput(true)}
+                        disabled={isAIEditing}
+                        size="sm"
+                        variant="outline"
+                        className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Add Context
+                      </Button>
+                    </div>
+
+                    {/* Context Input */}
+                    {showContextInput && (
+                      <div className="p-3 border border-purple-200 rounded-lg bg-white">
+                        <div className="flex space-x-2">
+                          <Input
+                            type="url"
+                            value={contextUrl}
+                            onChange={(e) => setContextUrl(e.target.value)}
+                            placeholder="Enter style reference, brand guide, or example URL..."
+                            onKeyDown={handleContextUrlKeyDown}
+                            className="flex-1"
+                            autoFocus
+                          />
+                          <Button
+                            type="button"
+                            onClick={() => addContextItem(contextUrl)}
+                            disabled={!contextUrl.trim()}
+                            size="sm"
+                            className="bg-purple-600 hover:bg-purple-700"
+                          >
+                            Add
+                          </Button>
+                          <Button
+                            type="button"
+                            onClick={() => {
+                              setShowContextInput(false);
+                              setContextUrl("");
+                            }}
+                            size="sm"
+                            variant="outline"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                        <p className="text-xs text-purple-600 mt-2">
+                          📎 Add style guides, brand references, or web pages
+                          for AI to follow
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Context Items List */}
+                    {contextItems.length > 0 && (
+                      <div className="space-y-2">
+                        {contextItems.map((item) => (
+                          <div
+                            key={item.id}
+                            className="flex items-center justify-between p-2 bg-white border border-purple-200 rounded-md"
+                          >
+                            <div className="flex items-center space-x-2 flex-1 min-w-0">
+                              {getContextIcon(item)}
+                              <span className="text-sm text-purple-700 truncate">
+                                {item.title ||
+                                  new URL(item.url).pathname.split("/").pop() ||
+                                  item.url}
+                              </span>
+                              <span className="text-xs text-purple-500 capitalize">
+                                ({item.type})
+                              </span>
+                            </div>
+                            <Button
+                              type="button"
+                              onClick={() => removeContextItem(item.id)}
+                              disabled={isAIEditing}
+                              size="sm"
+                              variant="ghost"
+                              className="text-purple-400 hover:text-red-600 p-1"
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <p className="text-xs text-purple-600">
+                      📎 AI will use context items as reference for improvements
+                    </p>
+                  </div>
+
+                  {/* AI Edit Status Display */}
+                  {isAIEditing && aiStatus && (
+                    <div className="p-3 bg-purple-100 border border-purple-200 rounded-lg">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm text-purple-800">
+                          {aiStatus}
+                        </span>
+                        <span className="text-xs text-purple-600">
+                          {aiProgress}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-purple-200 rounded-full h-2">
+                        <div
+                          className="bg-purple-600 h-2 rounded-full transition-all duration-300"
+                          style={{ width: `${aiProgress}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                  )}
+
+                  <Button
+                    onClick={handleAIEdit}
+                    disabled={isAIEditing || !aiPrompt.trim()}
+                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                  >
+                    {isAIEditing ? (
+                      <>Editing with AI...</>
+                    ) : (
+                      <>
+                        <Wand2 className="mr-2 h-4 w-4" />
+                        Edit with AI
+                      </>
+                    )}
+                  </Button>
+
+                  {/* Editing session help */}
+                  {editingSessionActive && (
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start space-x-2">
+                        <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="text-sm text-blue-800">
+                          <p className="font-medium mb-1">
+                            Iterative Editing Mode
+                          </p>
+                          <p className="text-xs">
+                            Keep adding refinement instructions to perfect your
+                            template. Context and previous changes are
+                            preserved.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          {/* Right Column: HTML Editor */}
+          <div className="w-1/2 bg-white flex flex-col">
+            {/* HTML Editor Header */}
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <h3 className="text-lg font-semibold text-gray-900">HTML Editor</h3>
+              <p className="text-sm text-gray-600 mt-1">
+                <strong>Subject:</strong> {formData.subject || "No subject"}
+              </p>
+            </div>
+
+            {/* HTML Editor Toolbar */}
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <HtmlEditingToolbar
+                onFormatApply={(format, value) => handleFormatApply(format, value, fullScreenPreviewRef)}
+                className=""
+                primaryColor={primaryColor}
+              />
+            </div>
+
+            {/* HTML Editor Content */}
+            <div className="flex-1 p-6 overflow-y-auto bg-white">
+              <div className="max-w-4xl mx-auto">
+                <div
+                  ref={fullScreenPreviewRef}
+                  className="prose max-w-none text-base cursor-text min-h-96"
+                  contentEditable={!isAIEditing}
+                  data-editor-instance="fullscreen"
+                  style={{
+                    pointerEvents: isAIEditing ? "none" : "auto",
+                    userSelect: isAIEditing ? "none" : "text",
+                    outline: "none",
+                    minHeight: "400px",
+                    lineHeight: "1.6",
+                  }}
+                  onInput={(e) => handleContentEditableInput(e, true)}
+                  suppressContentEditableWarning={true}
+                />
+                
+                {/* Preview unsubscribe footer in full screen */}
+                {formData.content && (
+                  <div className="mt-8 pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
+                    <p>
+                      You received this email because you subscribed to our
+                      mailing list.
+                      <br />
+                      <span className="underline cursor-pointer">
+                        Unsubscribe
+                      </span>{" "}
+                      from future emails.
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      ↑ This unsubscribe link will be added automatically to
+                      all campaign emails
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
         {/* Full screen footer */}
         <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <div className="flex items-center justify-between max-w-4xl mx-auto">
+          <div className="flex items-center justify-between">
             <div className="text-sm text-gray-600">
               Press <kbd className="px-2 py-1 bg-gray-200 rounded text-xs">ESC</kbd> to exit full screen
             </div>
@@ -1227,16 +1363,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <div className="text-xs text-gray-500">
                         {formData.template_type}
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={toggleFullScreen}
-                        size="sm"
-                        className="p-1 h-6 w-6"
-                        title="Open in full screen"
-                      >
-                        <Maximize className="h-3 w-3" />
-                      </Button>
                     </div>
                   </div>
                 </div>
@@ -1255,6 +1381,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     ref={mainPreviewRef}
                     className="prose max-w-none text-sm cursor-text"
                     contentEditable={!isAIEditing}
+                    data-editor-instance="main"
                     style={{
                       pointerEvents: isAIEditing ? "none" : "auto",
                       userSelect: isAIEditing ? "none" : "text",
@@ -1262,6 +1389,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       minHeight: "200px",
                     }}
                     onInput={(e) => handleContentEditableInput(e, false)}
+                    suppressContentEditableWarning={true}
                   />
                   {/* Preview unsubscribe footer */}
                   {formData.content && (
