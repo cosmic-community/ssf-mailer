@@ -59,7 +59,6 @@ export default async function ContactsPage({
                 statusFilter={status}
                 listFilter={listId}
                 totalContacts={total}
-                className="bg-green-600 hover:bg-green-700 text-white"
               />
               <CreateListModal />
               <CSVUploadModal />

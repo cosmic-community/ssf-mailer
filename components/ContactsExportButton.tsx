@@ -130,7 +130,7 @@ export default function ContactsExportButton({
     <Button
       onClick={handleExport}
       disabled={isExporting || totalContacts === 0}
-      variant={"default"}
+      variant={"outline"}
       size="sm"
       className={className}
     >

@@ -450,7 +450,6 @@ export default function ContactsList({
               statusFilter={statusFilter}
               listFilter={listFilter}
               totalContacts={total}
-              className="outline"
             />
             <Button
               variant="outline"
@@ -539,7 +538,6 @@ export default function ContactsList({
                 statusFilter="all"
                 listFilter=""
                 totalContacts={selectedContacts.length}
-                className="outline bg-white"
               />
               <Button
                 variant="outline"
