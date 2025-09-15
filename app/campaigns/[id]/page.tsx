@@ -69,8 +69,8 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
       subject: campaign.metadata.template_snapshot.subject,
       content: campaign.metadata.template_snapshot.content,
     };
-  } else if (status === "Draft") {
-    // For draft campaigns, show current template content
+  } else if (status === "Draft" || status === "Scheduled") {
+    // For draft and scheduled campaigns, ALWAYS show current template content
     const templateId =
       typeof campaign.metadata?.template === "string"
         ? campaign.metadata.template
@@ -230,7 +230,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                     <span>
                       {status === "Sent"
                         ? "Content Snapshot"
-                        : "Template Preview"}
+                        : "Current Template Preview"}
                     </span>
                   </CardTitle>
                   {status === "Sent" && (
@@ -238,9 +238,9 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                       This is the exact content that was sent to recipients
                     </p>
                   )}
-                  {status === "Draft" && (
+                  {(status === "Draft" || status === "Scheduled") && (
                     <p className="text-sm text-gray-600">
-                      Preview of the current template content
+                      Live preview of the current template content - updates automatically when template is modified
                     </p>
                   )}
                 </CardHeader>
@@ -300,6 +300,18 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                           </div>
                         </div>
                       )}
+
+                    {/* Live Content Notice for Draft/Scheduled */}
+                    {(status === "Draft" || status === "Scheduled") && (
+                      <div className="text-xs text-green-600 p-3 bg-green-50 rounded">
+                        <div className="flex items-center space-x-1">
+                          <Eye className="h-3 w-3" />
+                          <span>
+                            ✨ Live content - this preview updates automatically when you modify the template
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
