@@ -27,6 +27,14 @@ export async function POST(
     const originalName = originalCampaign.metadata?.name || originalCampaign.title
     const copyName = `${originalName} (Copy)`
 
+    // Extract template ID properly - handle both string and object cases
+    let templateId = ''
+    if (typeof originalCampaign.metadata?.template === 'string') {
+      templateId = originalCampaign.metadata.template
+    } else if (typeof originalCampaign.metadata?.template === 'object' && originalCampaign.metadata.template?.id) {
+      templateId = originalCampaign.metadata.template.id
+    }
+
     // Create the duplicate campaign with proper metadata structure
     // Reset status to Draft and clear stats/sending progress
     const duplicatedCampaign = await cosmic.objects.insertOne({
@@ -34,7 +42,7 @@ export async function POST(
       type: 'marketing-campaigns',
       metadata: {
         name: copyName,
-        template: originalCampaign.metadata?.template || '',
+        template: templateId, // Use template ID string, not object
         target_lists: originalCampaign.metadata?.target_lists || [],
         target_contacts: originalCampaign.metadata?.target_contacts || [],
         target_tags: originalCampaign.metadata?.target_tags || [],
