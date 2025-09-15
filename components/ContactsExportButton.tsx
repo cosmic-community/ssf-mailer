@@ -126,16 +126,11 @@ export default function ContactsExportButton({
       : 'Export CSV'
   }
 
-  const getButtonVariant = () => {
-    // Use different variant based on context
-    return className.includes('outline') ? 'outline' : 'default'
-  }
-
   return (
     <Button
       onClick={handleExport}
       disabled={isExporting || totalContacts === 0}
-      variant={getButtonVariant()}
+      variant={"default"}
       size="sm"
       className={className}
     >
