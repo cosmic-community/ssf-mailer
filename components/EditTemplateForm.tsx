@@ -480,7 +480,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   setStreamingContent(accumulatedContent);
                   
                   // CRITICAL: Update form data during streaming but prevent editor conflicts
-                  setActiveEditor('ai'); // Mark AI as active editor
+                  // Don't set activeEditor to 'ai' as it's not part of the valid union type
                   setFormData((prev) => ({
                     ...prev,
                     content: accumulatedContent,
@@ -510,8 +510,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     if (aiPromptRef.current) {
                       aiPromptRef.current.focus();
                     }
-                    // Clear AI as active editor
-                    setActiveEditor(null);
                   }, 100);
 
                   setTimeout(() => {
@@ -536,7 +534,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       );
       setAiStatus("Editing failed");
       setEditingSessionActive(false);
-      setActiveEditor(null); // Clear active editor on error
     } finally {
       setIsAIEditing(false);
       setTimeout(() => {
