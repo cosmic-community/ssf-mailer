@@ -135,8 +135,12 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
         throw new Error('Failed to update campaign')
       }
 
-      // Show success message instead of redirecting
+      // Show success message and trigger data refresh
       addToast('Campaign updated successfully!', 'success')
+      
+      // Trigger router refresh to update all components with fresh data
+      // This will cause the SendCampaignButton to re-render with updated campaign data
+      router.refresh()
 
     } catch (err) {
       setError('Failed to update campaign. Please try again.')
