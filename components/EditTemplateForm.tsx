@@ -87,6 +87,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const aiPromptRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const mainPreviewRef = useRef<HTMLDivElement>(null);
+  const fullScreenPreviewRef = useRef<HTMLDivElement>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -247,8 +248,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
   }, [formData.content, primaryColor]);
 
+  // FIXED: Initialize full screen preview content when opened
+  useEffect(() => {
+    if (isFullScreen && fullScreenPreviewRef.current) {
+      fullScreenPreviewRef.current.innerHTML =
+        formData.content || "<p>Start typing your email content here...</p>";
+      applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
+    }
+  }, [isFullScreen, formData.content, primaryColor]);
+
   // Update contentEditable divs when content changes externally (like from AI)
   useEffect(() => {
+    // Update main preview
     if (
       mainPreviewRef.current &&
       mainPreviewRef.current.innerHTML !== formData.content
@@ -260,7 +271,20 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
-  }, [formData.content, primaryColor]);
+
+    // Update full screen preview if open
+    if (
+      isFullScreen &&
+      fullScreenPreviewRef.current &&
+      fullScreenPreviewRef.current.innerHTML !== formData.content
+    ) {
+      if (document.activeElement !== fullScreenPreviewRef.current) {
+        fullScreenPreviewRef.current.innerHTML =
+          formData.content || "<p>Start typing your email content here...</p>";
+        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
+      }
+    }
+  }, [formData.content, primaryColor, isFullScreen]);
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -272,8 +296,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   };
 
   // Handle format application from toolbar - FIXED VERSION
-  const handleFormatApply = (format: string, value?: string) => {
-    const previewDiv = mainPreviewRef.current;
+  const handleFormatApply = (format: string, value?: string, targetRef?: React.RefObject<HTMLDivElement>) => {
+    // Determine which preview div to use based on full screen state or explicit target
+    const previewDiv = targetRef?.current || (isFullScreen ? fullScreenPreviewRef.current : mainPreviewRef.current);
     if (!previewDiv) return;
 
     // Apply formatting directly to the contentEditable div
@@ -287,6 +312,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       ...prev,
       content: updatedContent,
     }));
+
+    // Sync content between both preview divs
+    if (isFullScreen) {
+      // If we're in full screen, sync content to main preview
+      if (mainPreviewRef.current && mainPreviewRef.current !== previewDiv) {
+        mainPreviewRef.current.innerHTML = updatedContent;
+        applyStylesToContent(mainPreviewRef.current, primaryColor);
+      }
+    } else {
+      // If we're in normal view, sync content to full screen preview for when it opens
+      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== previewDiv) {
+        fullScreenPreviewRef.current.innerHTML = updatedContent;
+        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
+      }
+    }
 
     // Trigger a slight delay to ensure DOM changes are captured
     setTimeout(() => {
@@ -440,6 +480,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         mainPreviewRef.current.style.outline = "none";
         mainPreviewRef.current.style.backgroundColor = "transparent";
       }
+      if (fullScreenPreviewRef.current) {
+        fullScreenPreviewRef.current.contentEditable = "false";
+        fullScreenPreviewRef.current.style.outline = "none";
+        fullScreenPreviewRef.current.style.backgroundColor = "transparent";
+      }
     }
 
     try {
@@ -573,6 +618,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       mainPreviewRef.current.style.outline = "none";
       mainPreviewRef.current.style.backgroundColor = "transparent";
     }
+    if (fullScreenPreviewRef.current) {
+      fullScreenPreviewRef.current.contentEditable = "false";
+      fullScreenPreviewRef.current.style.outline = "none";
+      fullScreenPreviewRef.current.style.backgroundColor = "transparent";
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -698,7 +748,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   };
 
   // FIXED: ContentEditable input handler to properly sync state
-  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
+  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>, isFullScreen: boolean = false) => {
     const updatedContent = e.currentTarget.innerHTML;
     
     // Immediately update form data state to ensure changes are captured
@@ -706,6 +756,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       ...prev,
       content: updatedContent,
     }));
+
+    // Sync content between both preview divs
+    if (isFullScreen) {
+      // Update main preview when editing in full screen
+      if (mainPreviewRef.current && mainPreviewRef.current !== e.currentTarget) {
+        mainPreviewRef.current.innerHTML = updatedContent;
+        applyStylesToContent(mainPreviewRef.current, primaryColor);
+      }
+    } else {
+      // Update full screen preview when editing in normal view
+      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== e.currentTarget) {
+        fullScreenPreviewRef.current.innerHTML = updatedContent;
+        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
+      }
+    }
   };
 
   // Full screen content preview component
@@ -748,7 +813,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         {/* Full screen toolbar */}
         <div className="p-4 border-b border-gray-200 bg-gray-50">
           <HtmlEditingToolbar
-            onFormatApply={handleFormatApply}
+            onFormatApply={(format, value) => handleFormatApply(format, value, fullScreenPreviewRef)}
             className=""
             primaryColor={primaryColor}
           />
@@ -758,7 +823,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         <div className="flex-1 p-6 overflow-y-auto bg-white">
           <div className="max-w-4xl mx-auto">
             <div
-              ref={mainPreviewRef}
+              ref={fullScreenPreviewRef}
               className="prose max-w-none text-base cursor-text min-h-96"
               contentEditable={!isAIEditing}
               style={{
@@ -768,7 +833,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 minHeight: "400px",
                 lineHeight: "1.6",
               }}
-              onInput={handleContentEditableInput}
+              onInput={(e) => handleContentEditableInput(e, true)}
             />
             
             {/* Preview unsubscribe footer in full screen */}
@@ -1179,7 +1244,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 {/* Sticky formatting toolbar */}
                 <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
                   <HtmlEditingToolbar
-                    onFormatApply={handleFormatApply}
+                    onFormatApply={(format, value) => handleFormatApply(format, value, mainPreviewRef)}
                     className=""
                     primaryColor={primaryColor}
                   />
@@ -1196,7 +1261,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       outline: "none",
                       minHeight: "200px",
                     }}
-                    onInput={handleContentEditableInput}
+                    onInput={(e) => handleContentEditableInput(e, false)}
                   />
                   {/* Preview unsubscribe footer */}
                   {formData.content && (
