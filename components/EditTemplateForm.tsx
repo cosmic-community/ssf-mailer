@@ -69,8 +69,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [editingSessionActive, setEditingSessionActive] = useState(false);
   const { addToast } = useToast();
 
-  // Simple editing states - default to editing mode
-  const [isMainEditing, setIsMainEditing] = useState(true);
+  // Simple editing states - start in view mode
+  const [isMainEditing, setIsMainEditing] = useState(false);
 
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -89,7 +89,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const mainPreviewRef = useRef<HTMLDivElement>(null);
   const fullScreenPreviewRef = useRef<HTMLDivElement>(null);
 
-  // Form state
+  // Form state - SINGLE SOURCE OF TRUTH
   const [formData, setFormData] = useState({
     name: template.metadata.name,
     subject: template.metadata.subject,
@@ -111,6 +111,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // CRITICAL: Track which editor is currently being used to prevent conflicts
+  const [activeEditor, setActiveEditor] = useState<'main' | 'fullscreen' | null>(null);
+
   // Check if form has changes
   const hasFormChanges = () => {
     return (
@@ -124,18 +127,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Update unsaved changes state whenever form data changes
   useEffect(() => {
-    // Don't show unsaved changes warning during active editing
-    setHasUnsavedChanges(hasFormChanges() && !isSubmitting && !isMainEditing);
-  }, [formData, isSubmitting, isMainEditing]);
+    setHasUnsavedChanges(hasFormChanges() && !isSubmitting);
+  }, [formData, isSubmitting]);
 
   // Prevent navigation away with unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Don't show warning during active editing
-      if (hasUnsavedChanges && !isMainEditing) {
+      if (hasUnsavedChanges) {
         e.preventDefault();
-        e.returnValue =
-          "You have unsaved changes. Are you sure you want to leave?";
+        e.returnValue = "You have unsaved changes. Are you sure you want to leave?";
         return "You have unsaved changes. Are you sure you want to leave?";
       }
     };
@@ -147,7 +147,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const originalReplace = router.replace;
 
     router.push = (...args) => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -157,7 +157,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.back = () => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -167,7 +167,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     router.replace = (...args) => {
-      if (hasUnsavedChanges && !isSubmitting && !isMainEditing) {
+      if (hasUnsavedChanges && !isSubmitting) {
         const confirmed = window.confirm(
           "You have unsaved changes. Are you sure you want to leave?"
         );
@@ -182,7 +182,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       router.back = originalBack;
       router.replace = originalReplace;
     };
-  }, [hasUnsavedChanges, isSubmitting, isMainEditing, router]);
+  }, [hasUnsavedChanges, isSubmitting, router]);
 
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
@@ -213,7 +213,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     if (isFullScreen) {
       document.addEventListener("keydown", handleKeyDown);
-      // Prevent body scroll when in full screen
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -239,53 +238,32 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     });
   }, []);
 
-  // Initialize content in contentEditable divs
+  // FIXED: Initialize content in contentEditable divs - SINGLE DIRECTION SYNC
   useEffect(() => {
-    if (mainPreviewRef.current && !mainPreviewRef.current.innerHTML) {
-      mainPreviewRef.current.innerHTML =
-        formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(mainPreviewRef.current, primaryColor);
-    }
-  }, [formData.content, primaryColor]);
-
-  // FIXED: Initialize full screen preview content when opened - with unique key to prevent conflicts
-  useEffect(() => {
-    if (isFullScreen && fullScreenPreviewRef.current) {
-      // Use unique ID to differentiate from main preview
-      fullScreenPreviewRef.current.setAttribute('data-editor-instance', 'fullscreen');
-      fullScreenPreviewRef.current.innerHTML = formData.content || "<p>Start typing your email content here...</p>";
-      applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-    }
-  }, [isFullScreen, formData.content, primaryColor]);
-
-  // Update contentEditable divs when content changes externally (like from AI)
-  useEffect(() => {
-    // Update main preview
-    if (
-      mainPreviewRef.current &&
-      mainPreviewRef.current.innerHTML !== formData.content
-    ) {
-      // Only update if the content is different and we're not currently typing
-      if (document.activeElement !== mainPreviewRef.current) {
-        mainPreviewRef.current.innerHTML =
-          formData.content || "<p>Start typing your email content here...</p>";
+    // Initialize main preview
+    if (mainPreviewRef.current) {
+      const currentMainContent = mainPreviewRef.current.innerHTML;
+      const expectedContent = formData.content || "<p>Start typing your email content here...</p>";
+      
+      // Only update if content is actually different and we're not actively editing
+      if (currentMainContent !== expectedContent && activeEditor !== 'main') {
+        mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
       }
     }
 
-    // Update full screen preview if open
-    if (
-      isFullScreen &&
-      fullScreenPreviewRef.current &&
-      fullScreenPreviewRef.current.innerHTML !== formData.content
-    ) {
-      if (document.activeElement !== fullScreenPreviewRef.current) {
-        fullScreenPreviewRef.current.innerHTML =
-          formData.content || "<p>Start typing your email content here...</p>";
+    // Initialize full screen preview if it's open
+    if (isFullScreen && fullScreenPreviewRef.current) {
+      const currentFullScreenContent = fullScreenPreviewRef.current.innerHTML;
+      const expectedContent = formData.content || "<p>Start typing your email content here...</p>";
+      
+      // Only update if content is actually different and we're not actively editing
+      if (currentFullScreenContent !== expectedContent && activeEditor !== 'fullscreen') {
+        fullScreenPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
       }
     }
-  }, [formData.content, primaryColor, isFullScreen]);
+  }, [formData.content, primaryColor, isFullScreen, activeEditor]);
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -296,55 +274,49 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100);
   };
 
-  // Handle format application from toolbar - FIXED VERSION
+  // FIXED: Handle format application from toolbar with proper conflict prevention
   const handleFormatApply = (format: string, value?: string, targetRef?: React.RefObject<HTMLDivElement>) => {
-    // Determine which preview div to use based on full screen state or explicit target
-    const previewDiv = targetRef?.current || (isFullScreen ? fullScreenPreviewRef.current : mainPreviewRef.current);
-    if (!previewDiv) return;
+    let previewDiv: HTMLDivElement | null = null;
+    let editorType: 'main' | 'fullscreen' = 'main';
 
-    // Apply formatting directly to the contentEditable div
-    applyFormat(previewDiv, format, value, primaryColor);
-
-    // Get the updated content and sync with React state immediately
-    const updatedContent = previewDiv.innerHTML;
-    
-    // Update form data state to ensure it's saved
-    setFormData((prev) => ({
-      ...prev,
-      content: updatedContent,
-    }));
-
-    // Sync content between both preview divs
-    if (isFullScreen) {
-      // If we're in full screen, sync content to main preview
-      if (mainPreviewRef.current && mainPreviewRef.current !== previewDiv) {
-        mainPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(mainPreviewRef.current, primaryColor);
-      }
-    } else {
-      // If we're in normal view, sync content to full screen preview for when it opens
-      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== previewDiv) {
-        fullScreenPreviewRef.current.innerHTML = updatedContent;
-        applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-      }
+    // Determine which preview div to use
+    if (targetRef?.current) {
+      previewDiv = targetRef.current;
+      editorType = targetRef === fullScreenPreviewRef ? 'fullscreen' : 'main';
+    } else if (isFullScreen && fullScreenPreviewRef.current) {
+      previewDiv = fullScreenPreviewRef.current;
+      editorType = 'fullscreen';
+    } else if (mainPreviewRef.current) {
+      previewDiv = mainPreviewRef.current;
+      editorType = 'main';
     }
 
-    // Trigger a slight delay to ensure DOM changes are captured
-    setTimeout(() => {
-      if (previewDiv) {
-        const finalContent = previewDiv.innerHTML;
-        // Double-check that state is in sync with DOM
-        setFormData((prev) => {
-          if (prev.content !== finalContent) {
-            return {
-              ...prev,
-              content: finalContent,
-            };
-          }
-          return prev;
-        });
-      }
-    }, 100);
+    if (!previewDiv) return;
+
+    // Mark this editor as active to prevent conflicts
+    setActiveEditor(editorType);
+
+    try {
+      // Apply formatting directly to the contentEditable div
+      applyFormat(previewDiv, format, value, primaryColor);
+
+      // Get the updated content and sync with React state immediately
+      const updatedContent = previewDiv.innerHTML;
+      
+      // Update form data state IMMEDIATELY
+      setFormData((prev) => ({
+        ...prev,
+        content: updatedContent,
+      }));
+
+    } catch (error) {
+      console.error('Format application error:', error);
+    } finally {
+      // Clear active editor after a brief delay to allow for proper state sync
+      setTimeout(() => {
+        setActiveEditor(null);
+      }, 100);
+    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -370,24 +342,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   const detectContentType = (url: string): "file" | "webpage" => {
     const fileExtensions = [
-      "jpg",
-      "jpeg",
-      "png",
-      "gif",
-      "bmp",
-      "webp",
-      "svg",
-      "pdf",
-      "doc",
-      "docx",
-      "txt",
-      "rtf",
-      "md",
-      "xls",
-      "xlsx",
-      "csv",
-      "ppt",
-      "pptx",
+      "jpg", "jpeg", "png", "gif", "bmp", "webp", "svg",
+      "pdf", "doc", "docx", "txt", "rtf", "md",
+      "xls", "xlsx", "csv", "ppt", "pptx",
     ];
 
     const extension = url.split(".").pop()?.toLowerCase();
@@ -418,8 +375,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     const documentTypes = ["pdf", "doc", "docx", "txt", "rtf", "md"];
 
     if (imageTypes.includes(extension)) return <Image className="h-4 w-4" />;
-    if (documentTypes.includes(extension))
-      return <FileText className="h-4 w-4" />;
+    if (documentTypes.includes(extension)) return <FileText className="h-4 w-4" />;
     return <File className="h-4 w-4" />;
   };
 
@@ -442,9 +398,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setContextItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  const handleContextUrlKeyDown = (
-    e: React.KeyboardEvent<HTMLInputElement>
-  ) => {
+  const handleContextUrlKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       e.preventDefault();
       addContextItem(contextUrl);
@@ -472,21 +426,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setStreamingContent("");
     setAiStatus("Starting AI editing...");
     setAiProgress(0);
-
-    // Exit editing mode if active
-    if (isMainEditing) {
-      setIsMainEditing(false);
-      if (mainPreviewRef.current) {
-        mainPreviewRef.current.contentEditable = "false";
-        mainPreviewRef.current.style.outline = "none";
-        mainPreviewRef.current.style.backgroundColor = "transparent";
-      }
-      if (fullScreenPreviewRef.current) {
-        fullScreenPreviewRef.current.contentEditable = "false";
-        fullScreenPreviewRef.current.style.outline = "none";
-        fullScreenPreviewRef.current.style.backgroundColor = "transparent";
-      }
-    }
 
     try {
       const requestBody = {
@@ -539,7 +478,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                 } else if (data.type === "content") {
                   accumulatedContent += data.text;
                   setStreamingContent(accumulatedContent);
-                  // Update form data in real-time during streaming
+                  
+                  // CRITICAL: Update form data during streaming but prevent editor conflicts
+                  setActiveEditor('ai'); // Mark AI as active editor
                   setFormData((prev) => ({
                     ...prev,
                     content: accumulatedContent,
@@ -566,16 +507,15 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                     if (contentRef.current) {
                       autoResize(contentRef.current);
                     }
-
                     if (aiPromptRef.current) {
                       aiPromptRef.current.focus();
                     }
+                    // Clear AI as active editor
+                    setActiveEditor(null);
                   }, 100);
 
                   setTimeout(() => {
-                    setSuccess(
-                      "Ready for more edits! Add another instruction or save template."
-                    );
+                    setSuccess("Ready for more edits! Add another instruction or save template.");
                   }, 2000);
                 } else if (data.type === "error") {
                   throw new Error(data.error);
@@ -592,12 +532,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     } catch (error) {
       console.error("AI edit error:", error);
       setError(
-        error instanceof Error
-          ? error.message
-          : "Failed to edit template with AI"
+        error instanceof Error ? error.message : "Failed to edit template with AI"
       );
       setAiStatus("Editing failed");
       setEditingSessionActive(false);
+      setActiveEditor(null); // Clear active editor on error
     } finally {
       setIsAIEditing(false);
       setTimeout(() => {
@@ -611,19 +550,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     setEditingSessionActive(false);
     setAiPrompt("");
     setContextItems([]);
-
-    // Reset editing states
-    setIsMainEditing(false);
-    if (mainPreviewRef.current) {
-      mainPreviewRef.current.contentEditable = "false";
-      mainPreviewRef.current.style.outline = "none";
-      mainPreviewRef.current.style.backgroundColor = "transparent";
-    }
-    if (fullScreenPreviewRef.current) {
-      fullScreenPreviewRef.current.contentEditable = "false";
-      fullScreenPreviewRef.current.style.outline = "none";
-      fullScreenPreviewRef.current.style.backgroundColor = "transparent";
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -683,10 +609,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         });
 
         setHasUnsavedChanges(false);
-
         setSuccess("Template updated successfully!");
         addToast("Template updated successfully!", "success");
-
         setEditingSessionActive(false);
       } catch (error) {
         console.error("Update error:", error);
@@ -748,43 +672,30 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     router.back();
   };
 
-  // FIXED: ContentEditable input handler to properly sync state and prevent unfocus
+  // FIXED: ContentEditable input handler with proper conflict prevention
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>, isFullScreenEditor: boolean = false) => {
+    const targetEditor = isFullScreenEditor ? 'fullscreen' : 'main';
+    
+    // Set this editor as active to prevent conflicts
+    setActiveEditor(targetEditor);
+    
     const updatedContent = e.currentTarget.innerHTML;
     
-    // Immediately update form data state to ensure changes are captured
+    // CRITICAL: Update form data immediately to ensure changes are captured
     setFormData((prev) => ({
       ...prev,
       content: updatedContent,
     }));
 
-    // Sync content between both preview divs ONLY if they're different instances
-    if (isFullScreenEditor) {
-      // Update main preview when editing in full screen
-      if (mainPreviewRef.current && mainPreviewRef.current !== e.currentTarget) {
-        // Use setTimeout to prevent interfering with the current input event
-        setTimeout(() => {
-          if (mainPreviewRef.current && document.activeElement !== mainPreviewRef.current) {
-            mainPreviewRef.current.innerHTML = updatedContent;
-            applyStylesToContent(mainPreviewRef.current, primaryColor);
-          }
-        }, 0);
+    // Clear active editor after state update
+    setTimeout(() => {
+      if (activeEditor === targetEditor) {
+        setActiveEditor(null);
       }
-    } else {
-      // Update full screen preview when editing in normal view
-      if (fullScreenPreviewRef.current && fullScreenPreviewRef.current !== e.currentTarget) {
-        // Use setTimeout to prevent interfering with the current input event
-        setTimeout(() => {
-          if (fullScreenPreviewRef.current && document.activeElement !== fullScreenPreviewRef.current) {
-            fullScreenPreviewRef.current.innerHTML = updatedContent;
-            applyStylesToContent(fullScreenPreviewRef.current, primaryColor);
-          }
-        }, 0);
-      }
-    }
+    }, 100);
   };
 
-  // Full screen content preview component - REDESIGNED as 2-column layout
+  // FIXED: Full screen content preview component with better state management
   const FullScreenPreview = () => (
     <div className="fixed inset-0 z-50 bg-white">
       <div className="flex flex-col h-full">
@@ -1442,7 +1353,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </Card>
             </div>
 
-            {/* Right Column: Template Content with Toolbar (NO duplicate full screen button) */}
+            {/* Right Column: Template Content with Toolbar */}
             <div className="space-y-4">
               <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
@@ -1455,7 +1366,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                       <div className="text-xs text-gray-500">
                         {formData.template_type}
                       </div>
-                      {/* REMOVED: Duplicate full screen button as requested */}
                     </div>
                   </div>
                 </div>
