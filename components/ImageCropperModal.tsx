@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import ReactCrop, { 
   Crop, 
   PixelCrop, 
@@ -64,10 +64,10 @@ export default function ImageCropperModal({
   const [maintainAspect, setMaintainAspect] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
+  const [originalImageDimensions, setOriginalImageDimensions] = useState<{width: number, height: number}>({width: 0, height: 0});
 
   // Reset state when modal opens/closes or media changes
-  // FIXED: Remove useState call and use useEffect instead
-  useState(() => {
+  useEffect(() => {
     if (isOpen && mediaItem) {
       setCrop(undefined);
       setCompletedCrop(undefined);
@@ -78,13 +78,18 @@ export default function ImageCropperModal({
       setOutputWidth(800);
       setOutputHeight(600);
       setMaintainAspect(true);
+      setOriginalImageDimensions({width: 0, height: 0});
     }
-  });
+  }, [isOpen, mediaItem]);
 
   // Handle image load and set initial crop
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+    
+    // Store original dimensions for calculations
+    setOriginalImageDimensions({ width: naturalWidth, height: naturalHeight });
+    
     if (aspectRatio) {
-      const { width, height } = e.currentTarget;
       const newCrop = centerCrop(
         makeAspectCrop(
           {
@@ -142,75 +147,68 @@ export default function ImageCropperModal({
     }
   }, [maintainAspect, aspectRatio]);
 
-  // Create cropped image canvas
-  const getCroppedImg = useCallback((
-    image: HTMLImageElement,
+  // Create imgix cropped URL and convert to File
+  const getCroppedImgixFile = useCallback(async (
     crop: PixelCrop,
     fileName: string
   ): Promise<File> => {
-    return new Promise((resolve, reject) => {
-      const canvas = canvasRef.current;
-      if (!canvas) {
-        reject(new Error('Canvas not available'));
-        return;
-      }
+    if (!mediaItem || !originalImageDimensions.width || !originalImageDimensions.height) {
+      throw new Error('Media item or dimensions not available');
+    }
 
-      const ctx = canvas.getContext('2d');
-      if (!ctx) {
-        reject(new Error('Canvas context not available'));
-        return;
-      }
+    // Calculate scale factors between displayed image and original image
+    const displayedImg = imgRef.current;
+    if (!displayedImg) {
+      throw new Error('Image reference not available');
+    }
 
-      const scaleX = image.naturalWidth / image.width;
-      const scaleY = image.naturalHeight / image.height;
+    const scaleX = originalImageDimensions.width / displayedImg.width;
+    const scaleY = originalImageDimensions.height / displayedImg.height;
 
-      // Set canvas size to desired output dimensions
-      canvas.width = outputWidth;
-      canvas.height = outputHeight;
+    // Calculate crop coordinates in original image space
+    const cropX = Math.round(crop.x * scaleX);
+    const cropY = Math.round(crop.y * scaleY);
+    const cropWidth = Math.round(crop.width * scaleX);
+    const cropHeight = Math.round(crop.height * scaleY);
 
-      // Calculate source dimensions from crop
-      const sourceX = crop.x * scaleX;
-      const sourceY = crop.y * scaleY;
-      const sourceWidth = crop.width * scaleX;
-      const sourceHeight = crop.height * scaleY;
-
-      // Clear canvas and draw cropped image
-      ctx.fillStyle = '#ffffff';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      ctx.drawImage(
-        image,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-      );
-
-      // Convert canvas to blob and create file
-      canvas.toBlob(
-        (blob) => {
-          if (!blob) {
-            reject(new Error('Failed to create cropped image'));
-            return;
-          }
-
-          const croppedFileName = fileName.replace(/\.[^/.]+$/, '') + '_cropped.jpg';
-          const file = new File([blob], croppedFileName, {
-            type: 'image/jpeg',
-            lastModified: Date.now(),
-          });
-          
-          resolve(file);
-        },
-        'image/jpeg',
-        quality
-      );
+    // Build imgix URL with crop parameters
+    const imgixParams = new URLSearchParams({
+      // Crop parameters (in original image coordinates)
+      rect: `${cropX},${cropY},${cropWidth},${cropHeight}`,
+      // Output size
+      w: outputWidth.toString(),
+      h: outputHeight.toString(),
+      // Quality and format
+      auto: 'format,compress',
+      q: Math.round(quality * 100).toString(),
+      // Fit mode
+      fit: 'crop'
     });
-  }, [outputWidth, outputHeight, quality]);
+
+    const croppedImageUrl = `${mediaItem.imgix_url}?${imgixParams.toString()}`;
+
+    try {
+      // Fetch the cropped image from imgix
+      const response = await fetch(croppedImageUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch cropped image: ${response.statusText}`);
+      }
+
+      const blob = await response.blob();
+      
+      // Create file with appropriate name
+      const croppedFileName = fileName.replace(/\.[^/.]+$/, '') + '_cropped.jpg';
+      const file = new File([blob], croppedFileName, {
+        type: 'image/jpeg',
+        lastModified: Date.now(),
+      });
+      
+      return file;
+    } catch (error) {
+      console.error('Error fetching cropped image from imgix:', error);
+      throw new Error(`Failed to create cropped image: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [mediaItem, originalImageDimensions, outputWidth, outputHeight, quality]);
 
   // Handle crop and save
   const handleCropSave = useCallback(async () => {
@@ -222,8 +220,7 @@ export default function ImageCropperModal({
     setIsProcessing(true);
 
     try {
-      const croppedImageFile = await getCroppedImg(
-        imgRef.current,
+      const croppedImageFile = await getCroppedImgixFile(
         completedCrop,
         mediaItem.original_name
       );
@@ -236,7 +233,7 @@ export default function ImageCropperModal({
     } finally {
       setIsProcessing(false);
     }
-  }, [completedCrop, mediaItem, getCroppedImg, onCropComplete, onError, onOpenChange]);
+  }, [completedCrop, mediaItem, getCroppedImgixFile, onCropComplete, onError, onOpenChange]);
 
   // Handle crop reset
   const handleReset = useCallback(() => {
@@ -250,8 +247,7 @@ export default function ImageCropperModal({
     if (!completedCrop || !imgRef.current || !mediaItem) return;
 
     try {
-      const croppedImageFile = await getCroppedImg(
-        imgRef.current,
+      const croppedImageFile = await getCroppedImgixFile(
         completedCrop,
         mediaItem.original_name
       );
@@ -269,7 +265,7 @@ export default function ImageCropperModal({
       console.error('Error downloading preview:', error);
       onError?.(error instanceof Error ? error.message : 'Failed to download preview');
     }
-  }, [completedCrop, mediaItem, getCroppedImg, onError]);
+  }, [completedCrop, mediaItem, getCroppedImgixFile, onError]);
 
   if (!mediaItem || !mediaItem.type.startsWith('image/')) {
     return null;
@@ -294,7 +290,6 @@ export default function ImageCropperModal({
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
                   onComplete={(c) => {
-                    // FIXED: convertToPixelCrop now takes 3 arguments: crop, imageWidth, imageHeight
                     if (imgRef.current) {
                       setCompletedCrop(convertToPixelCrop(c, imgRef.current.width, imgRef.current.height));
                     }
@@ -421,7 +416,7 @@ export default function ImageCropperModal({
             {/* Info */}
             <div className="p-3 bg-blue-50 rounded-lg">
               <p className="text-xs text-blue-800">
-                <strong>Original:</strong> {mediaItem?.width}×{mediaItem?.height}px
+                <strong>Original:</strong> {originalImageDimensions.width}×{originalImageDimensions.height}px
               </p>
               <p className="text-xs text-blue-800 mt-1">
                 <strong>Output:</strong> {outputWidth}×{outputHeight}px
