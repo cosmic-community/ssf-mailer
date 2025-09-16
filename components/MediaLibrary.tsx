@@ -71,7 +71,7 @@ export default function MediaLibrary({
   
   // Filter and search state
   const [searchTerm, setSearchTerm] = useState('')
-  const [selectedFolder, setSelectedFolder] = useState<string>('')
+  const [selectedFolder, setSelectedFolder] = useState<string>('all-folders')
   const [sortBy, setSortBy] = useState<SortMode>('-created_at')
   const [viewMode, setViewMode] = useState<ViewMode>('grid')
   const [folders, setFolders] = useState<string[]>([])
@@ -118,7 +118,7 @@ export default function MediaLibrary({
         sort: sortBy
       })
       
-      if (selectedFolder) {
+      if (selectedFolder && selectedFolder !== 'all-folders') {
         params.append('folder', selectedFolder)
       }
       
@@ -389,7 +389,7 @@ export default function MediaLibrary({
                 <SelectValue placeholder="All folders" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">All folders</SelectItem>
+                <SelectItem value="all-folders">All folders</SelectItem>
                 {folders.map(folder => (
                   <SelectItem key={folder} value={folder}>
                     <div className="flex items-center">
@@ -468,12 +468,12 @@ export default function MediaLibrary({
             <ImageIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No media files</h3>
             <p className="text-gray-600 mb-4">
-              {searchTerm || selectedFolder 
+              {searchTerm || (selectedFolder && selectedFolder !== 'all-folders')
                 ? 'No files match your current filters.'
                 : 'Upload your first file to get started.'
               }
             </p>
-            {!searchTerm && !selectedFolder && (
+            {!searchTerm && (!selectedFolder || selectedFolder === 'all-folders') && (
               <Button
                 onClick={() => document.getElementById('file-upload')?.click()}
                 className="bg-blue-600 hover:bg-blue-700"
