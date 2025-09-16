@@ -1,223 +1,265 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { MarketingCampaign, EmailTemplate, EmailContact, EmailList } from '@/types'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { useToast } from '@/hooks/useToast'
+import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import {
+  MarketingCampaign,
+  EmailTemplate,
+  EmailContact,
+  EmailList,
+} from "@/types";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { useToast } from "@/hooks/useToast";
 
 interface EditCampaignFormProps {
-  campaign: MarketingCampaign
-  templates: EmailTemplate[]
-  contacts: EmailContact[]
-  lists: EmailList[]
+  campaign: MarketingCampaign;
+  templates: EmailTemplate[];
+  contacts: EmailContact[];
+  lists: EmailList[];
+  onFormDataChange?: (
+    formData: any,
+    isLoading: boolean,
+    handleSubmit: () => Promise<void>
+  ) => void;
 }
 
-export default function EditCampaignForm({ campaign, templates, contacts, lists }: EditCampaignFormProps) {
-  const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState('')
-  const { addToast } = useToast()
-  
-  // Get template ID from campaign metadata - handle the template field
-  const getTemplateId = () => {
-    if (typeof campaign.metadata?.template === 'string') {
-      return campaign.metadata.template
-    }
-    if (campaign.metadata?.template && typeof campaign.metadata.template === 'object') {
-      return campaign.metadata.template.id
-    }
-    return ''
-  }
+export default function EditCampaignForm({
+  campaign,
+  templates,
+  contacts,
+  lists,
+  onFormDataChange,
+}: EditCampaignFormProps) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
+  const { addToast } = useToast();
 
   // Get target list IDs from campaign metadata
   const getTargetListIds = (): string[] => {
-    if (campaign.metadata?.target_lists && Array.isArray(campaign.metadata.target_lists)) {
-      return campaign.metadata.target_lists.map((list: any) => {
-        if (typeof list === 'object' && list !== null && 'id' in list) {
-          return list.id as string
-        }
-        if (typeof list === 'string') {
-          return list
-        }
-        return ''
-      }).filter((id: string) => id !== '')
+    if (
+      campaign.metadata?.target_lists &&
+      Array.isArray(campaign.metadata.target_lists)
+    ) {
+      return campaign.metadata.target_lists
+        .map((list: any) => {
+          if (typeof list === "object" && list !== null && "id" in list) {
+            return list.id as string;
+          }
+          if (typeof list === "string") {
+            return list;
+          }
+          return "";
+        })
+        .filter((id: string) => id !== "");
     }
-    return []
-  }
+    return [];
+  };
 
   // Get target contact IDs from campaign metadata - handle both full objects and IDs with proper typing
   const getTargetContactIds = (): string[] => {
-    if (campaign.metadata?.target_contacts && Array.isArray(campaign.metadata.target_contacts)) {
-      return campaign.metadata.target_contacts.map((contact: any) => {
-        // Handle both full contact objects and string IDs
-        if (typeof contact === 'object' && contact !== null && 'id' in contact) {
-          return contact.id as string
-        }
-        if (typeof contact === 'string') {
-          return contact
-        }
-        return ''
-      }).filter((id: string) => id !== '')
+    if (
+      campaign.metadata?.target_contacts &&
+      Array.isArray(campaign.metadata.target_contacts)
+    ) {
+      return campaign.metadata.target_contacts
+        .map((contact: any) => {
+          // Handle both full contact objects and string IDs
+          if (
+            typeof contact === "object" &&
+            contact !== null &&
+            "id" in contact
+          ) {
+            return contact.id as string;
+          }
+          if (typeof contact === "string") {
+            return contact;
+          }
+          return "";
+        })
+        .filter((id: string) => id !== "");
     }
-    return []
-  }
+    return [];
+  };
 
   // Determine initial target type based on campaign data
   const getInitialTargetType = () => {
-    const listIds = getTargetListIds()
-    const contactIds = getTargetContactIds()
-    const tags = campaign.metadata?.target_tags || []
+    const listIds = getTargetListIds();
+    const contactIds = getTargetContactIds();
+    const tags = campaign.metadata?.target_tags || [];
 
-    if (listIds.length > 0) return 'lists'
-    if (contactIds.length > 0) return 'contacts'
-    if (tags.length > 0) return 'tags'
-    return 'lists' // default
-  }
-  
+    if (listIds.length > 0) return "lists";
+    if (contactIds.length > 0) return "contacts";
+    if (tags.length > 0) return "tags";
+    return "lists"; // default
+  };
+
   const [formData, setFormData] = useState({
-    name: campaign.metadata?.name || '',
-    template_id: getTemplateId(),
-    target_type: getInitialTargetType() as 'lists' | 'contacts' | 'tags',
+    name: campaign.metadata?.name || "",
+    target_type: getInitialTargetType() as "lists" | "contacts" | "tags",
     list_ids: getTargetListIds(),
     contact_ids: getTargetContactIds(),
     target_tags: campaign.metadata?.target_tags || [],
-    send_date: campaign.metadata?.send_date || '',
-    schedule_type: campaign.metadata?.send_date ? 'scheduled' as const : 'now' as const
-  })
+    send_date: campaign.metadata?.send_date || "",
+    schedule_type: campaign.metadata?.send_date
+      ? ("scheduled" as const)
+      : ("now" as const),
+  });
 
-  console.log('Campaign metadata:', campaign.metadata)
-  console.log('Target list IDs:', getTargetListIds())
-  console.log('Target contact IDs:', getTargetContactIds())
-  console.log('Form data initialized:', formData)
+  console.log("Campaign metadata:", campaign.metadata);
+  console.log("Target list IDs:", getTargetListIds());
+  console.log("Target contact IDs:", getTargetContactIds());
+  console.log("Form data initialized:", formData);
 
   // Filter out unsubscribed contacts
-  const activeContacts = contacts.filter(contact => 
-    contact.metadata?.status?.value !== 'Unsubscribed'
-  )
+  const activeContacts = contacts.filter(
+    (contact) => contact.metadata?.status?.value !== "Unsubscribed"
+  );
 
   // Filter out inactive lists
-  const activeLists = lists.filter(list => 
-    list.metadata?.active !== false
-  )
+  const activeLists = lists.filter((list) => list.metadata?.active !== false);
 
   // Get unique tags from active contacts only
   const uniqueTags = Array.from(
     new Set(
       activeContacts
-        .flatMap(contact => contact.metadata?.tags || [])
+        .flatMap((contact) => contact.metadata?.tags || [])
         .filter(Boolean)
     )
-  )
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setIsLoading(true)
+    e.preventDefault();
+    setError("");
+    setIsLoading(true);
 
     try {
       const response = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           name: formData.name,
-          template_id: formData.template_id,
-          list_ids: formData.target_type === 'lists' ? formData.list_ids : [],
-          contact_ids: formData.target_type === 'contacts' ? formData.contact_ids : [],
-          target_tags: formData.target_type === 'tags' ? formData.target_tags : [],
-          send_date: formData.schedule_type === 'scheduled' ? formData.send_date : '',
+          list_ids: formData.target_type === "lists" ? formData.list_ids : [],
+          contact_ids:
+            formData.target_type === "contacts" ? formData.contact_ids : [],
+          target_tags:
+            formData.target_type === "tags" ? formData.target_tags : [],
+          send_date:
+            formData.schedule_type === "scheduled" ? formData.send_date : "",
         }),
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to update campaign')
+        throw new Error("Failed to update campaign");
       }
 
       // Show success message and trigger data refresh
-      addToast('Campaign updated successfully!', 'success')
-      
+      addToast("Campaign updated successfully!", "success");
+
       // Trigger router refresh to update all components with fresh data
       // This will cause the SendCampaignButton to re-render with updated campaign data
-      router.refresh()
-
+      router.refresh();
     } catch (err) {
-      setError('Failed to update campaign. Please try again.')
-      addToast('Failed to update campaign. Please try again.', 'error')
-      console.error('Campaign update error:', err)
+      setError("Failed to update campaign. Please try again.");
+      addToast("Failed to update campaign. Please try again.", "error");
+      console.error("Campaign update error:", err);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
   const handleListToggle = (listId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       list_ids: prev.list_ids.includes(listId)
-        ? prev.list_ids.filter(id => id !== listId)
-        : [...prev.list_ids, listId]
-    }))
-  }
+        ? prev.list_ids.filter((id) => id !== listId)
+        : [...prev.list_ids, listId],
+    }));
+  };
 
   const handleContactToggle = (contactId: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       contact_ids: prev.contact_ids.includes(contactId)
-        ? prev.contact_ids.filter(id => id !== contactId)
-        : [...prev.contact_ids, contactId]
-    }))
-  }
+        ? prev.contact_ids.filter((id) => id !== contactId)
+        : [...prev.contact_ids, contactId],
+    }));
+  };
 
   const handleTagToggle = (tag: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       target_tags: prev.target_tags.includes(tag)
-        ? prev.target_tags.filter(t => t !== tag)
-        : [...prev.target_tags, tag]
-    }))
-  }
+        ? prev.target_tags.filter((t) => t !== tag)
+        : [...prev.target_tags, tag],
+    }));
+  };
 
   const handleRevertToDraft = async () => {
-    setIsLoading(true)
-    setError('')
-    
+    setIsLoading(true);
+    setError("");
+
     try {
       const response = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: 'PUT',
+        method: "PUT",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          status: 'Draft',
-          send_date: ''
+          status: "Draft",
+          send_date: "",
         }),
-      })
+      });
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to revert campaign to draft')
+        const errorData = await response.json();
+        throw new Error(
+          errorData.error || "Failed to revert campaign to draft"
+        );
       }
 
-      addToast('Campaign reverted to draft successfully!', 'success')
-      router.refresh()
+      addToast("Campaign reverted to draft successfully!", "success");
+      router.refresh();
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Failed to revert campaign to draft'
-      setError(errorMessage)
-      addToast(errorMessage, 'error')
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to revert campaign to draft";
+      setError(errorMessage);
+      addToast(errorMessage, "error");
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
-  }
+  };
 
-  const canEdit = campaign.metadata?.status?.value === 'Draft'
-  const isScheduled = campaign.metadata?.status?.value === 'Scheduled'
+  const canEdit = campaign.metadata?.status?.value === "Draft";
+  const isScheduled = campaign.metadata?.status?.value === "Scheduled";
+
+  // Create a submit handler that can be called from outside
+  const handleExternalSubmit = useCallback(async () => {
+    await handleSubmit({ preventDefault: () => {} } as React.FormEvent);
+  }, []);
+
+  // Notify parent component of form data changes
+  useEffect(() => {
+    if (onFormDataChange) {
+      onFormDataChange(formData, isLoading, handleExternalSubmit);
+    }
+  }, [formData, isLoading]);
 
   return (
     <div className="card max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold text-gray-900">
-          {canEdit ? 'Edit Campaign' : 'Campaign Details'}
+          {canEdit ? "Edit Campaign" : "Campaign Details"}
         </h2>
         <div className="flex items-center space-x-3">
           {!canEdit && !isScheduled && (
@@ -231,12 +273,12 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
               disabled={isLoading}
               className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'Reverting...' : 'Revert to Draft'}
+              {isLoading ? "Reverting..." : "Revert to Draft"}
             </button>
           )}
         </div>
       </div>
-      
+
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
           <p className="text-red-600">{error}</p>
@@ -246,7 +288,10 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Campaign Name */}
         <div>
-          <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
+          <label
+            htmlFor="name"
+            className="block text-sm font-medium text-gray-700 mb-2"
+          >
             Campaign Name
           </label>
           <input
@@ -255,46 +300,12 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
             required
             className="form-input"
             value={formData.name}
-            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+            onChange={(e) =>
+              setFormData((prev) => ({ ...prev, name: e.target.value }))
+            }
             placeholder="Enter campaign name"
             disabled={!canEdit}
           />
-        </div>
-
-        {/* Template Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Email Template
-          </label>
-          <Select
-            value={formData.template_id}
-            onValueChange={(value) => setFormData(prev => ({ ...prev, template_id: value }))}
-            disabled={!canEdit}
-          >
-            <SelectTrigger className="w-full">
-              <SelectValue placeholder="Select a template" />
-            </SelectTrigger>
-            <SelectContent>
-              {templates.length === 0 ? (
-                <SelectItem value="" disabled>
-                  No templates available - create a template first
-                </SelectItem>
-              ) : (
-                templates.map((template) => (
-                  <SelectItem key={template.id} value={template.id}>
-                    {template.metadata?.name} ({template.metadata?.template_type?.value})
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
-          {templates.length === 0 && (
-            <p className="mt-1 text-sm text-gray-500">
-              <a href="/templates/new" className="text-primary-600 hover:text-primary-700">
-                Create your first email template
-              </a> to get started.
-            </p>
-          )}
         </div>
 
         {/* Target Type Selection */}
@@ -308,32 +319,60 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                 type="radio"
                 name="target_type"
                 value="lists"
-                checked={formData.target_type === 'lists'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
+                checked={formData.target_type === "lists"}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    target_type: e.target.value as
+                      | "lists"
+                      | "contacts"
+                      | "tags",
+                  }))
+                }
                 className="form-radio"
                 disabled={!canEdit}
               />
-              <span className="ml-2 text-sm text-gray-700">Select lists (recommended for large audiences)</span>
+              <span className="ml-2 text-sm text-gray-700">
+                Select lists (recommended for large audiences)
+              </span>
             </label>
             <label className="flex items-center">
               <input
                 type="radio"
                 name="target_type"
                 value="contacts"
-                checked={formData.target_type === 'contacts'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
+                checked={formData.target_type === "contacts"}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    target_type: e.target.value as
+                      | "lists"
+                      | "contacts"
+                      | "tags",
+                  }))
+                }
                 className="form-radio"
                 disabled={!canEdit}
               />
-              <span className="ml-2 text-sm text-gray-700">Select specific contacts</span>
+              <span className="ml-2 text-sm text-gray-700">
+                Select specific contacts
+              </span>
             </label>
             <label className="flex items-center">
               <input
                 type="radio"
                 name="target_type"
                 value="tags"
-                checked={formData.target_type === 'tags'}
-                onChange={(e) => setFormData(prev => ({ ...prev, target_type: e.target.value as 'lists' | 'contacts' | 'tags' }))}
+                checked={formData.target_type === "tags"}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    target_type: e.target.value as
+                      | "lists"
+                      | "contacts"
+                      | "tags",
+                  }))
+                }
                 className="form-radio"
                 disabled={!canEdit}
               />
@@ -343,7 +382,7 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
         </div>
 
         {/* List Selection */}
-        {formData.target_type === 'lists' && (
+        {formData.target_type === "lists" && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Lists ({formData.list_ids.length} selected)
@@ -351,7 +390,12 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
             {lists.length > activeLists.length && (
               <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> {lists.length - activeLists.length} inactive list{lists.length - activeLists.length !== 1 ? 's are' : ' is'} hidden from selection.
+                  <strong>Note:</strong> {lists.length - activeLists.length}{" "}
+                  inactive list
+                  {lists.length - activeLists.length !== 1
+                    ? "s are"
+                    : " is"}{" "}
+                  hidden from selection.
                 </p>
               </div>
             )}
@@ -359,7 +403,16 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
               {activeLists.length === 0 ? (
                 <p className="text-sm text-gray-500">
                   {lists.length === 0 ? (
-                    <>No lists available. <a href="/lists/new" className="text-primary-600 hover:text-primary-700">Create lists first</a>.</>
+                    <>
+                      No lists available.{" "}
+                      <a
+                        href="/lists/new"
+                        className="text-primary-600 hover:text-primary-700"
+                      >
+                        Create lists first
+                      </a>
+                      .
+                    </>
                   ) : (
                     <>No active lists available. All lists are inactive.</>
                   )}
@@ -377,10 +430,13 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                     <span className="ml-2 text-sm text-gray-700">
                       <span className="font-medium">{list.metadata?.name}</span>
                       {list.metadata?.description && (
-                        <span className="text-gray-500"> - {list.metadata.description}</span>
+                        <span className="text-gray-500">
+                          {" "}
+                          - {list.metadata.description}
+                        </span>
                       )}
                       <span className="ml-2 inline-flex px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        {list.metadata?.list_type?.value || 'General'}
+                        {list.metadata?.list_type?.value || "General"}
                       </span>
                       {list.metadata?.total_contacts !== undefined && (
                         <span className="ml-1 text-xs text-gray-500">
@@ -392,7 +448,7 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                 ))
               )}
             </div>
-            
+
             {/* Show selected lists summary */}
             {formData.list_ids.length > 0 && (
               <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
@@ -400,14 +456,17 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                   <strong>Selected Lists ({formData.list_ids.length}):</strong>
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.list_ids.map(listId => {
-                    const list = activeLists.find(l => l.id === listId)
-                    if (!list) return null
+                  {formData.list_ids.map((listId) => {
+                    const list = activeLists.find((l) => l.id === listId);
+                    if (!list) return null;
                     return (
-                      <span key={listId} className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                      <span
+                        key={listId}
+                        className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
+                      >
                         {list.metadata?.name}
                       </span>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -416,7 +475,7 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
         )}
 
         {/* Contact Selection */}
-        {formData.target_type === 'contacts' && (
+        {formData.target_type === "contacts" && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Contacts ({formData.contact_ids.length} selected)
@@ -424,7 +483,12 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
             {contacts.length > activeContacts.length && (
               <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> {contacts.length - activeContacts.length} unsubscribed contact{contacts.length - activeContacts.length !== 1 ? 's are' : ' is'} hidden from selection.
+                  <strong>Note:</strong>{" "}
+                  {contacts.length - activeContacts.length} unsubscribed contact
+                  {contacts.length - activeContacts.length !== 1
+                    ? "s are"
+                    : " is"}{" "}
+                  hidden from selection.
                 </p>
               </div>
             )}
@@ -432,9 +496,21 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
               {activeContacts.length === 0 ? (
                 <p className="text-sm text-gray-500">
                   {contacts.length === 0 ? (
-                    <>No contacts available. <a href="/contacts/new" className="text-primary-600 hover:text-primary-700">Add contacts first</a>.</>
+                    <>
+                      No contacts available.{" "}
+                      <a
+                        href="/contacts/new"
+                        className="text-primary-600 hover:text-primary-700"
+                      >
+                        Add contacts first
+                      </a>
+                      .
+                    </>
                   ) : (
-                    <>No active contacts available. All contacts are unsubscribed.</>
+                    <>
+                      No active contacts available. All contacts are
+                      unsubscribed.
+                    </>
                   )}
                 </p>
               ) : (
@@ -448,38 +524,48 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                       disabled={!canEdit}
                     />
                     <span className="ml-2 text-sm text-gray-700">
-                      {contact.metadata?.first_name} {contact.metadata?.last_name} 
-                      <span className="text-gray-500">({contact.metadata?.email})</span>
-                      {contact.metadata?.status?.value === 'Active' && (
+                      {contact.metadata?.first_name}{" "}
+                      {contact.metadata?.last_name}
+                      <span className="text-gray-500">
+                        ({contact.metadata?.email})
+                      </span>
+                      {contact.metadata?.status?.value === "Active" && (
                         <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
                           Active
                         </span>
                       )}
-                      {contact.metadata?.status?.value === 'Bounced' && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                        </span>
+                      {contact.metadata?.status?.value === "Bounced" && (
+                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full"></span>
                       )}
                     </span>
                   </label>
                 ))
               )}
             </div>
-            
+
             {/* Show selected contacts summary */}
             {formData.contact_ids.length > 0 && (
               <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
                 <p className="text-sm text-green-700">
-                  <strong>Selected Contacts ({formData.contact_ids.length}):</strong>
+                  <strong>
+                    Selected Contacts ({formData.contact_ids.length}):
+                  </strong>
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.contact_ids.map(contactId => {
-                    const contact = activeContacts.find(c => c.id === contactId)
-                    if (!contact) return null
+                  {formData.contact_ids.map((contactId) => {
+                    const contact = activeContacts.find(
+                      (c) => c.id === contactId
+                    );
+                    if (!contact) return null;
                     return (
-                      <span key={contactId} className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                        {contact.metadata?.first_name} {contact.metadata?.last_name}
+                      <span
+                        key={contactId}
+                        className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
+                      >
+                        {contact.metadata?.first_name}{" "}
+                        {contact.metadata?.last_name}
                       </span>
-                    )
+                    );
                   })}
                 </div>
               </div>
@@ -488,7 +574,7 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
         )}
 
         {/* Tag Selection */}
-        {formData.target_type === 'tags' && (
+        {formData.target_type === "tags" && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Tags ({formData.target_tags.length} selected)
@@ -496,7 +582,9 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
             {contacts.length > activeContacts.length && (
               <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> Tags are based on active contacts only. Unsubscribed contacts will not receive emails even if they have matching tags.
+                  <strong>Note:</strong> Tags are based on active contacts only.
+                  Unsubscribed contacts will not receive emails even if they
+                  have matching tags.
                 </p>
               </div>
             )}
@@ -520,12 +608,15 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                 ))
               )}
             </div>
-            
+
             {/* Show selected tags summary */}
             {formData.target_tags.length > 0 && (
               <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-700">
-                  <strong>Selected Tags ({formData.target_tags.length}):</strong> {formData.target_tags.join(', ')}
+                  <strong>
+                    Selected Tags ({formData.target_tags.length}):
+                  </strong>{" "}
+                  {formData.target_tags.join(", ")}
                 </p>
               </div>
             )}
@@ -543,34 +634,53 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
                 type="radio"
                 name="schedule_type"
                 value="now"
-                checked={formData.schedule_type === 'now'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
+                checked={formData.schedule_type === "now"}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    schedule_type: e.target.value as "now" | "scheduled",
+                  }))
+                }
                 className="form-radio"
                 disabled={!canEdit}
               />
-              <span className="ml-2 text-sm text-gray-700">Send immediately (Draft mode)</span>
+              <span className="ml-2 text-sm text-gray-700">
+                Send immediately (Draft mode)
+              </span>
             </label>
             <label className="flex items-center">
               <input
                 type="radio"
                 name="schedule_type"
                 value="scheduled"
-                checked={formData.schedule_type === 'scheduled'}
-                onChange={(e) => setFormData(prev => ({ ...prev, schedule_type: e.target.value as 'now' | 'scheduled' }))}
+                checked={formData.schedule_type === "scheduled"}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    schedule_type: e.target.value as "now" | "scheduled",
+                  }))
+                }
                 className="form-radio"
                 disabled={!canEdit}
               />
-              <span className="ml-2 text-sm text-gray-700">Schedule for later</span>
+              <span className="ml-2 text-sm text-gray-700">
+                Schedule for later
+              </span>
             </label>
           </div>
-          
-          {formData.schedule_type === 'scheduled' && (
+
+          {formData.schedule_type === "scheduled" && (
             <div className="mt-3">
               <input
                 type="datetime-local"
                 className="form-input"
                 value={formData.send_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, send_date: e.target.value }))}
+                onChange={(e) =>
+                  setFormData((prev) => ({
+                    ...prev,
+                    send_date: e.target.value,
+                  }))
+                }
                 min={new Date().toISOString().slice(0, 16)}
                 disabled={!canEdit}
               />
@@ -582,66 +692,52 @@ export default function EditCampaignForm({ campaign, templates, contacts, lists 
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-700">Current Status:</p>
-              <span className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
-                campaign.metadata?.status?.value === 'Sent' 
-                  ? 'bg-green-100 text-green-800' 
-                  : campaign.metadata?.status?.value === 'Scheduled'
-                  ? 'bg-blue-100 text-blue-800'
-                  : campaign.metadata?.status?.value === 'Sending'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : campaign.metadata?.status?.value === 'Draft'
-                  ? 'bg-gray-100 text-gray-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {campaign.metadata?.status?.value || 'Draft'}
+              <p className="text-sm font-medium text-gray-700">
+                Current Status:
+              </p>
+              <span
+                className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
+                  campaign.metadata?.status?.value === "Sent"
+                    ? "bg-green-100 text-green-800"
+                    : campaign.metadata?.status?.value === "Scheduled"
+                    ? "bg-blue-100 text-blue-800"
+                    : campaign.metadata?.status?.value === "Sending"
+                    ? "bg-yellow-100 text-yellow-800"
+                    : campaign.metadata?.status?.value === "Draft"
+                    ? "bg-gray-100 text-gray-800"
+                    : "bg-red-100 text-red-800"
+                }`}
+              >
+                {campaign.metadata?.status?.value || "Draft"}
               </span>
             </div>
-            
+
             {campaign.metadata?.send_date && (
               <div>
-                <p className="text-sm font-medium text-gray-700">Scheduled For:</p>
+                <p className="text-sm font-medium text-gray-700">
+                  Scheduled For:
+                </p>
                 <p className="text-sm text-gray-600 mt-1">
                   {new Date(campaign.metadata.send_date).toLocaleString()}
                 </p>
               </div>
             )}
-            
+
             <div>
-              <p className="text-sm font-medium text-gray-700">Target Recipients:</p>
+              <p className="text-sm font-medium text-gray-700">
+                Target Recipients:
+              </p>
               <p className="text-sm text-gray-600 mt-1">
-                {formData.target_type === 'lists' 
+                {formData.target_type === "lists"
                   ? `${formData.list_ids.length} lists selected`
-                  : formData.target_type === 'contacts' 
+                  : formData.target_type === "contacts"
                   ? `${formData.contact_ids.length} specific contacts`
-                  : `${formData.target_tags.length} tags selected`
-                }
+                  : `${formData.target_tags.length} tags selected`}
               </p>
             </div>
           </div>
         </div>
-
-        {/* Actions */}
-        <div className="flex space-x-4 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="btn-secondary"
-            disabled={isLoading}
-          >
-            Back
-          </button>
-          {canEdit && (
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={isLoading || !formData.name || !formData.template_id}
-            >
-              {isLoading ? 'Updating...' : 'Update Campaign'}
-            </button>
-          )}
-        </div>
       </form>
     </div>
-  )
+  );
 }

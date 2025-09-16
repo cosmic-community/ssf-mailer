@@ -11,7 +11,11 @@ interface CosmicObject {
 }
 
 // Template type union
-export type TemplateType = 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
+export type TemplateType =
+  | "Welcome Email"
+  | "Newsletter"
+  | "Promotional"
+  | "Transactional";
 
 // Media Item interface
 export interface MediaItem {
@@ -33,13 +37,13 @@ export interface MediaItem {
 
 // Email List interface
 export interface EmailList extends CosmicObject {
-  type: 'email-lists';
+  type: "email-lists";
   metadata: {
     name: string;
     description?: string;
     list_type: {
       key: string;
-      value: 'General' | 'Newsletter' | 'Promotional' | 'Transactional' | 'VIP';
+      value: "General" | "Newsletter" | "Promotional" | "Transactional" | "VIP";
     };
     active?: boolean;
     created_date?: string;
@@ -49,14 +53,14 @@ export interface EmailList extends CosmicObject {
 
 // Email Contact interface - Updated to include lists
 export interface EmailContact extends CosmicObject {
-  type: 'email-contacts';
+  type: "email-contacts";
   metadata: {
     first_name: string;
     last_name?: string;
     email: string;
     status: {
       key: string;
-      value: 'Active' | 'Unsubscribed' | 'Bounced';
+      value: "Active" | "Unsubscribed" | "Bounced";
     };
     lists?: EmailList[] | string[]; // Can be full objects or IDs
     tags?: string[] | null;
@@ -67,7 +71,7 @@ export interface EmailContact extends CosmicObject {
 
 // Email Template interface - removed category field
 export interface EmailTemplate extends CosmicObject {
-  type: 'email-templates';
+  type: "email-templates";
   metadata: {
     name: string;
     subject: string;
@@ -84,19 +88,6 @@ export interface EmailTemplate extends CosmicObject {
     is_ai_generated?: boolean;
     active: boolean;
   };
-}
-
-// Template snapshot interface for preserving sent content
-export interface TemplateSnapshot {
-  name: string;
-  subject: string;
-  content: string;
-  template_type: {
-    key: string;
-    value: TemplateType;
-  };
-  snapshot_date: string;
-  original_template_id: string;
 }
 
 // Campaign statistics interface - added missing opened property
@@ -121,43 +112,60 @@ export interface CampaignProgress {
   last_updated?: string;
 }
 
-// Marketing Campaign interface - Updated to include lists
+// Campaign content interface for storing decoupled template content
+export interface CampaignContent {
+  subject: string;
+  content: string;
+  template_type: {
+    key: string;
+    value: TemplateType;
+  };
+  original_template_id?: string; // Track which template was used originally
+}
+
+// Marketing Campaign interface - Updated to include lists and campaign_content
 export interface MarketingCampaign extends CosmicObject {
-  type: 'marketing-campaigns';
+  type: "marketing-campaigns";
   metadata: {
     name: string;
-    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
-    template_snapshot?: TemplateSnapshot;
+    campaign_content?: CampaignContent; // NEW: stores decoupled content
+    template?: string | EmailTemplate; // DEPRECATED: for backward compatibility
     target_lists?: EmailList[] | string[]; // NEW: target lists for sending
     target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
+      value: "Draft" | "Scheduled" | "Sending" | "Sent" | "Cancelled";
     };
     send_date?: string;
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
+    // Backward compatibility fields
+    subject?: string; // DEPRECATED: use campaign_content.subject
+    content?: string; // DEPRECATED: use campaign_content.content
   };
 }
 
 // Add EmailCampaign as an alias for MarketingCampaign for backward compatibility
 export interface EmailCampaign extends CosmicObject {
-  type: 'marketing-campaigns';
+  type: "marketing-campaigns";
   metadata: {
     name: string;
-    template: string | EmailTemplate; // Changed: now stores ID as string or full object when populated
-    template_snapshot?: TemplateSnapshot;
+    campaign_content?: CampaignContent; // NEW: stores decoupled content
+    template?: string | EmailTemplate; // DEPRECATED: for backward compatibility
     target_lists?: EmailList[] | string[];
     target_contacts?: string[];
     target_tags?: string[];
     status: {
       key: string;
-      value: 'Draft' | 'Scheduled' | 'Sending' | 'Sent' | 'Cancelled';
+      value: "Draft" | "Scheduled" | "Sending" | "Sent" | "Cancelled";
     };
     send_date?: string;
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
+    // Backward compatibility fields
+    subject?: string; // DEPRECATED: use campaign_content.subject
+    content?: string; // DEPRECATED: use campaign_content.content
   };
 }
 
@@ -166,7 +174,7 @@ export type Campaign = MarketingCampaign;
 
 // Settings interface - Updated to use comma-separated string for test_emails
 export interface Settings extends CosmicObject {
-  type: 'settings';
+  type: "settings";
   metadata: {
     from_name: string;
     from_email: string;
@@ -184,7 +192,7 @@ export interface Settings extends CosmicObject {
     };
     ai_tone?: {
       key: string;
-      value: 'Professional' | 'Friendly' | 'Casual' | 'Formal';
+      value: "Professional" | "Friendly" | "Casual" | "Formal";
     };
     privacy_policy_url?: string;
     terms_of_service_url?: string;
@@ -210,7 +218,7 @@ export interface CreateContactData {
   first_name: string;
   last_name?: string;
   email: string;
-  status: 'Active' | 'Unsubscribed' | 'Bounced';
+  status: "Active" | "Unsubscribed" | "Bounced";
   list_ids?: string[]; // NEW: for list membership
   tags?: string[];
   subscribe_date?: string;
@@ -220,7 +228,7 @@ export interface CreateContactData {
 export interface CreateListData {
   name: string;
   description?: string;
-  list_type: 'General' | 'Newsletter' | 'Promotional' | 'Transactional' | 'VIP';
+  list_type: "General" | "Newsletter" | "Promotional" | "Transactional" | "VIP";
   active?: boolean;
 }
 
@@ -239,6 +247,8 @@ export interface CreateCampaignData {
   contact_ids?: string[];
   target_tags?: string[];
   send_date?: string;
+  subject?: string; // NEW: subject for campaign content
+  content?: string; // NEW: content for campaign content
 }
 
 export interface UpdateSettingsData {
@@ -252,12 +262,12 @@ export interface UpdateSettingsData {
   brand_guidelines?: string;
   primary_brand_color?: string;
   secondary_brand_color?: string;
-  ai_tone?: 'Professional' | 'Friendly' | 'Casual' | 'Formal';
+  ai_tone?: "Professional" | "Friendly" | "Casual" | "Formal";
   privacy_policy_url?: string;
   terms_of_service_url?: string;
   google_analytics_id?: string;
   email_signature?: string;
-  test_emails?: string; // Changed from string[] to string for comma-separated format
+  test_emails?: string | string[]; // Allow both comma-separated string and array formats
 }
 
 // List management data types
@@ -269,33 +279,50 @@ export interface BulkListUpdateData {
 
 // Type guards
 export function isEmailList(obj: CosmicObject): obj is EmailList {
-  return obj.type === 'email-lists';
+  return obj.type === "email-lists";
 }
 
 export function isEmailContact(obj: CosmicObject): obj is EmailContact {
-  return obj.type === 'email-contacts';
+  return obj.type === "email-contacts";
 }
 
 export function isEmailTemplate(obj: CosmicObject): obj is EmailTemplate {
-  return obj.type === 'email-templates';
+  return obj.type === "email-templates";
 }
 
-export function isMarketingCampaign(obj: CosmicObject): obj is MarketingCampaign {
-  return obj.type === 'marketing-campaigns';
+export function isMarketingCampaign(
+  obj: CosmicObject
+): obj is MarketingCampaign {
+  return obj.type === "marketing-campaigns";
 }
 
 export function isSettings(obj: CosmicObject): obj is Settings {
-  return obj.type === 'settings';
+  return obj.type === "settings";
 }
 
 export function isMediaItem(obj: any): obj is MediaItem {
-  return obj && typeof obj.id === 'string' && typeof obj.url === 'string';
+  return obj && typeof obj.id === "string" && typeof obj.url === "string";
 }
 
 // Utility types
-export type OptionalMetadata<T extends CosmicObject> = Partial<T['metadata']>;
-export type CreateContactFormData = Omit<EmailContact, 'id' | 'created_at' | 'modified_at'>;
-export type CreateListFormData = Omit<EmailList, 'id' | 'created_at' | 'modified_at'>;
-export type CreateTemplateFormData = Omit<EmailTemplate, 'id' | 'created_at' | 'modified_at'>;
-export type CreateCampaignFormData = Omit<MarketingCampaign, 'id' | 'created_at' | 'modified_at'>;
-export type CreateSettingsFormData = Omit<Settings, 'id' | 'created_at' | 'modified_at'>;
+export type OptionalMetadata<T extends CosmicObject> = Partial<T["metadata"]>;
+export type CreateContactFormData = Omit<
+  EmailContact,
+  "id" | "created_at" | "modified_at"
+>;
+export type CreateListFormData = Omit<
+  EmailList,
+  "id" | "created_at" | "modified_at"
+>;
+export type CreateTemplateFormData = Omit<
+  EmailTemplate,
+  "id" | "created_at" | "modified_at"
+>;
+export type CreateCampaignFormData = Omit<
+  MarketingCampaign,
+  "id" | "created_at" | "modified_at"
+>;
+export type CreateSettingsFormData = Omit<
+  Settings,
+  "id" | "created_at" | "modified_at"
+>;

@@ -7,7 +7,7 @@ import {
   getEmailLists,
   getEmailTemplate,
 } from "@/lib/cosmic";
-import EditCampaignForm from "@/components/EditCampaignForm";
+import CampaignPageClient from "@/components/CampaignPageClient";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import DeleteCampaignButton from "@/components/DeleteCampaignButton";
 import TestEmailModal from "@/components/TestEmailModal";
@@ -55,41 +55,27 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
   const status = campaign.metadata.status?.value || "Draft";
   const stats = campaign.metadata.stats;
 
-  // Get template content for preview
+  // Get campaign content for preview (now decoupled from templates)
   let templateContent: {
     name: string;
     subject: string;
     content: string;
   } | null = null;
 
-  // If campaign is sent, show the snapshot
-  if (status === "Sent" && campaign.metadata.template_snapshot) {
+  // Use campaign_content as the primary source
+  if (campaign.metadata.campaign_content) {
     templateContent = {
-      name: campaign.metadata.template_snapshot.name,
-      subject: campaign.metadata.template_snapshot.subject,
-      content: campaign.metadata.template_snapshot.content,
+      name: campaign.metadata.name,
+      subject: campaign.metadata.campaign_content.subject,
+      content: campaign.metadata.campaign_content.content,
     };
-  } else if (status === "Draft" || status === "Scheduled") {
-    // For draft and scheduled campaigns, ALWAYS show current template content
-    const templateId =
-      typeof campaign.metadata?.template === "string"
-        ? campaign.metadata.template
-        : campaign.metadata.template?.id;
-
-    if (templateId) {
-      try {
-        const template = await getEmailTemplate(templateId);
-        if (template) {
-          templateContent = {
-            name: template.metadata.name,
-            subject: template.metadata.subject,
-            content: template.metadata.content,
-          };
-        }
-      } catch (error) {
-        console.error("Failed to load template for preview:", error);
-      }
-    }
+  } else {
+    // Fallback to legacy fields for very old campaigns
+    templateContent = {
+      name: campaign.metadata.name,
+      subject: campaign.metadata.subject || "",
+      content: campaign.metadata.content || "",
+    };
   }
 
   const getStatusColor = (status: string) => {
@@ -132,20 +118,20 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
 
     const parts = [];
     if (listCount > 0) {
-      parts.push(`${listCount} list${listCount === 1 ? '' : 's'}`);
+      parts.push(`${listCount} list${listCount === 1 ? "" : "s"}`);
     }
     if (contactCount > 0) {
-      parts.push(`${contactCount} contact${contactCount === 1 ? '' : 's'}`);
+      parts.push(`${contactCount} contact${contactCount === 1 ? "" : "s"}`);
     }
     if (tagCount > 0) {
-      parts.push(`${tagCount} tag${tagCount === 1 ? '' : 's'}`);
+      parts.push(`${tagCount} tag${tagCount === 1 ? "" : "s"}`);
     }
 
     if (parts.length === 0) {
       return "0 recipients";
     }
 
-    return parts.join(' + ');
+    return parts.join(" + ");
   };
 
   return (
@@ -211,319 +197,38 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column - Campaign Form */}
-          <div className="lg:col-span-2">
-            <EditCampaignForm
-              campaign={campaign}
-              templates={templates}
-              contacts={contacts}
-              lists={lists}
-            />
+        <CampaignPageClient
+          campaign={campaign}
+          templates={templates}
+          contacts={contacts}
+          lists={lists}
+          stats={stats}
+        />
 
-            {/* Template Preview Section */}
-            {templateContent && (
-              <Card className="mt-8">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <FileText className="h-5 w-5" />
-                    <span>
-                      {status === "Sent"
-                        ? "Content Snapshot"
-                        : "Current Template Preview"}
-                    </span>
-                  </CardTitle>
-                  {status === "Sent" && (
-                    <p className="text-sm text-gray-600">
-                      This is the exact content that was sent to recipients
-                    </p>
-                  )}
-                  {(status === "Draft" || status === "Scheduled") && (
-                    <p className="text-sm text-gray-600">
-                      Live preview of the current template content - updates automatically when template is modified
-                    </p>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {/* Template Info */}
-                    <div className="bg-gray-50 p-4 rounded-lg">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            Template:
-                          </span>
-                          <span className="ml-2">{templateContent.name}</span>
-                        </div>
-                        <div>
-                          <span className="font-medium text-gray-700">
-                            Subject:
-                          </span>
-                          <span className="ml-2">
-                            {templateContent.subject}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Email Content Preview */}
-                    <div className="border rounded-lg overflow-hidden">
-                      <div className="bg-gray-100 px-4 py-2 border-b">
-                        <span className="text-sm font-medium text-gray-700">
-                          Email Content:
-                        </span>
-                      </div>
-                      <div
-                        className="p-4 max-h-96 overflow-y-auto"
-                        dangerouslySetInnerHTML={{
-                          __html: templateContent.content,
-                        }}
-                        style={{
-                          fontFamily: "system-ui, -apple-system, sans-serif",
-                          lineHeight: "1.5",
-                        }}
-                      />
-                    </div>
-
-                    {/* Additional Info for Sent Campaigns */}
-                    {status === "Sent" &&
-                      campaign.metadata.template_snapshot && (
-                        <div className="text-xs text-gray-500 p-3 bg-blue-50 rounded">
-                          <div className="flex items-center space-x-1">
-                            <Eye className="h-3 w-3" />
-                            <span>
-                              Content captured on{" "}
-                              {new Date(
-                                campaign.metadata.template_snapshot.snapshot_date
-                              ).toLocaleString()}
-                            </span>
-                          </div>
-                        </div>
-                      )}
-
-                    {/* Live Content Notice for Draft/Scheduled */}
-                    {(status === "Draft" || status === "Scheduled") && (
-                      <div className="text-xs text-green-600 p-3 bg-green-50 rounded">
-                        <div className="flex items-center space-x-1">
-                          <Eye className="h-3 w-3" />
-                          <span>
-                            ✨ Live content - this preview updates automatically when you modify the template
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Delete Campaign Section - Moved to bottom like template page */}
-            {status === "Draft" && (
-              <div className="border-t pt-8 mt-8">
-                <Card className="border-red-200 bg-red-50/50">
-                  <CardHeader>
-                    <CardTitle className="text-red-800 flex items-center space-x-2">
-                      <Trash2 className="h-5 w-5" />
-                      <span>Danger Zone</span>
-                    </CardTitle>
-                    <p className="text-red-700 text-sm">
-                      Permanently delete this campaign. This action cannot be
-                      undone.
-                    </p>
-                  </CardHeader>
-                  <CardContent>
-                    <DeleteCampaignButton
-                      campaignId={campaign.id}
-                      campaignName={campaign.metadata.name}
-                      isDraft={status === "Draft"}
-                    />
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </div>
-
-          {/* Right Column - Actions & Stats */}
-          <div className="space-y-6">
-            {/* Send Campaign Card */}
-            <Card>
+        {/* Delete Campaign Section - Moved to bottom like template page */}
+        {status === "Draft" && (
+          <div className="border-t pt-8 mt-8">
+            <Card className="border-red-200 bg-red-50/50">
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Send className="h-5 w-5" />
-                  <span>Campaign Actions</span>
+                <CardTitle className="text-red-800 flex items-center space-x-2">
+                  <Trash2 className="h-5 w-5" />
+                  <span>Danger Zone</span>
                 </CardTitle>
+                <p className="text-red-700 text-sm">
+                  Permanently delete this campaign. This action cannot be
+                  undone.
+                </p>
               </CardHeader>
               <CardContent>
-                <SendCampaignButton campaign={campaign} />
+                <DeleteCampaignButton
+                  campaignId={campaign.id}
+                  campaignName={campaign.metadata.name}
+                  isDraft={status === "Draft"}
+                />
               </CardContent>
             </Card>
-
-            {/* Campaign Stats */}
-            {(status === "Sent" || status === "Sending") && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <TrendingUp className="h-5 w-5" />
-                    <span>Campaign Statistics</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {status === "Sending" &&
-                  campaign.metadata.sending_progress ? (
-                    <div className="space-y-4">
-                      <div>
-                        <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
-                          <span>Sending Progress</span>
-                          <span>
-                            {
-                              campaign.metadata.sending_progress
-                                .progress_percentage
-                            }
-                            %
-                          </span>
-                        </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div
-                            className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${campaign.metadata.sending_progress.progress_percentage}%`,
-                            }}
-                          ></div>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4 text-sm">
-                        <div>
-                          <div className="text-gray-500">Sent</div>
-                          <div className="font-semibold">
-                            {campaign.metadata.sending_progress.sent}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">Total</div>
-                          <div className="font-semibold">
-                            {campaign.metadata.sending_progress.total}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">Failed</div>
-                          <div className="font-semibold text-red-600">
-                            {campaign.metadata.sending_progress.failed}
-                          </div>
-                        </div>
-                        <div>
-                          <div className="text-gray-500">Last Batch</div>
-                          <div className="font-semibold">
-                            {new Date(
-                              campaign.metadata.sending_progress.last_batch_completed
-                            ).toLocaleTimeString()}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : stats ? (
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-900">
-                          {stats.sent || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">Sent</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-green-600">
-                          {stats.delivered || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">Delivered</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-blue-600">
-                          {stats.opened || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">Opened</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-purple-600">
-                          {stats.clicked || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">Clicked</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-yellow-600">
-                          {stats.bounced || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">Bounced</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-red-600">
-                          {stats.unsubscribed || 0}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          Unsubscribed
-                        </div>
-                      </div>
-                      <div className="text-center col-span-2 border-t pt-4 mt-4">
-                        <div className="flex justify-between">
-                          <div>
-                            <div className="text-lg font-bold text-blue-600">
-                              {stats.open_rate || "0%"}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Open Rate
-                            </div>
-                          </div>
-                          <div>
-                            <div className="text-lg font-bold text-purple-600">
-                              {stats.click_rate || "0%"}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Click Rate
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-center text-gray-500">
-                      <TrendingUp className="mx-auto h-8 w-8 mb-2" />
-                      <p>Statistics will appear once the campaign is sent</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Schedule Info */}
-            {status === "Scheduled" && campaign.metadata.send_date && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Clock className="h-5 w-5" />
-                    <span>Scheduled Sending</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center">
-                    <div className="text-lg font-semibold text-blue-600">
-                      {new Date(
-                        campaign.metadata.send_date
-                      ).toLocaleDateString()}
-                    </div>
-                    <div className="text-sm text-gray-600">
-                      at{" "}
-                      {new Date(
-                        campaign.metadata.send_date
-                      ).toLocaleTimeString()}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-2">
-                      Campaign will be automatically sent via scheduled
-                      processing
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

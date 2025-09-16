@@ -104,8 +104,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updateData.target_tags = data.target_tags;
     if (data.send_date !== undefined) updateData.send_date = data.send_date;
     if (data.stats !== undefined) updateData.stats = data.stats;
-    if (data.template_snapshot !== undefined)
-      updateData.template_snapshot = data.template_snapshot;
 
     // Handle status update with special logic
     if (data.status !== undefined) {
@@ -142,12 +140,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       const campaign = await updateEmailCampaign(id, updateData);
       if (campaign) {
         // Then update the status using the specialized function
-        await updateCampaignStatus(
-          id,
-          data.status,
-          data.stats,
-          data.template_snapshot
-        );
+        await updateCampaignStatus(id, data.status, data.stats);
       }
     } else {
       // Regular update without status change

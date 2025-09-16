@@ -302,16 +302,21 @@ async function sendCampaignEmail(
   contact: EmailContact,
   settings: any
 ) {
-  // Get template content from snapshot or original template
+  // Get campaign content (decoupled from templates)
   let subject: string;
   let content: string;
 
-  if (campaign.metadata.template_snapshot) {
-    subject = campaign.metadata.template_snapshot.subject;
-    content = campaign.metadata.template_snapshot.content;
+  if (campaign.metadata.campaign_content) {
+    subject = campaign.metadata.campaign_content.subject;
+    content = campaign.metadata.campaign_content.content;
   } else {
-    // Fallback to original template (shouldn't happen in normal flow)
-    throw new Error("No template snapshot available for campaign");
+    // Fallback to deprecated fields for very old campaigns
+    subject = campaign.metadata.subject || "";
+    content = campaign.metadata.content || "";
+
+    if (!subject || !content) {
+      throw new Error("No campaign content available for sending");
+    }
   }
 
   // Replace template variables
