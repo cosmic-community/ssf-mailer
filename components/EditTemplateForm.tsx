@@ -113,6 +113,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Track which editor is currently being used to prevent conflicts
   const [activeEditor, setActiveEditor] = useState<"main" | null>(null);
 
+  // CRITICAL: Add content sync timeout to ensure all changes are captured
+  const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Check if form has changes
   const hasFormChanges = () => {
     return (
@@ -262,7 +265,23 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100);
   };
 
-  // FIXED: Handle format application from toolbar with proper conflict prevention
+  // CRITICAL: Enhanced content sync function to ensure all changes are captured
+  const syncContentToState = (content: string) => {
+    // Clear any existing timeout
+    if (contentSyncTimeoutRef.current) {
+      clearTimeout(contentSyncTimeoutRef.current);
+    }
+
+    // Set a short timeout to batch rapid changes
+    contentSyncTimeoutRef.current = setTimeout(() => {
+      setFormData((prev) => ({
+        ...prev,
+        content: content,
+      }));
+    }, 50); // 50ms delay to batch rapid changes
+  };
+
+  // FIXED: Handle format application from toolbar with proper conflict prevention and content sync
   const handleFormatApply = (
     format: string,
     value?: string,
@@ -285,11 +304,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       // Get the updated content and sync with React state immediately
       const updatedContent = previewDiv.innerHTML;
 
-      // Update form data state IMMEDIATELY
-      setFormData((prev) => ({
-        ...prev,
-        content: updatedContent,
-      }));
+      // CRITICAL: Use the enhanced sync function for immediate state update
+      syncContentToState(updatedContent);
+
     } catch (error) {
       console.error("Format application error:", error);
     } finally {
@@ -577,6 +594,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return;
     }
 
+    // CRITICAL: Before submitting, ensure any pending content changes are captured
+    if (mainPreviewRef.current) {
+      const currentContent = mainPreviewRef.current.innerHTML;
+      if (currentContent !== formData.content) {
+        // Sync the latest content from the editor
+        setFormData(prev => ({
+          ...prev,
+          content: currentContent
+        }));
+        
+        // Wait a brief moment for state update
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
+
     setIsSubmitting(true);
 
     startTransition(async () => {
@@ -589,7 +621,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           body: JSON.stringify({
             name: formData.name.trim(),
             subject: formData.subject.trim(),
-            content: formData.content,
+            content: mainPreviewRef.current?.innerHTML || formData.content, // Use the most current content
             template_type: formData.template_type,
             active: formData.active,
           }),
@@ -600,10 +632,12 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || "Failed to update template");
         }
 
+        const finalContent = mainPreviewRef.current?.innerHTML || formData.content;
+
         setOriginalFormData({
           name: formData.name.trim(),
           subject: formData.subject.trim(),
-          content: formData.content,
+          content: finalContent,
           template_type: formData.template_type,
           active: formData.active,
         });
@@ -672,24 +706,50 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     router.back();
   };
 
-  // ContentEditable input handler
+  // ENHANCED: ContentEditable input handler with better content sync
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
     // Set main editor as active to prevent conflicts
     setActiveEditor("main");
 
     const updatedContent = e.currentTarget.innerHTML;
 
-    // Update form data immediately to ensure changes are captured
-    setFormData((prev) => ({
-      ...prev,
-      content: updatedContent,
-    }));
+    // CRITICAL: Use enhanced sync function for immediate state update
+    syncContentToState(updatedContent);
 
     // Clear active editor after state update
     setTimeout(() => {
       setActiveEditor(null);
     }, 100);
   };
+
+  // ENHANCED: Handle content change events from toolbar operations
+  useEffect(() => {
+    const handleContentChanged = (event: CustomEvent) => {
+      const { content } = event.detail;
+      if (content && content !== formData.content) {
+        syncContentToState(content);
+      }
+    };
+
+    if (mainPreviewRef.current) {
+      mainPreviewRef.current.addEventListener('contentChanged', handleContentChanged as EventListener);
+    }
+
+    return () => {
+      if (mainPreviewRef.current) {
+        mainPreviewRef.current.removeEventListener('contentChanged', handleContentChanged as EventListener);
+      }
+    };
+  }, [formData.content]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (contentSyncTimeoutRef.current) {
+        clearTimeout(contentSyncTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Simple read-only full-screen preview modal
   const FullScreenPreview = () => (
