@@ -164,51 +164,60 @@ export default function ImageCropperModal({
       throw new Error('Media item or dimensions not available');
     }
 
-    console.log('Crop calculation:', {
+    console.log('Crop calculation - Starting:', {
       crop,
       original: originalImageDimensions,
       displayed: displayImageDimensions
     });
 
-    // CRITICAL FIX: Calculate precise scale factors
-    // The displayed image might be scaled down/up from the original
+    // CRITICAL FIX: Calculate precise scale factors between displayed image and original image
+    // The crop coordinates from ReactCrop are relative to the displayed image size
+    // We need to convert them to coordinates relative to the original image size
     const scaleX = originalImageDimensions.width / displayImageDimensions.width;
     const scaleY = originalImageDimensions.height / displayImageDimensions.height;
 
     console.log('Scale factors:', { scaleX, scaleY });
 
     // FIXED: Convert crop coordinates from displayed image space to original image space
-    // ReactCrop provides pixel coordinates relative to the displayed image
+    // ReactCrop provides pixel coordinates relative to the displayed/rendered image
+    // We need to scale them up to match the original image dimensions
     const originalX = Math.round(crop.x * scaleX);
     const originalY = Math.round(crop.y * scaleY);
     const originalWidth = Math.round(crop.width * scaleX);
     const originalHeight = Math.round(crop.height * scaleY);
 
-    // FIXED: Ensure crop coordinates are within bounds
+    console.log('Scaled coordinates:', {
+      originalX,
+      originalY,
+      originalWidth,
+      originalHeight
+    });
+
+    // FIXED: Ensure crop coordinates are within bounds of the original image
     const clampedX = Math.max(0, Math.min(originalX, originalImageDimensions.width - 1));
     const clampedY = Math.max(0, Math.min(originalY, originalImageDimensions.height - 1));
     const clampedWidth = Math.max(1, Math.min(originalWidth, originalImageDimensions.width - clampedX));
     const clampedHeight = Math.max(1, Math.min(originalHeight, originalImageDimensions.height - clampedY));
 
-    console.log('Final crop coordinates (original image space):', {
+    console.log('Final crop coordinates (clamped to original image bounds):', {
       x: clampedX,
       y: clampedY,
       width: clampedWidth,
       height: clampedHeight
     });
 
-    // FIXED: Build imgix URL with correct crop parameters
-    // Imgix rect parameter format: x,y,width,height (all in original image coordinates)
+    // CRITICAL FIX: Build imgix URL with correct crop parameters
+    // Imgix rect parameter format: x,y,width,height (all in original image pixel coordinates)
     const imgixParams = new URLSearchParams({
-      // CRITICAL: Use correct imgix crop parameter
+      // CRITICAL: Use 'rect' parameter for precise pixel-based cropping
       rect: `${clampedX},${clampedY},${clampedWidth},${clampedHeight}`,
-      // Output dimensions
+      // Output dimensions (these will resize the cropped area to the desired output size)
       w: outputWidth.toString(),
       h: outputHeight.toString(),
       // Quality and format optimization
       auto: 'format,compress',
       q: Math.round(quality * 100).toString(),
-      // FIXED: Use 'crop' instead of 'fill' for precise cropping
+      // FIXED: Use 'crop' fit mode for precise cropping without additional scaling
       fit: 'crop'
     });
 
@@ -229,6 +238,12 @@ export default function ImageCropperModal({
       const file = new File([blob], croppedFileName, {
         type: 'image/jpeg',
         lastModified: Date.now(),
+      });
+      
+      console.log('Cropped file created:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
       });
       
       return file;
@@ -443,7 +458,7 @@ export default function ImageCropperModal({
               </Button>
             </div>
 
-            {/* Info */}
+            {/* Debug Info */}
             <div className="p-3 bg-blue-50 rounded-lg">
               <p className="text-xs text-blue-800">
                 <strong>Original:</strong> {originalImageDimensions.width}×{originalImageDimensions.height}px
@@ -457,9 +472,17 @@ export default function ImageCropperModal({
                 </p>
               )}
               {completedCrop && (
-                <p className="text-xs text-blue-800 mt-1">
-                  <strong>Crop:</strong> {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}px (display space)
-                </p>
+                <>
+                  <p className="text-xs text-blue-800 mt-1">
+                    <strong>Crop (display):</strong> {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}px
+                  </p>
+                  <p className="text-xs text-blue-800 mt-1">
+                    <strong>Crop (original):</strong> {Math.round(completedCrop.width * originalImageDimensions.width / displayImageDimensions.width)}×{Math.round(completedCrop.height * originalImageDimensions.height / displayImageDimensions.height)}px
+                  </p>
+                  <p className="text-xs text-blue-800 mt-1">
+                    <strong>Position (original):</strong> x:{Math.round(completedCrop.x * originalImageDimensions.width / displayImageDimensions.width)}, y:{Math.round(completedCrop.y * originalImageDimensions.height / displayImageDimensions.height)}
+                  </p>
+                </>
               )}
             </div>
           </div>
