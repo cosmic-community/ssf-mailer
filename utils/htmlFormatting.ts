@@ -67,6 +67,11 @@ export function applyFormat(
           applyFontSize(range, value);
         }
         break;
+      case "font-family":
+        if (value) {
+          applyFontFamily(range, value);
+        }
+        break;
     }
     
     // CRITICAL: Trigger mutation event to notify parent components
@@ -533,6 +538,73 @@ function applyFontSize(range: Range, size: string) {
         }
       } catch (error) {
         console.warn("Failed to apply font size:", error);
+      }
+    }
+  }
+}
+
+/**
+ * Apply font family to selected text
+ */
+function applyFontFamily(range: Range, fontFamily: string) {
+  if (range.collapsed) {
+    // If no selection, create a span at cursor position for future typing
+    const span = document.createElement("span");
+    span.style.fontFamily = fontFamily;
+    span.innerHTML = "&#8203;"; // Zero-width space to make it selectable
+
+    try {
+      range.insertNode(span);
+      range.setStartAfter(span);
+      range.setEndAfter(span);
+
+      // Set cursor position after the span
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+    } catch (error) {
+      console.warn("Failed to apply font family:", error);
+    }
+  } else {
+    // If there's a selection, check if it's already wrapped in a span with font-family
+    const selectedContent = range.cloneContents();
+    const tempDiv = document.createElement("div");
+    tempDiv.appendChild(selectedContent);
+
+    // Check if the selection is entirely within a span with font-family
+    const parentSpan =
+      range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+        ? range.commonAncestorContainer.parentElement
+        : (range.commonAncestorContainer as Element);
+
+    if (
+      parentSpan &&
+      parentSpan.tagName === "SPAN" &&
+      (parentSpan as HTMLElement).style.fontFamily
+    ) {
+      // Update existing span
+      (parentSpan as HTMLElement).style.fontFamily = fontFamily;
+    } else {
+      // Create new span with font-family
+      const span = document.createElement("span");
+      span.style.fontFamily = fontFamily;
+
+      try {
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        range.insertNode(span);
+
+        // Select the new span content
+        range.selectNodeContents(span);
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+      } catch (error) {
+        console.warn("Failed to apply font family:", error);
       }
     }
   }
