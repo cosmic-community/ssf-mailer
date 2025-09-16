@@ -201,15 +201,11 @@ export default function ImageCropperModal({
     [maintainAspect, aspectRatio]
   );
 
-  // Create imgix cropped URL with proper coordinate calculation
+  // Create imgix cropped URL using dashboard approach (pixel-based rect parameter)
   const getCroppedImgixFile = useCallback(
     async (crop: PixelCrop, fileName: string): Promise<File> => {
-      if (
-        !mediaItem ||
-        !displayImageDimensions.width ||
-        !displayImageDimensions.height
-      ) {
-        throw new Error("Media item or dimensions not available");
+      if (!mediaItem) {
+        throw new Error("Media item not available");
       }
 
       console.log("=== CROP CALCULATION DEBUG ===");
@@ -223,19 +219,13 @@ export default function ImageCropperModal({
         height: mediaItem.height,
       });
 
-      // CRITICAL: Use the actual original image dimensions from mediaItem
-      // These are the true dimensions of the source image before any processing
+      // Use the actual original image dimensions from mediaItem
       const sourceWidth = mediaItem.width || originalImageDimensions.width;
       const sourceHeight = mediaItem.height || originalImageDimensions.height;
 
       if (!sourceWidth || !sourceHeight) {
         throw new Error("Cannot determine source image dimensions");
       }
-
-      console.log("Source image dimensions (actual original):", {
-        width: sourceWidth,
-        height: sourceHeight,
-      });
 
       // Calculate scale factors between displayed image and source image
       const scaleX = sourceWidth / displayImageDimensions.width;
@@ -244,64 +234,39 @@ export default function ImageCropperModal({
       console.log("Scale factors (source/display):", { scaleX, scaleY });
 
       // Convert crop coordinates from displayed image space to source image space
-      const sourceX = Math.round(crop.x * scaleX);
-      const sourceY = Math.round(crop.y * scaleY);
-      const sourceWidth_crop = Math.round(crop.width * scaleX);
-      const sourceHeight_crop = Math.round(crop.height * scaleY);
+      // Following dashboard approach: use pixel coordinates directly with rect parameter
+      const rectX = Math.round(crop.x * scaleX);
+      const rectY = Math.round(crop.y * scaleY);
+      const rectWidth = Math.round(crop.width * scaleX);
+      const rectHeight = Math.round(crop.height * scaleY);
 
-      console.log("Coordinates in source image space:", {
-        x: sourceX,
-        y: sourceY,
-        width: sourceWidth_crop,
-        height: sourceHeight_crop,
-      });
-
-      // Ensure crop coordinates are within bounds of the source image
-      const clampedX = Math.max(0, Math.min(sourceX, sourceWidth - 1));
-      const clampedY = Math.max(0, Math.min(sourceY, sourceHeight - 1));
+      // Ensure coordinates are within bounds
+      const clampedX = Math.max(0, Math.min(rectX, sourceWidth - 1));
+      const clampedY = Math.max(0, Math.min(rectY, sourceHeight - 1));
       const clampedWidth = Math.max(
         1,
-        Math.min(sourceWidth_crop, sourceWidth - clampedX)
+        Math.min(rectWidth, sourceWidth - clampedX)
       );
       const clampedHeight = Math.max(
         1,
-        Math.min(sourceHeight_crop, sourceHeight - clampedY)
+        Math.min(rectHeight, sourceHeight - clampedY)
       );
 
-      console.log("Final clamped coordinates:", {
-        x: clampedX,
-        y: clampedY,
-        width: clampedWidth,
-        height: clampedHeight,
-      });
+      // Create rect parameter like dashboard: "x,y,width,height"
+      const rectParam = `${clampedX},${clampedY},${clampedWidth},${clampedHeight}`;
 
-      // Calculate crop percentages for imgix (more reliable than pixel coordinates)
-      const cropLeft = (clampedX / sourceWidth) * 100;
-      const cropTop = (clampedY / sourceHeight) * 100;
-      const cropWidth = (clampedWidth / sourceWidth) * 100;
-      const cropHeight = (clampedHeight / sourceHeight) * 100;
+      console.log("Final rect parameter:", rectParam);
 
-      console.log("Crop percentages:", {
-        left: cropLeft,
-        top: cropTop,
-        width: cropWidth,
-        height: cropHeight,
-      });
-
-      // Build imgix URL with percentage-based cropping (more reliable)
+      // Build imgix URL using dashboard approach with rect parameter
       const imgixParams = new URLSearchParams({
-        // Use percentage-based cropping which is more reliable
-        crop: `${cropLeft.toFixed(2)},${cropTop.toFixed(2)},${cropWidth.toFixed(
-          2
-        )},${cropHeight.toFixed(2)}`,
+        // Use rect parameter for pixel-based cropping (dashboard approach)
+        rect: rectParam,
         // Output dimensions
         w: outputWidth.toString(),
         h: outputHeight.toString(),
         // Quality and format optimization
         auto: "format,compress",
         q: Math.round(quality * 100).toString(),
-        // Use 'crop' fit mode for precise cropping
-        fit: "crop",
       });
 
       const croppedImageUrl = `${
@@ -673,6 +638,28 @@ export default function ImageCropperModal({
                           originalImageDimensions.height /
                           displayImageDimensions.height
                         ).toFixed(2)}
+                      </p>
+                      <p className="text-blue-800">
+                        <strong>Rect Param:</strong>{" "}
+                        {(() => {
+                          const sourceWidth =
+                            mediaItem?.width || originalImageDimensions.width;
+                          const sourceHeight =
+                            mediaItem?.height || originalImageDimensions.height;
+                          const scaleX =
+                            sourceWidth / displayImageDimensions.width;
+                          const scaleY =
+                            sourceHeight / displayImageDimensions.height;
+                          const rectX = Math.round(completedCrop.x * scaleX);
+                          const rectY = Math.round(completedCrop.y * scaleY);
+                          const rectWidth = Math.round(
+                            completedCrop.width * scaleX
+                          );
+                          const rectHeight = Math.round(
+                            completedCrop.height * scaleY
+                          );
+                          return `${rectX},${rectY},${rectWidth},${rectHeight}`;
+                        })()}
                       </p>
                     </>
                   )}
