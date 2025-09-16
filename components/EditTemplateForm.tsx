@@ -116,7 +116,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // CRITICAL: Add content sync timeout to ensure all changes are captured
   const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingFromStateRef = useRef<boolean>(false);
-  const cursorPositionRef = useRef<{selection: Selection | null, range: Range | null}>({selection: null, range: null});
+  const cursorPositionRef = useRef<{
+    selection: Selection | null;
+    range: Range | null;
+  }>({ selection: null, range: null });
 
   // Check if form has changes
   const hasFormChanges = () => {
@@ -251,17 +254,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         formData.content || "<p>Start typing your email content here...</p>";
 
       // Only update if content is actually different and we're not actively editing
-      if (currentMainContent !== expectedContent && activeEditor !== "main" && document.activeElement !== mainPreviewRef.current) {
+      if (
+        currentMainContent !== expectedContent &&
+        activeEditor !== "main" &&
+        document.activeElement !== mainPreviewRef.current
+      ) {
         // Save cursor position before updating
         const wasActive = document.activeElement === mainPreviewRef.current;
         if (wasActive) {
           saveCursorPosition();
         }
-        
+
         isUpdatingFromStateRef.current = true;
         mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
-        
+
         // Restore cursor position after update
         if (wasActive) {
           setTimeout(() => {
@@ -291,7 +298,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       const range = selection.getRangeAt(0);
       cursorPositionRef.current = {
         selection: selection,
-        range: range.cloneRange()
+        range: range.cloneRange(),
       };
     }
   };
@@ -305,7 +312,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         selection.addRange(range);
       } catch (error) {
         // Ignore errors if range is no longer valid
-        console.warn('Could not restore cursor position:', error);
+        console.warn("Could not restore cursor position:", error);
       }
     }
   };
@@ -319,11 +326,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     // Set a short timeout to batch rapid changes
     contentSyncTimeoutRef.current = setTimeout(() => {
-      setFormData((prev) => ({
-        ...prev,
-        content: content,
-      }));
-    }, 50); // 50ms delay to batch rapid changes
+      // Double check that we're not in a state update cycle
+      if (!isUpdatingFromStateRef.current) {
+        setFormData((prev) => ({
+          ...prev,
+          content: content,
+        }));
+      }
+    }, 100); // Increased to 100ms for better debouncing
   };
 
   // FIXED: Handle format application from toolbar with proper conflict prevention and content sync
@@ -351,7 +361,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
       // CRITICAL: Use the enhanced sync function for immediate state update
       syncContentToState(updatedContent);
-
     } catch (error) {
       console.error("Format application error:", error);
     } finally {
@@ -644,13 +653,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       const currentContent = mainPreviewRef.current.innerHTML;
       if (currentContent !== formData.content) {
         // Sync the latest content from the editor
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          content: currentContent
+          content: currentContent,
         }));
-        
+
         // Wait a brief moment for state update
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
@@ -677,7 +686,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || "Failed to update template");
         }
 
-        const finalContent = mainPreviewRef.current?.innerHTML || formData.content;
+        const finalContent =
+          mainPreviewRef.current?.innerHTML || formData.content;
 
         setOriginalFormData({
           name: formData.name.trim(),
@@ -785,12 +795,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     if (mainPreviewRef.current) {
-      mainPreviewRef.current.addEventListener('contentChanged', handleContentChanged as EventListener);
+      mainPreviewRef.current.addEventListener(
+        "contentChanged",
+        handleContentChanged as EventListener
+      );
     }
 
     return () => {
       if (mainPreviewRef.current) {
-        mainPreviewRef.current.removeEventListener('contentChanged', handleContentChanged as EventListener);
+        mainPreviewRef.current.removeEventListener(
+          "contentChanged",
+          handleContentChanged as EventListener
+        );
       }
     };
   }, [formData.content]);
