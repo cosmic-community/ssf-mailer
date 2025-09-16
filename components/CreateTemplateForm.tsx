@@ -219,6 +219,11 @@ export default function CreateTemplateForm() {
   const editPromptRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
+  const isUpdatingFromStateRef = useRef<boolean>(false);
+  const cursorPositionRef = useRef<{
+    selection: Selection | null;
+    range: Range | null;
+  }>({ selection: null, range: null });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -232,11 +237,38 @@ export default function CreateTemplateForm() {
   const { settings, primaryColor } = useTemplateSettings();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Auto-resize textarea function
   const autoResize = (textarea: HTMLTextAreaElement) => {
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + "px";
+  };
+
+  // Save current cursor position
+  const saveCursorPosition = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      cursorPositionRef.current = {
+        selection: selection,
+        range: range.cloneRange(),
+      };
+    }
+  };
+
+  // Restore cursor position
+  const restoreCursorPosition = () => {
+    const { selection, range } = cursorPositionRef.current;
+    if (selection && range) {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (error) {
+        // Ignore errors if range is no longer valid
+        console.warn("Could not restore cursor position:", error);
+      }
+    }
   };
 
   // Handle keyboard shortcuts for AI prompt textareas
@@ -286,13 +318,30 @@ export default function CreateTemplateForm() {
   useEffect(() => {
     if (
       previewRef.current &&
-      previewRef.current.innerHTML !== formData.content
+      previewRef.current.innerHTML !== formData.content &&
+      !isUpdatingFromStateRef.current
     ) {
       // Only update if the content is different and we're not currently typing
-      if (document.activeElement !== previewRef.current) {
+      const isActiveElement = document.activeElement === previewRef.current;
+      if (!isActiveElement) {
+        isUpdatingFromStateRef.current = true;
         previewRef.current.innerHTML =
           formData.content || "<p>Start typing your email content here...</p>";
         applyStylesToContent(previewRef.current, primaryColor);
+        isUpdatingFromStateRef.current = false;
+      } else {
+        // If the user is actively typing, save cursor, update, then restore
+        saveCursorPosition();
+        isUpdatingFromStateRef.current = true;
+        previewRef.current.innerHTML =
+          formData.content || "<p>Start typing your email content here...</p>";
+        applyStylesToContent(previewRef.current, primaryColor);
+
+        // Restore cursor position after update
+        setTimeout(() => {
+          restoreCursorPosition();
+          isUpdatingFromStateRef.current = false;
+        }, 0);
       }
     }
   }, [formData.content, primaryColor]);
@@ -1227,6 +1276,15 @@ export default function CreateTemplateForm() {
     router.back();
   };
 
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (contentSyncTimeoutRef.current) {
+        clearTimeout(contentSyncTimeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
@@ -1379,9 +1437,9 @@ export default function CreateTemplateForm() {
             <CardTitle>Template Content</CardTitle>
           </CardHeader>
           <CardContent className="px-6 pb-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Left Column: Generate/Edit Content with AI */}
-              <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Left Column: Generate/Edit Content with AI - 1/3 width */}
+              <div className="space-y-6 lg:col-span-1">
                 {!hasGeneratedContent ? (
                   /* AI Generator Interface */
                   <Card className="border-blue-200 bg-blue-50/50">
@@ -1751,8 +1809,8 @@ export default function CreateTemplateForm() {
                 )}
               </div>
 
-              {/* Right Column: Template Content with Toolbar */}
-              <div className="space-y-4">
+              {/* Right Column: Template Content with Toolbar - 2/3 width */}
+              <div className="space-y-4 lg:col-span-2">
                 <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                     <div className="flex items-center justify-between">
@@ -1789,12 +1847,31 @@ export default function CreateTemplateForm() {
                         minHeight: "200px",
                       }}
                       onInput={(e) => {
-                        // Update content in real-time for AI to see changes
+                        // Prevent recursive updates
+                        if (isUpdatingFromStateRef.current) {
+                          return;
+                        }
+
+                        // Save cursor position before any state changes
+                        saveCursorPosition();
+
+                        // Update content with debouncing to prevent race conditions
                         const updatedContent = e.currentTarget.innerHTML;
-                        setFormData((prev) => ({
-                          ...prev,
-                          content: updatedContent,
-                        }));
+
+                        // Clear any existing timeout
+                        if (contentSyncTimeoutRef.current) {
+                          clearTimeout(contentSyncTimeoutRef.current);
+                        }
+
+                        // Set a timeout to batch rapid changes
+                        contentSyncTimeoutRef.current = setTimeout(() => {
+                          if (!isUpdatingFromStateRef.current) {
+                            setFormData((prev) => ({
+                              ...prev,
+                              content: updatedContent,
+                            }));
+                          }
+                        }, 100); // 100ms debounce
                       }}
                     />
                     {/* Preview unsubscribe footer */}

@@ -115,6 +115,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // CRITICAL: Add content sync timeout to ensure all changes are captured
   const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUpdatingFromStateRef = useRef<boolean>(false);
+  const cursorPositionRef = useRef<{
+    selection: Selection | null;
+    range: Range | null;
+  }>({ selection: null, range: null });
 
   // Check if form has changes
   const hasFormChanges = () => {
@@ -243,15 +248,36 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Initialize content in contentEditable div
   useEffect(() => {
-    if (mainPreviewRef.current) {
+    if (mainPreviewRef.current && !isUpdatingFromStateRef.current) {
       const currentMainContent = mainPreviewRef.current.innerHTML;
       const expectedContent =
         formData.content || "<p>Start typing your email content here...</p>";
 
       // Only update if content is actually different and we're not actively editing
-      if (currentMainContent !== expectedContent && activeEditor !== "main") {
+      if (
+        currentMainContent !== expectedContent &&
+        activeEditor !== "main" &&
+        document.activeElement !== mainPreviewRef.current
+      ) {
+        // Save cursor position before updating
+        const wasActive = document.activeElement === mainPreviewRef.current;
+        if (wasActive) {
+          saveCursorPosition();
+        }
+
+        isUpdatingFromStateRef.current = true;
         mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
+
+        // Restore cursor position after update
+        if (wasActive) {
+          setTimeout(() => {
+            restoreCursorPosition();
+            isUpdatingFromStateRef.current = false;
+          }, 0);
+        } else {
+          isUpdatingFromStateRef.current = false;
+        }
       }
     }
   }, [formData.content, primaryColor, activeEditor]);
@@ -265,6 +291,32 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }, 100);
   };
 
+  // Save current cursor position
+  const saveCursorPosition = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      cursorPositionRef.current = {
+        selection: selection,
+        range: range.cloneRange(),
+      };
+    }
+  };
+
+  // Restore cursor position
+  const restoreCursorPosition = () => {
+    const { selection, range } = cursorPositionRef.current;
+    if (selection && range) {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (error) {
+        // Ignore errors if range is no longer valid
+        console.warn("Could not restore cursor position:", error);
+      }
+    }
+  };
+
   // CRITICAL: Enhanced content sync function to ensure all changes are captured
   const syncContentToState = (content: string) => {
     // Clear any existing timeout
@@ -274,11 +326,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
     // Set a short timeout to batch rapid changes
     contentSyncTimeoutRef.current = setTimeout(() => {
-      setFormData((prev) => ({
-        ...prev,
-        content: content,
-      }));
-    }, 50); // 50ms delay to batch rapid changes
+      // Double check that we're not in a state update cycle
+      if (!isUpdatingFromStateRef.current) {
+        setFormData((prev) => ({
+          ...prev,
+          content: content,
+        }));
+      }
+    }, 100); // Increased to 100ms for better debouncing
   };
 
   // FIXED: Handle format application from toolbar with proper conflict prevention and content sync
@@ -306,7 +361,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
       // CRITICAL: Use the enhanced sync function for immediate state update
       syncContentToState(updatedContent);
-
     } catch (error) {
       console.error("Format application error:", error);
     } finally {
@@ -599,13 +653,13 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       const currentContent = mainPreviewRef.current.innerHTML;
       if (currentContent !== formData.content) {
         // Sync the latest content from the editor
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
-          content: currentContent
+          content: currentContent,
         }));
-        
+
         // Wait a brief moment for state update
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise((resolve) => setTimeout(resolve, 100));
       }
     }
 
@@ -632,7 +686,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || "Failed to update template");
         }
 
-        const finalContent = mainPreviewRef.current?.innerHTML || formData.content;
+        const finalContent =
+          mainPreviewRef.current?.innerHTML || formData.content;
 
         setOriginalFormData({
           name: formData.name.trim(),
@@ -708,8 +763,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // ENHANCED: ContentEditable input handler with better content sync
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
+    // Prevent recursive updates
+    if (isUpdatingFromStateRef.current) {
+      return;
+    }
+
     // Set main editor as active to prevent conflicts
     setActiveEditor("main");
+
+    // Save cursor position before any state changes
+    saveCursorPosition();
 
     const updatedContent = e.currentTarget.innerHTML;
 
@@ -732,12 +795,18 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     };
 
     if (mainPreviewRef.current) {
-      mainPreviewRef.current.addEventListener('contentChanged', handleContentChanged as EventListener);
+      mainPreviewRef.current.addEventListener(
+        "contentChanged",
+        handleContentChanged as EventListener
+      );
     }
 
     return () => {
       if (mainPreviewRef.current) {
-        mainPreviewRef.current.removeEventListener('contentChanged', handleContentChanged as EventListener);
+        mainPreviewRef.current.removeEventListener(
+          "contentChanged",
+          handleContentChanged as EventListener
+        );
       }
     };
   }, [formData.content]);
@@ -951,9 +1020,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           <CardTitle>Template Content</CardTitle>
         </CardHeader>
         <CardContent className="px-6 pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Edit Content with AI */}
-            <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Edit Content with AI - 1/3 width */}
+            <div className="space-y-6 lg:col-span-1">
               <Card className="border-purple-200 bg-purple-50/50">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-purple-800">
@@ -1144,8 +1213,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </Card>
             </div>
 
-            {/* Right Column: Template Content with Toolbar */}
-            <div className="space-y-4">
+            {/* Right Column: Template Content with Toolbar - 2/3 width */}
+            <div className="space-y-4 lg:col-span-2">
               <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                   <div className="flex items-center justify-between">

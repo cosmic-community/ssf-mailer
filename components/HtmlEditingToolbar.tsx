@@ -18,8 +18,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bold, Italic, Link, Image, ExternalLink, Palette, Upload, Type } from "lucide-react";
+import {
+  Bold,
+  Italic,
+  Link,
+  Image,
+  ExternalLink,
+  Palette,
+  Upload,
+  Type,
+  Crop,
+} from "lucide-react";
 import MediaLibrary from "@/components/MediaLibrary";
+import ImageCropperModal from "@/components/ImageCropperModal";
 import { MediaItem } from "@/types";
 
 interface HtmlEditingToolbarProps {
@@ -54,23 +65,67 @@ const EMAIL_FONTS = [
   { value: "inherit", label: "Default", family: "inherit" },
   // Web-safe fonts
   { value: "arial", label: "Arial", family: "Arial, Helvetica, sans-serif" },
-  { value: "helvetica", label: "Helvetica", family: "Helvetica, Arial, sans-serif" },
-  { value: "times", label: "Times New Roman", family: "Times, 'Times New Roman', serif" },
+  {
+    value: "helvetica",
+    label: "Helvetica",
+    family: "Helvetica, Arial, sans-serif",
+  },
+  {
+    value: "times",
+    label: "Times New Roman",
+    family: "Times, 'Times New Roman', serif",
+  },
   { value: "georgia", label: "Georgia", family: "Georgia, serif" },
-  { value: "courier", label: "Courier New", family: "'Courier New', Courier, monospace" },
+  {
+    value: "courier",
+    label: "Courier New",
+    family: "'Courier New', Courier, monospace",
+  },
   { value: "verdana", label: "Verdana", family: "Verdana, Geneva, sans-serif" },
   { value: "tahoma", label: "Tahoma", family: "Tahoma, Geneva, sans-serif" },
-  { value: "trebuchet", label: "Trebuchet MS", family: "'Trebuchet MS', Helvetica, sans-serif" },
+  {
+    value: "trebuchet",
+    label: "Trebuchet MS",
+    family: "'Trebuchet MS', Helvetica, sans-serif",
+  },
   // Google Fonts (with fallbacks for email compatibility)
-  { value: "quicksand", label: "Quicksand", family: "'Quicksand', Helvetica, Arial, sans-serif" },
-  { value: "opensans", label: "Open Sans", family: "'Open Sans', Helvetica, Arial, sans-serif" },
+  {
+    value: "quicksand",
+    label: "Quicksand",
+    family: "'Quicksand', Helvetica, Arial, sans-serif",
+  },
+  {
+    value: "opensans",
+    label: "Open Sans",
+    family: "'Open Sans', Helvetica, Arial, sans-serif",
+  },
   { value: "roboto", label: "Roboto", family: "'Roboto', Arial, sans-serif" },
   { value: "lato", label: "Lato", family: "'Lato', Arial, sans-serif" },
-  { value: "montserrat", label: "Montserrat", family: "'Montserrat', Helvetica, sans-serif" },
-  { value: "poppins", label: "Poppins", family: "'Poppins', Arial, sans-serif" },
-  { value: "futura", label: "Futura", family: "'Futura', 'Futura PT', Helvetica, Arial, sans-serif" },
-  { value: "playfair", label: "Playfair Display", family: "'Playfair Display', Georgia, serif" },
-  { value: "merriweather", label: "Merriweather", family: "'Merriweather', Georgia, serif" },
+  {
+    value: "montserrat",
+    label: "Montserrat",
+    family: "'Montserrat', Helvetica, sans-serif",
+  },
+  {
+    value: "poppins",
+    label: "Poppins",
+    family: "'Poppins', Arial, sans-serif",
+  },
+  {
+    value: "futura",
+    label: "Futura",
+    family: "'Futura', 'Futura PT', Helvetica, Arial, sans-serif",
+  },
+  {
+    value: "playfair",
+    label: "Playfair Display",
+    family: "'Playfair Display', Georgia, serif",
+  },
+  {
+    value: "merriweather",
+    label: "Merriweather",
+    family: "'Merriweather', Georgia, serif",
+  },
 ];
 
 // Utility function to convert RGB color to hex
@@ -128,7 +183,13 @@ export default function HtmlEditingToolbar({
 
   // Media selection state
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
-  const [activeImageTab, setActiveImageTab] = useState<"url" | "media">("media");
+  const [activeImageTab, setActiveImageTab] = useState<"url" | "media">(
+    "media"
+  );
+
+  // Image cropping state
+  const [showCropperModal, setShowCropperModal] = useState(false);
+  const [cropperMedia, setCropperMedia] = useState<MediaItem | null>(null);
 
   // Listen for edit events from links and images
   React.useEffect(() => {
@@ -167,7 +228,7 @@ export default function HtmlEditingToolbar({
       });
 
       // Pre-select the appropriate tab based on URL type
-      if (url && url.includes('cdn.cosmicjs.com')) {
+      if (url && url.includes("cdn.cosmicjs.com")) {
         setActiveImageTab("media");
       } else {
         setActiveImageTab("url");
@@ -408,11 +469,65 @@ export default function HtmlEditingToolbar({
 
   const handleMediaSelect = (media: MediaItem) => {
     setSelectedMedia(media);
-    setImageDialog(prev => ({
+    setImageDialog((prev) => ({
       ...prev,
       url: media.imgix_url || media.url,
-      alt: media.alt_text || media.original_name || "Image"
+      alt: media.alt_text || media.original_name || "Image",
     }));
+  };
+
+  // Handle crop button click in media library
+  const handleMediaCrop = (media: MediaItem) => {
+    if (!media.type.startsWith("image/")) {
+      return;
+    }
+    setCropperMedia(media);
+    setShowCropperModal(true);
+  };
+
+  // Handle crop completion
+  const handleCropComplete = async (
+    croppedImageFile: File,
+    originalMedia: MediaItem
+  ) => {
+    try {
+      // Upload the cropped image
+      const formData = new FormData();
+      formData.append("file", croppedImageFile);
+
+      // Preserve folder from original if it exists
+      if (originalMedia.folder) {
+        formData.append("folder", originalMedia.folder);
+      }
+
+      // Set alt text based on original
+      const croppedAltText = originalMedia.alt_text
+        ? `${originalMedia.alt_text} (cropped)`
+        : `${originalMedia.original_name} (cropped)`;
+      formData.append("alt_text", croppedAltText);
+
+      const response = await fetch("/api/media", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to upload cropped image");
+      }
+
+      // Use the cropped image
+      setSelectedMedia(data.media as MediaItem);
+      setImageDialog((prev) => ({
+        ...prev,
+        url: data.media.imgix_url || data.media.url,
+        alt: data.media.alt_text || data.media.original_name || "Image",
+      }));
+    } catch (error) {
+      console.error("Error saving cropped image:", error);
+      // You might want to show a toast notification here
+    }
   };
 
   const handleImageSave = () => {
@@ -422,11 +537,15 @@ export default function HtmlEditingToolbar({
     if (activeImageTab === "media" && selectedMedia) {
       // Use selected media
       imageUrl = selectedMedia.imgix_url || selectedMedia.url;
-      altText = selectedMedia.alt_text || selectedMedia.original_name || "Image";
-      
+      altText =
+        selectedMedia.alt_text || selectedMedia.original_name || "Image";
+
       // Add optimization parameters for better performance
-      if (imageUrl.includes('imgix_url') || imageUrl.includes('cdn.cosmicjs.com')) {
-        const separator = imageUrl.includes('?') ? '&' : '?';
+      if (
+        imageUrl.includes("imgix_url") ||
+        imageUrl.includes("cdn.cosmicjs.com")
+      ) {
+        const separator = imageUrl.includes("?") ? "&" : "?";
         imageUrl = `${imageUrl}${separator}w=800&h=600&fit=crop&auto=format,compress`;
       }
     } else {
@@ -539,180 +658,256 @@ export default function HtmlEditingToolbar({
 
   return (
     <>
-      <div
-        className={`toolbar-container flex items-center space-x-1 p-2 bg-white border border-gray-300 rounded-lg shadow-sm ${className}`}
-        onMouseDown={(e) => e.preventDefault()} // Prevent focus loss when clicking toolbar
-      >
-        {/* Text Styles Dropdown */}
-        <div className="flex items-center space-x-1 pr-2 border-r border-gray-200">
-          <Select
-            onValueChange={(value) => {
-              handleFormat(value);
-            }}
-          >
-            <SelectTrigger className="h-8 w-20 text-xs">
-              <SelectValue placeholder="Style" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="paragraph">Normal</SelectItem>
-              <SelectItem value="h1">Heading 1</SelectItem>
-              <SelectItem value="h2">Heading 2</SelectItem>
-              <SelectItem value="h3">Heading 3</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="w-full overflow-x-auto">
+        <div
+          className={`toolbar-container flex items-center gap-1 p-2 bg-white border border-gray-300 rounded-lg shadow-sm min-w-max ${className}`}
+          onMouseDown={(e) => e.preventDefault()} // Prevent focus loss when clicking toolbar
+          style={{ minWidth: "fit-content" }}
+        >
+          {/* Text Styles Dropdown */}
+          <div className="flex items-center pr-1 border-r border-gray-200 flex-shrink-0">
+            <Select
+              onValueChange={(value) => {
+                handleFormat(value);
+              }}
+            >
+              <SelectTrigger className="h-8 w-16 text-xs">
+                <SelectValue placeholder="Style" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="paragraph">Normal</SelectItem>
+                <SelectItem value="h1">Heading 1</SelectItem>
+                <SelectItem value="h2">Heading 2</SelectItem>
+                <SelectItem value="h3">Heading 3</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Text Formatting */}
-        <div className="flex items-center space-x-1 pr-2 border-r border-gray-200">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("bold")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Bold"
-          >
-            <Bold className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("italic")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Italic"
-          >
-            <Italic className="h-4 w-4" />
-          </Button>
-        </div>
+          {/* Text Formatting */}
+          <div className="flex items-center gap-0.5 pr-1 border-r border-gray-200 flex-shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleFormat("bold")}
+              onMouseDown={(e) => e.preventDefault()}
+              className="h-8 w-8 p-0"
+              title="Bold"
+            >
+              <Bold className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleFormat("italic")}
+              onMouseDown={(e) => e.preventDefault()}
+              className="h-8 w-8 p-0"
+              title="Italic"
+            >
+              <Italic className="h-4 w-4" />
+            </Button>
+          </div>
 
-        {/* Font Family */}
-        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
-          <Select
-            value={fontFamily}
-            onValueChange={(value) => {
-              // Save current state before applying font family
-              const editableDiv = document.querySelector(
-                '[contenteditable="true"]'
-              ) as HTMLElement;
-              if (editableDiv) {
-                saveToUndoStack(editableDiv.innerHTML);
-              }
+          {/* Font Family - Hidden on mobile */}
+          <div className="hidden md:flex items-center px-1 border-r border-gray-200 flex-shrink-0">
+            <Select
+              value={fontFamily}
+              onValueChange={(value) => {
+                // Save current state before applying font family
+                const editableDiv = document.querySelector(
+                  '[contenteditable="true"]'
+                ) as HTMLElement;
+                if (editableDiv) {
+                  saveToUndoStack(editableDiv.innerHTML);
+                }
 
-              const selectedFont = EMAIL_FONTS.find(font => font.value === value);
-              if (selectedFont) {
-                setFontFamily(value);
-                onFormatApply("font-family", selectedFont.family);
-              }
-            }}
-          >
-            <SelectTrigger className="h-8 w-28 text-xs">
-              <div className="flex items-center space-x-1">
-                <Type className="h-3 w-3" />
+                const selectedFont = EMAIL_FONTS.find(
+                  (font) => font.value === value
+                );
+                if (selectedFont) {
+                  setFontFamily(value);
+                  onFormatApply("font-family", selectedFont.family);
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 w-20 text-xs">
+                <div className="flex items-center gap-1">
+                  <Type className="h-3 w-3" />
+                  <SelectValue
+                    style={{
+                      fontFamily:
+                        fontFamily !== "inherit"
+                          ? EMAIL_FONTS.find(
+                              (font) => font.value === fontFamily
+                            )?.family
+                          : "inherit",
+                    }}
+                  />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="inherit">Default</SelectItem>
+                <SelectItem
+                  value="arial"
+                  style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+                >
+                  Arial
+                </SelectItem>
+                <SelectItem
+                  value="helvetica"
+                  style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+                >
+                  Helvetica
+                </SelectItem>
+                <SelectItem
+                  value="times"
+                  style={{ fontFamily: 'Times, "Times New Roman", serif' }}
+                >
+                  Times
+                </SelectItem>
+                <SelectItem
+                  value="georgia"
+                  style={{ fontFamily: "Georgia, serif" }}
+                >
+                  Georgia
+                </SelectItem>
+                <SelectItem
+                  value="courier"
+                  style={{ fontFamily: '"Courier New", Courier, monospace' }}
+                >
+                  Courier
+                </SelectItem>
+                <SelectItem
+                  value="verdana"
+                  style={{ fontFamily: "Verdana, Geneva, sans-serif" }}
+                >
+                  Verdana
+                </SelectItem>
+                <SelectItem
+                  value="opensans"
+                  style={{
+                    fontFamily: '"Open Sans", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Open Sans
+                </SelectItem>
+                <SelectItem
+                  value="roboto"
+                  style={{ fontFamily: '"Roboto", Arial, sans-serif' }}
+                >
+                  Roboto
+                </SelectItem>
+                <SelectItem
+                  value="lato"
+                  style={{ fontFamily: '"Lato", Arial, sans-serif' }}
+                >
+                  Lato
+                </SelectItem>
+                <SelectItem
+                  value="montserrat"
+                  style={{ fontFamily: '"Montserrat", Helvetica, sans-serif' }}
+                >
+                  Montserrat
+                </SelectItem>
+                <SelectItem
+                  value="quicksand"
+                  style={{
+                    fontFamily: '"Quicksand", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Quicksand
+                </SelectItem>
+                <SelectItem
+                  value="futura"
+                  style={{
+                    fontFamily:
+                      '"Futura", "Futura PT", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Futura
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Text Alignment Dropdown */}
+          <div className="flex items-center px-1 border-r border-gray-200 flex-shrink-0">
+            <Select
+              onValueChange={(value) => {
+                handleFormat(value);
+              }}
+            >
+              <SelectTrigger className="h-8 w-14 text-xs">
+                <SelectValue placeholder="Align" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="align-left">Left</SelectItem>
+                <SelectItem value="align-center">Center</SelectItem>
+                <SelectItem value="align-right">Right</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Font Size */}
+          <div className="flex items-center px-1 border-r border-gray-200 flex-shrink-0">
+            <Select
+              value={fontSize}
+              onValueChange={(value) => {
+                // Save current state before applying font size
+                const editableDiv = document.querySelector(
+                  '[contenteditable="true"]'
+                ) as HTMLElement;
+                if (editableDiv) {
+                  saveToUndoStack(editableDiv.innerHTML);
+                }
+
+                setFontSize(value);
+                onFormatApply("font-size", value);
+              }}
+            >
+              <SelectTrigger className="h-8 w-14 text-xs">
                 <SelectValue />
-              </div>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="inherit">Default</SelectItem>
-              <SelectItem value="arial" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>Arial</SelectItem>
-              <SelectItem value="helvetica" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>Helvetica</SelectItem>
-              <SelectItem value="times" style={{ fontFamily: 'Times, "Times New Roman", serif' }}>Times New Roman</SelectItem>
-              <SelectItem value="georgia" style={{ fontFamily: 'Georgia, serif' }}>Georgia</SelectItem>
-              <SelectItem value="courier" style={{ fontFamily: '"Courier New", Courier, monospace' }}>Courier New</SelectItem>
-              <SelectItem value="verdana" style={{ fontFamily: 'Verdana, Geneva, sans-serif' }}>Verdana</SelectItem>
-              <SelectItem value="tahoma" style={{ fontFamily: 'Tahoma, Geneva, sans-serif' }}>Tahoma</SelectItem>
-              <SelectItem value="trebuchet" style={{ fontFamily: '"Trebuchet MS", Helvetica, sans-serif' }}>Trebuchet MS</SelectItem>
-              <SelectItem value="quicksand" style={{ fontFamily: '"Quicksand", Helvetica, Arial, sans-serif' }}>Quicksand</SelectItem>
-              <SelectItem value="opensans" style={{ fontFamily: '"Open Sans", Helvetica, Arial, sans-serif' }}>Open Sans</SelectItem>
-              <SelectItem value="roboto" style={{ fontFamily: '"Roboto", Arial, sans-serif' }}>Roboto</SelectItem>
-              <SelectItem value="lato" style={{ fontFamily: '"Lato", Arial, sans-serif' }}>Lato</SelectItem>
-              <SelectItem value="montserrat" style={{ fontFamily: '"Montserrat", Helvetica, sans-serif' }}>Montserrat</SelectItem>
-              <SelectItem value="poppins" style={{ fontFamily: '"Poppins", Arial, sans-serif' }}>Poppins</SelectItem>
-              <SelectItem value="futura" style={{ fontFamily: '"Futura", "Futura PT", Helvetica, Arial, sans-serif' }}>Futura</SelectItem>
-              <SelectItem value="playfair" style={{ fontFamily: '"Playfair Display", Georgia, serif' }}>Playfair Display</SelectItem>
-              <SelectItem value="merriweather" style={{ fontFamily: '"Merriweather", Georgia, serif' }}>Merriweather</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="12">12px</SelectItem>
+                <SelectItem value="14">14px</SelectItem>
+                <SelectItem value="16">16px</SelectItem>
+                <SelectItem value="18">18px</SelectItem>
+                <SelectItem value="20">20px</SelectItem>
+                <SelectItem value="24">24px</SelectItem>
+                <SelectItem value="28">28px</SelectItem>
+                <SelectItem value="32">32px</SelectItem>
+                <SelectItem value="36">36px</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-        {/* Text Alignment Dropdown */}
-        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
-          <Select
-            onValueChange={(value) => {
-              handleFormat(value);
-            }}
-          >
-            <SelectTrigger className="h-8 w-16 text-xs">
-              <SelectValue placeholder="Align" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="align-left">Left</SelectItem>
-              <SelectItem value="align-center">Center</SelectItem>
-              <SelectItem value="align-right">Right</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Font Size */}
-        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
-          <Select
-            value={fontSize}
-            onValueChange={(value) => {
-              // Save current state before applying font size
-              const editableDiv = document.querySelector(
-                '[contenteditable="true"]'
-              ) as HTMLElement;
-              if (editableDiv) {
-                saveToUndoStack(editableDiv.innerHTML);
-              }
-
-              setFontSize(value);
-              onFormatApply("font-size", value);
-            }}
-          >
-            <SelectTrigger className="h-8 w-16 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="12">12px</SelectItem>
-              <SelectItem value="14">14px</SelectItem>
-              <SelectItem value="16">16px</SelectItem>
-              <SelectItem value="18">18px</SelectItem>
-              <SelectItem value="20">20px</SelectItem>
-              <SelectItem value="24">24px</SelectItem>
-              <SelectItem value="28">28px</SelectItem>
-              <SelectItem value="32">32px</SelectItem>
-              <SelectItem value="36">36px</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Links and Images */}
-        <div className="flex items-center space-x-1">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("link")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Add link"
-          >
-            <Link className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            onClick={() => handleFormat("image")}
-            onMouseDown={(e) => e.preventDefault()}
-            className="h-8 px-2"
-            title="Insert image"
-          >
-            <Image className="h-4 w-4" />
-          </Button>
+          {/* Links and Images */}
+          <div className="flex items-center gap-0.5 flex-shrink-0">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleFormat("link")}
+              onMouseDown={(e) => e.preventDefault()}
+              className="h-8 w-8 p-0"
+              title="Add link"
+            >
+              <Link className="h-4 w-4" />
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => handleFormat("image")}
+              onMouseDown={(e) => e.preventDefault()}
+              className="h-8 w-8 p-0"
+              title="Insert image"
+            >
+              <Image className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -818,7 +1013,7 @@ export default function HtmlEditingToolbar({
         </DialogContent>
       </Dialog>
 
-      {/* Image Dialog with Media Library Integration */}
+      {/* Image Dialog with Media Library Integration and Cropping */}
       <Dialog
         open={imageDialog.isOpen}
         onOpenChange={(open) => {
@@ -836,38 +1031,52 @@ export default function HtmlEditingToolbar({
               <span>{imageDialog.element ? "Edit Image" : "Insert Image"}</span>
             </DialogTitle>
           </DialogHeader>
-          
+
           <div className="flex-1 overflow-hidden flex flex-col pt-4">
-            <Tabs value={activeImageTab} onValueChange={(value) => setActiveImageTab(value as "url" | "media")}>
+            <Tabs
+              value={activeImageTab}
+              onValueChange={(value) =>
+                setActiveImageTab(value as "url" | "media")
+              }
+            >
               <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
-                <TabsTrigger value="media" className="flex items-center space-x-2">
+                <TabsTrigger
+                  value="media"
+                  className="flex items-center space-x-2"
+                >
                   <Upload className="h-4 w-4" />
                   <span>Media Library</span>
                 </TabsTrigger>
-                <TabsTrigger value="url" className="flex items-center space-x-2">
+                <TabsTrigger
+                  value="url"
+                  className="flex items-center space-x-2"
+                >
                   <ExternalLink className="h-4 w-4" />
                   <span>URL</span>
                 </TabsTrigger>
               </TabsList>
-              
+
               <div className="flex-1 overflow-y-auto mt-4">
                 <TabsContent value="media" className="space-y-4 mt-0">
                   <div className="border rounded-lg p-4 max-h-[350px] overflow-y-auto">
-                    <MediaLibrary 
+                    <MediaLibrary
                       selectionMode={true}
                       onSelect={handleMediaSelect}
                       selectedMedia={selectedMedia}
                     />
                   </div>
-                  
+
                   {selectedMedia && (
                     <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center space-x-4">
                         <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                          {selectedMedia.type.startsWith('image/') ? (
+                          {selectedMedia.type.startsWith("image/") ? (
                             <img
                               src={`${selectedMedia.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
-                              alt={selectedMedia.alt_text || selectedMedia.original_name}
+                              alt={
+                                selectedMedia.alt_text ||
+                                selectedMedia.original_name
+                              }
                               className="w-full h-full object-cover"
                             />
                           ) : (
@@ -889,11 +1098,23 @@ export default function HtmlEditingToolbar({
                             </p>
                           )}
                         </div>
+                        {selectedMedia.type.startsWith("image/") && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMediaCrop(selectedMedia)}
+                            className="flex items-center space-x-1"
+                          >
+                            <Crop className="h-4 w-4" />
+                            <span>Crop</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
                 </TabsContent>
-                
+
                 <TabsContent value="url" className="space-y-4 mt-0">
                   <div className="space-y-2">
                     <Label htmlFor="image-url">Image URL *</Label>
@@ -901,7 +1122,10 @@ export default function HtmlEditingToolbar({
                       id="image-url"
                       value={imageDialog.url}
                       onChange={(e) =>
-                        setImageDialog((prev) => ({ ...prev, url: e.target.value }))
+                        setImageDialog((prev) => ({
+                          ...prev,
+                          url: e.target.value,
+                        }))
                       }
                       onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
                       placeholder="https://example.com/image.jpg"
@@ -914,7 +1138,10 @@ export default function HtmlEditingToolbar({
                       id="image-alt-url"
                       value={imageDialog.alt}
                       onChange={(e) =>
-                        setImageDialog((prev) => ({ ...prev, alt: e.target.value }))
+                        setImageDialog((prev) => ({
+                          ...prev,
+                          alt: e.target.value,
+                        }))
                       }
                       onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
                       placeholder="Describe the image"
@@ -923,7 +1150,7 @@ export default function HtmlEditingToolbar({
                 </TabsContent>
               </div>
             </Tabs>
-            
+
             {/* Link URL field (shared between tabs) - Now inside the scrollable area */}
             <div className="space-y-2 mt-4 flex-shrink-0">
               <Label htmlFor="image-link">Link URL (optional)</Label>
@@ -941,7 +1168,7 @@ export default function HtmlEditingToolbar({
               </p>
             </div>
           </div>
-          
+
           {/* Fixed footer outside the scrollable area */}
           <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 flex-shrink-0 bg-white">
             <Button
@@ -957,8 +1184,8 @@ export default function HtmlEditingToolbar({
             <Button
               onClick={handleImageSave}
               disabled={
-                activeImageTab === "media" 
-                  ? !selectedMedia 
+                activeImageTab === "media"
+                  ? !selectedMedia
                   : !imageDialog.url.trim()
               }
               className="bg-green-600 hover:bg-green-700"
@@ -968,6 +1195,18 @@ export default function HtmlEditingToolbar({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={showCropperModal}
+        onOpenChange={setShowCropperModal}
+        mediaItem={cropperMedia}
+        onCropComplete={handleCropComplete}
+        onError={(error) => {
+          console.error("Crop error:", error);
+          // You might want to show a toast notification here
+        }}
+      />
     </>
   );
 }
