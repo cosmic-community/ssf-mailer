@@ -292,7 +292,7 @@ export default function ImageCropperModal({
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => setCompletedCrop(convertToPixelCrop(c, imgRef.current!.width, imgRef.current!.height))}
+                  onComplete={(c) => setCompletedCrop(convertToPixelCrop(c))}
                   aspect={aspectRatio || undefined}
                   className="max-w-full max-h-full"
                 >
