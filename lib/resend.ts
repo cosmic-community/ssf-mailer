@@ -1,5 +1,10 @@
 import { Resend } from "resend";
-import { EmailTemplate, Settings, EmailContact } from "@/types";
+import {
+  EmailTemplate,
+  Settings,
+  EmailContact,
+  MarketingCampaign,
+} from "@/types";
 import { updateCampaignProgress } from "./cosmic";
 import { addTrackingToEmail, createUnsubscribeUrl } from "./email-tracking";
 
@@ -103,7 +108,7 @@ function sleep(ms: number): Promise<void> {
 // Batch processing function with rate limiting and retry logic
 export async function sendCampaignEmails(
   campaignId: string,
-  template: EmailTemplate,
+  campaign: MarketingCampaign,
   contacts: EmailContact[],
   settings: Settings
 ): Promise<{ success: boolean; sent_count: number; error?: string }> {
@@ -125,15 +130,24 @@ export async function sendCampaignEmails(
       };
     }
 
-    // Use template snapshot if available (for sent campaigns), otherwise use current template
-    const emailContent = templateSnapshot?.content || template.metadata.content;
-    const emailSubject = templateSnapshot?.subject || template.metadata.subject;
+    // Get campaign content (decoupled from templates)
+    let emailContent: string;
+    let emailSubject: string;
+
+    if (campaign.metadata.campaign_content) {
+      emailContent = campaign.metadata.campaign_content.content;
+      emailSubject = campaign.metadata.campaign_content.subject;
+    } else {
+      // Fallback to deprecated fields for very old campaigns
+      emailContent = campaign.metadata.content || "";
+      emailSubject = campaign.metadata.subject || "";
+    }
 
     if (!emailContent || !emailSubject) {
       return {
         success: false,
         sent_count: 0,
-        error: "Template content or subject is missing",
+        error: "Campaign content or subject is missing",
       };
     }
 

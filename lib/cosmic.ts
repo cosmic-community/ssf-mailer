@@ -8,6 +8,7 @@ import {
   CreateContactData,
   CreateListData,
   CreateTemplateData,
+  TemplateType,
   CreateCampaignData,
   UpdateSettingsData,
   BulkListUpdateData,
@@ -1166,7 +1167,10 @@ export async function createMarketingCampaign(
     console.log("Creating marketing campaign with data:", data);
 
     let template: EmailTemplate | null = null;
-    let templateType = { key: "custom", value: "Custom" as const };
+    let templateType: { key: string; value: TemplateType } = {
+      key: "welcome-email",
+      value: "Welcome Email",
+    };
 
     // Validate template exists and get its data for copying
     if (data.template_id) {

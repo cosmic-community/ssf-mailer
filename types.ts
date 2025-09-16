@@ -247,6 +247,8 @@ export interface CreateCampaignData {
   contact_ids?: string[];
   target_tags?: string[];
   send_date?: string;
+  subject?: string; // NEW: subject for campaign content
+  content?: string; // NEW: content for campaign content
 }
 
 export interface UpdateSettingsData {
