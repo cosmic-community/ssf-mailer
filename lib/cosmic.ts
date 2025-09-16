@@ -142,17 +142,17 @@ export async function uploadMedia(
   }
 ): Promise<MediaItem> {
   try {
-    // Convert File to ArrayBuffer for Cosmic SDK
-    const buffer = await file.arrayBuffer();
+    // Convert File to Buffer (Node.js compatible)
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
     
-    // Create media object compatible with Cosmic's expected format
-    const mediaObject = {
-      originalname: file.name,
-      buffer: buffer,
-    };
-
+    // Create the upload payload with proper structure for Cosmic SDK
     const uploadData: any = {
-      media: mediaObject,
+      media: {
+        originalname: file.name,
+        buffer: buffer,
+        mimetype: file.type,
+      }
     };
 
     // Add optional parameters
