@@ -734,21 +734,99 @@ export default function HtmlEditingToolbar({
               <SelectTrigger className="h-8 w-20 text-xs">
                 <div className="flex items-center gap-1">
                   <Type className="h-3 w-3" />
-                  <SelectValue />
+                  <SelectValue
+                    style={{
+                      fontFamily:
+                        fontFamily !== "inherit"
+                          ? EMAIL_FONTS.find(
+                              (font) => font.value === fontFamily
+                            )?.family
+                          : "inherit",
+                    }}
+                  />
                 </div>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="inherit">Default</SelectItem>
-                <SelectItem value="arial">Arial</SelectItem>
-                <SelectItem value="helvetica">Helvetica</SelectItem>
-                <SelectItem value="times">Times</SelectItem>
-                <SelectItem value="georgia">Georgia</SelectItem>
-                <SelectItem value="courier">Courier</SelectItem>
-                <SelectItem value="verdana">Verdana</SelectItem>
-                <SelectItem value="opensans">Open Sans</SelectItem>
-                <SelectItem value="roboto">Roboto</SelectItem>
-                <SelectItem value="lato">Lato</SelectItem>
-                <SelectItem value="montserrat">Montserrat</SelectItem>
+                <SelectItem
+                  value="arial"
+                  style={{ fontFamily: "Arial, Helvetica, sans-serif" }}
+                >
+                  Arial
+                </SelectItem>
+                <SelectItem
+                  value="helvetica"
+                  style={{ fontFamily: "Helvetica, Arial, sans-serif" }}
+                >
+                  Helvetica
+                </SelectItem>
+                <SelectItem
+                  value="times"
+                  style={{ fontFamily: 'Times, "Times New Roman", serif' }}
+                >
+                  Times
+                </SelectItem>
+                <SelectItem
+                  value="georgia"
+                  style={{ fontFamily: "Georgia, serif" }}
+                >
+                  Georgia
+                </SelectItem>
+                <SelectItem
+                  value="courier"
+                  style={{ fontFamily: '"Courier New", Courier, monospace' }}
+                >
+                  Courier
+                </SelectItem>
+                <SelectItem
+                  value="verdana"
+                  style={{ fontFamily: "Verdana, Geneva, sans-serif" }}
+                >
+                  Verdana
+                </SelectItem>
+                <SelectItem
+                  value="opensans"
+                  style={{
+                    fontFamily: '"Open Sans", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Open Sans
+                </SelectItem>
+                <SelectItem
+                  value="roboto"
+                  style={{ fontFamily: '"Roboto", Arial, sans-serif' }}
+                >
+                  Roboto
+                </SelectItem>
+                <SelectItem
+                  value="lato"
+                  style={{ fontFamily: '"Lato", Arial, sans-serif' }}
+                >
+                  Lato
+                </SelectItem>
+                <SelectItem
+                  value="montserrat"
+                  style={{ fontFamily: '"Montserrat", Helvetica, sans-serif' }}
+                >
+                  Montserrat
+                </SelectItem>
+                <SelectItem
+                  value="quicksand"
+                  style={{
+                    fontFamily: '"Quicksand", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Quicksand
+                </SelectItem>
+                <SelectItem
+                  value="futura"
+                  style={{
+                    fontFamily:
+                      '"Futura", "Futura PT", Helvetica, Arial, sans-serif',
+                  }}
+                >
+                  Futura
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
