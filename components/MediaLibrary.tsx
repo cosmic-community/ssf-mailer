@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useDropzone } from 'react-dropzone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -37,7 +38,10 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
-  X
+  X,
+  CloudUpload,
+  AlertCircle,
+  CheckCircle
 } from 'lucide-react'
 import { MediaItem } from '@/types'
 import { useToast } from '@/hooks/useToast'
@@ -78,10 +82,11 @@ export default function MediaLibrary({
   
   // Upload dialog state
   const [showUploadDialog, setShowUploadDialog] = useState(false)
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadFiles, setUploadFiles] = useState<File[]>([])
   const [uploadFolder, setUploadFolder] = useState('')
-  const [uploadAltText, setUploadAltText] = useState('')
+  const [uploadAltTexts, setUploadAltTexts] = useState<Record<string, string>>({})
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   
   // Preview dialog state
   const [showPreviewDialog, setShowPreviewDialog] = useState(false)
@@ -96,6 +101,67 @@ export default function MediaLibrary({
   // Debounced search state
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
   
+  // Dropzone configuration
+  const maxFileSize = 900 * 1024 * 1024 // 900MB (Cosmic's limit)
+  const acceptedFileTypes = {
+    'image/*': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'],
+    'application/pdf': ['.pdf'],
+    'text/plain': ['.txt'],
+    'text/csv': ['.csv'],
+    'application/msword': ['.doc'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
+    'application/vnd.ms-excel': ['.xls'],
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+    'video/mp4': ['.mp4'],
+    'video/webm': ['.webm'],
+    'audio/mpeg': ['.mp3'],
+    'audio/wav': ['.wav']
+  }
+
+  // Dropzone handlers
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+    if (rejectedFiles.length > 0) {
+      const errors = rejectedFiles.map(({ file, errors }) => {
+        const errorMessages = errors.map((e: any) => {
+          if (e.code === 'file-too-large') {
+            return `${file.name}: File size exceeds 900MB limit`
+          }
+          if (e.code === 'file-invalid-type') {
+            return `${file.name}: File type not supported`
+          }
+          return `${file.name}: ${e.message}`
+        }).join(', ')
+        return errorMessages
+      })
+      
+      errors.forEach(error => addToast(error, 'error'))
+    }
+
+    if (acceptedFiles.length > 0) {
+      setUploadFiles(acceptedFiles)
+      // Initialize alt text state for images
+      const altTexts: Record<string, string> = {}
+      acceptedFiles.forEach((file, index) => {
+        if (file.type.startsWith('image/')) {
+          altTexts[`${file.name}-${index}`] = ''
+        }
+      })
+      setUploadAltTexts(altTexts)
+      setUploadFolder('')
+      setUploadProgress({})
+      setShowUploadDialog(true)
+    }
+  }, [addToast])
+
+  const { getRootProps, getInputProps, isDragActive, open: openFileDialog } = useDropzone({
+    onDrop,
+    accept: acceptedFileTypes,
+    maxSize: maxFileSize,
+    multiple: true,
+    noClick: true, // We'll handle clicking manually
+    noKeyboard: true,
+  })
+
   // Debounce search term
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -169,51 +235,76 @@ export default function MediaLibrary({
     fetchFolders()
   }, [])
   
-  // Handle file upload
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (file) {
-      setUploadFile(file)
-      setUploadAltText('')
-      setUploadFolder('')
-      setShowUploadDialog(true)
-    }
-  }
-  
+  // Handle file upload with progress tracking
   const handleUpload = async () => {
-    if (!uploadFile) return
+    if (uploadFiles.length === 0) return
     
     try {
       setUploading(true)
-      
-      const formData = new FormData()
-      formData.append('file', uploadFile)
-      if (uploadFolder.trim()) formData.append('folder', uploadFolder.trim())
-      if (uploadAltText.trim()) formData.append('alt_text', uploadAltText.trim())
-      
-      // Server-side upload processing
-      const response = await fetch('/api/media', {
-        method: 'POST',
-        body: formData
-      })
-      
-      const data = await response.json()
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Upload failed')
+      const totalFiles = uploadFiles.length
+      let completedFiles = 0
+      const errors: string[] = []
+
+      // Upload files one by one to track progress
+      for (let i = 0; i < uploadFiles.length; i++) {
+        const file = uploadFiles[i]
+        const fileKey = `${file.name}-${i}`
+        
+        try {
+          setUploadProgress(prev => ({ ...prev, [fileKey]: 0 }))
+          
+          const formData = new FormData()
+          formData.append('file', file)
+          if (uploadFolder.trim()) formData.append('folder', uploadFolder.trim())
+          
+          // Add alt text for images
+          if (file.type.startsWith('image/') && uploadAltTexts[fileKey]?.trim()) {
+            formData.append('alt_text', uploadAltTexts[fileKey].trim())
+          }
+          
+          // Server-side upload processing
+          const response = await fetch('/api/media', {
+            method: 'POST',
+            body: formData
+          })
+          
+          const data = await response.json()
+          
+          if (!response.ok) {
+            throw new Error(data.error || `Upload failed for ${file.name}`)
+          }
+          
+          setUploadProgress(prev => ({ ...prev, [fileKey]: 100 }))
+          completedFiles++
+          
+        } catch (fileError) {
+          errors.push(`${file.name}: ${fileError instanceof Error ? fileError.message : 'Upload failed'}`)
+          setUploadProgress(prev => ({ ...prev, [fileKey]: -1 })) // Mark as error
+        }
       }
       
-      addToast('File uploaded successfully!', 'success')
+      // Show results
+      if (completedFiles > 0) {
+        addToast(`Successfully uploaded ${completedFiles} file${completedFiles === 1 ? '' : 's'}!`, 'success')
+      }
+      
+      if (errors.length > 0) {
+        errors.forEach(error => addToast(error, 'error'))
+      }
+      
+      // Clean up and refresh
       setShowUploadDialog(false)
-      setUploadFile(null)
+      setUploadFiles([])
       setUploadFolder('')
-      setUploadAltText('')
+      setUploadAltTexts({})
+      setUploadProgress({})
       
       // Refresh media list and folders from server
       await Promise.all([
         fetchMedia(currentPage),
         fetchFolders()
       ])
+      
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Upload failed', 'error')
     } finally {
@@ -340,6 +431,43 @@ export default function MediaLibrary({
     
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
   }
+
+  // Get upload progress indicator
+  const getUploadProgressIndicator = (file: File, index: number) => {
+    const fileKey = `${file.name}-${index}`
+    const progress = uploadProgress[fileKey]
+    
+    if (progress === undefined) {
+      return <div className="w-full bg-gray-200 rounded-full h-1" />
+    }
+    
+    if (progress === -1) {
+      return (
+        <div className="flex items-center space-x-1 text-red-600">
+          <AlertCircle className="h-3 w-3" />
+          <span className="text-xs">Failed</span>
+        </div>
+      )
+    }
+    
+    if (progress === 100) {
+      return (
+        <div className="flex items-center space-x-1 text-green-600">
+          <CheckCircle className="h-3 w-3" />
+          <span className="text-xs">Complete</span>
+        </div>
+      )
+    }
+    
+    return (
+      <div className="w-full bg-gray-200 rounded-full h-1">
+        <div
+          className="bg-blue-600 h-1 rounded-full transition-all duration-300"
+          style={{ width: `${progress}%` }}
+        />
+      </div>
+    )
+  }
   
   // Calculate pagination
   const totalPages = Math.ceil(totalItems / itemsPerPage)
@@ -351,27 +479,58 @@ export default function MediaLibrary({
       <ToastContainer toasts={toasts} onRemove={removeToast} />
       
       <div className="space-y-6">
-        {/* Controls Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Upload Button */}
+        {/* Dropzone Area */}
+        <div
+          {...getRootProps()}
+          className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragActive
+              ? 'border-blue-500 bg-blue-50'
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+          }`}
+        >
+          <input {...getInputProps()} />
+          
+          <CloudUpload 
+            className={`mx-auto h-12 w-12 mb-4 ${
+              isDragActive ? 'text-blue-500' : 'text-gray-400'
+            }`} 
+          />
+          
+          {isDragActive ? (
             <div>
-              <input
-                type="file"
-                id="file-upload"
-                className="hidden"
-                onChange={handleFileSelect}
-                accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xlsx,.xls,video/mp4,video/webm,audio/mpeg,audio/wav"
-              />
+              <p className="text-lg font-medium text-blue-600 mb-2">
+                Drop files here to upload
+              </p>
+              <p className="text-sm text-blue-500">
+                Release to start uploading
+              </p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-lg font-medium text-gray-700 mb-2">
+                Drag & drop files here, or click to browse
+              </p>
+              <p className="text-sm text-gray-500 mb-4">
+                Supports images, PDFs, documents, videos, and audio files up to 900MB
+              </p>
               <Button
-                onClick={() => document.getElementById('file-upload')?.click()}
+                onClick={openFileDialog}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload File
+                Choose Files
               </Button>
             </div>
-            
+          )}
+          
+          <div className="mt-4 text-xs text-gray-400">
+            Maximum file size: 900MB • Supported formats: JPG, PNG, GIF, PDF, DOC, MP4, MP3, and more
+          </div>
+        </div>
+        
+        {/* Controls Bar */}
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+          <div className="flex flex-wrap gap-3 items-center">
             {/* Search */}
             <div className="relative">
               <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -470,16 +629,16 @@ export default function MediaLibrary({
             <p className="text-gray-600 mb-4">
               {searchTerm || (selectedFolder && selectedFolder !== 'all-folders')
                 ? 'No files match your current filters.'
-                : 'Upload your first file to get started.'
+                : 'Drag & drop files above or click to browse and upload your first file.'
               }
             </p>
             {!searchTerm && (!selectedFolder || selectedFolder === 'all-folders') && (
               <Button
-                onClick={() => document.getElementById('file-upload')?.click()}
+                onClick={openFileDialog}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload File
+                Upload Files
               </Button>
             )}
           </div>
@@ -745,54 +904,102 @@ export default function MediaLibrary({
       
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Upload Media File</DialogTitle>
+            <DialogTitle>Upload Files ({uploadFiles.length} selected)</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            {uploadFile && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <div className="flex-shrink-0">
-                    {uploadFile.type.startsWith('image/') ? (
-                      <ImageIcon className="h-8 w-8 text-blue-600" />
-                    ) : (
-                      <File className="h-8 w-8 text-gray-600" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-900 truncate">
-                      {uploadFile.name}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {formatFileSize(uploadFile.size)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <Label htmlFor="upload-folder">Folder (optional)</Label>
-              <Input
-                id="upload-folder"
-                value={uploadFolder}
-                onChange={(e) => setUploadFolder(e.target.value)}
-                placeholder="e.g., images, documents"
-              />
-            </div>
-            
-            {uploadFile?.type.startsWith('image/') && (
+            {/* Global Settings */}
+            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
               <div className="space-y-2">
-                <Label htmlFor="upload-alt-text">Alt Text (optional)</Label>
+                <Label htmlFor="upload-folder">Folder for all files (optional)</Label>
                 <Input
-                  id="upload-alt-text"
-                  value={uploadAltText}
-                  onChange={(e) => setUploadAltText(e.target.value)}
-                  placeholder="Describe the image"
+                  id="upload-folder"
+                  value={uploadFolder}
+                  onChange={(e) => setUploadFolder(e.target.value)}
+                  placeholder="e.g., images, documents"
                 />
               </div>
-            )}
+            </div>
+
+            {/* File List */}
+            <div className="space-y-3 max-h-60 overflow-y-auto">
+              {uploadFiles.map((file, index) => {
+                const fileKey = `${file.name}-${index}`
+                const isImage = file.type.startsWith('image/')
+                
+                return (
+                  <div key={fileKey} className="p-4 bg-gray-50 rounded-lg">
+                    <div className="flex items-start space-x-3">
+                      <div className="flex-shrink-0">
+                        {isImage ? (
+                          <ImageIcon className="h-8 w-8 text-blue-600" />
+                        ) : file.type === 'application/pdf' ? (
+                          <FileText className="h-8 w-8 text-red-600" />
+                        ) : (
+                          <File className="h-8 w-8 text-gray-600" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {formatFileSize(file.size)}
+                          </p>
+                        </div>
+                        
+                        {/* Alt text for images */}
+                        {isImage && (
+                          <div className="space-y-1">
+                            <Label htmlFor={`alt-text-${fileKey}`} className="text-xs">
+                              Alt Text (optional)
+                            </Label>
+                            <Input
+                              id={`alt-text-${fileKey}`}
+                              value={uploadAltTexts[fileKey] || ''}
+                              onChange={(e) => setUploadAltTexts(prev => ({
+                                ...prev,
+                                [fileKey]: e.target.value
+                              }))}
+                              placeholder="Describe the image"
+                              className="text-sm"
+                            />
+                          </div>
+                        )}
+                        
+                        {/* Progress indicator */}
+                        {uploading && (
+                          <div className="space-y-1">
+                            {getUploadProgressIndicator(file, index)}
+                          </div>
+                        )}
+                      </div>
+                      
+                      {/* Remove file button */}
+                      {!uploading && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setUploadFiles(files => files.filter((_, i) => i !== index))
+                            setUploadAltTexts(prev => {
+                              const newAltTexts = { ...prev }
+                              delete newAltTexts[fileKey]
+                              return newAltTexts
+                            })
+                          }}
+                          className="p-1 h-auto"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
           </div>
           <DialogFooter>
             <Button 
@@ -804,10 +1011,10 @@ export default function MediaLibrary({
             </Button>
             <Button 
               onClick={handleUpload} 
-              disabled={!uploadFile || uploading}
+              disabled={uploadFiles.length === 0 || uploading}
               className="bg-blue-600 hover:bg-blue-700"
             >
-              {uploading ? 'Uploading...' : 'Upload'}
+              {uploading ? 'Uploading...' : `Upload ${uploadFiles.length} file${uploadFiles.length === 1 ? '' : 's'}`}
             </Button>
           </DialogFooter>
         </DialogContent>
