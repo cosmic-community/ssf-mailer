@@ -115,6 +115,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // CRITICAL: Add content sync timeout to ensure all changes are captured
   const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isUpdatingFromStateRef = useRef<boolean>(false);
+  const cursorPositionRef = useRef<{selection: Selection | null, range: Range | null}>({selection: null, range: null});
 
   // Check if form has changes
   const hasFormChanges = () => {
@@ -243,15 +245,32 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // Initialize content in contentEditable div
   useEffect(() => {
-    if (mainPreviewRef.current) {
+    if (mainPreviewRef.current && !isUpdatingFromStateRef.current) {
       const currentMainContent = mainPreviewRef.current.innerHTML;
       const expectedContent =
         formData.content || "<p>Start typing your email content here...</p>";
 
       // Only update if content is actually different and we're not actively editing
-      if (currentMainContent !== expectedContent && activeEditor !== "main") {
+      if (currentMainContent !== expectedContent && activeEditor !== "main" && document.activeElement !== mainPreviewRef.current) {
+        // Save cursor position before updating
+        const wasActive = document.activeElement === mainPreviewRef.current;
+        if (wasActive) {
+          saveCursorPosition();
+        }
+        
+        isUpdatingFromStateRef.current = true;
         mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
+        
+        // Restore cursor position after update
+        if (wasActive) {
+          setTimeout(() => {
+            restoreCursorPosition();
+            isUpdatingFromStateRef.current = false;
+          }, 0);
+        } else {
+          isUpdatingFromStateRef.current = false;
+        }
       }
     }
   }, [formData.content, primaryColor, activeEditor]);
@@ -263,6 +282,32 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         aiPromptRef.current.focus();
       }
     }, 100);
+  };
+
+  // Save current cursor position
+  const saveCursorPosition = () => {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0);
+      cursorPositionRef.current = {
+        selection: selection,
+        range: range.cloneRange()
+      };
+    }
+  };
+
+  // Restore cursor position
+  const restoreCursorPosition = () => {
+    const { selection, range } = cursorPositionRef.current;
+    if (selection && range) {
+      try {
+        selection.removeAllRanges();
+        selection.addRange(range);
+      } catch (error) {
+        // Ignore errors if range is no longer valid
+        console.warn('Could not restore cursor position:', error);
+      }
+    }
   };
 
   // CRITICAL: Enhanced content sync function to ensure all changes are captured
@@ -708,8 +753,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
   // ENHANCED: ContentEditable input handler with better content sync
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
+    // Prevent recursive updates
+    if (isUpdatingFromStateRef.current) {
+      return;
+    }
+
     // Set main editor as active to prevent conflicts
     setActiveEditor("main");
+
+    // Save cursor position before any state changes
+    saveCursorPosition();
 
     const updatedContent = e.currentTarget.innerHTML;
 

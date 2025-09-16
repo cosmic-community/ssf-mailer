@@ -1,21 +1,33 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import ReactCrop, { 
-  Crop, 
-  PixelCrop, 
-  centerCrop, 
+import { useState, useRef, useCallback, useEffect } from "react";
+import ReactCrop, {
+  Crop,
+  PixelCrop,
+  centerCrop,
   makeAspectCrop,
-  convertToPixelCrop 
-} from 'react-image-crop';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { MediaItem } from '@/types';
-import { Crop as CropIcon, RotateCcw, Download, Loader2 } from 'lucide-react';
-import 'react-image-crop/dist/ReactCrop.css';
+  convertToPixelCrop,
+} from "react-image-crop";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { MediaItem } from "@/types";
+import { Crop as CropIcon, RotateCcw, Download, Loader2 } from "lucide-react";
+import "react-image-crop/dist/ReactCrop.css";
 
 interface ImageCropperModalProps {
   isOpen: boolean;
@@ -27,22 +39,22 @@ interface ImageCropperModalProps {
 
 // Common aspect ratios for different use cases
 const ASPECT_RATIOS = [
-  { label: 'Free', value: null },
-  { label: 'Square (1:1)', value: 1 },
-  { label: 'Portrait (3:4)', value: 3/4 },
-  { label: 'Landscape (4:3)', value: 4/3 },
-  { label: 'Widescreen (16:9)', value: 16/9 },
-  { label: 'Banner (5:1)', value: 5/1 },
-  { label: 'Social Media Post (1.91:1)', value: 1.91/1 },
-  { label: 'Story (9:16)', value: 9/16 },
+  { label: "Free", value: null },
+  { label: "Square (1:1)", value: 1 },
+  { label: "Portrait (3:4)", value: 3 / 4 },
+  { label: "Landscape (4:3)", value: 4 / 3 },
+  { label: "Widescreen (16:9)", value: 16 / 9 },
+  { label: "Banner (5:1)", value: 5 / 1 },
+  { label: "Social Media Post (1.91:1)", value: 1.91 / 1 },
+  { label: "Story (9:16)", value: 9 / 16 },
 ];
 
 // Quality presets for different use cases
 const QUALITY_PRESETS = [
-  { label: 'High Quality (90%)', value: 0.9 },
-  { label: 'Medium Quality (70%)', value: 0.7 },
-  { label: 'Low Quality (50%)', value: 0.5 },
-  { label: 'Web Optimized (60%)', value: 0.6 },
+  { label: "High Quality (90%)", value: 0.9 },
+  { label: "Medium Quality (70%)", value: 0.7 },
+  { label: "Low Quality (50%)", value: 0.5 },
+  { label: "Web Optimized (60%)", value: 0.6 },
 ];
 
 export default function ImageCropperModal({
@@ -54,7 +66,7 @@ export default function ImageCropperModal({
 }: ImageCropperModalProps) {
   const imgRef = useRef<HTMLImageElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   const [crop, setCrop] = useState<Crop>();
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>();
   const [aspectRatio, setAspectRatio] = useState<number | null>(null);
@@ -64,8 +76,14 @@ export default function ImageCropperModal({
   const [maintainAspect, setMaintainAspect] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
-  const [originalImageDimensions, setOriginalImageDimensions] = useState<{width: number, height: number}>({width: 0, height: 0});
-  const [displayImageDimensions, setDisplayImageDimensions] = useState<{width: number, height: number}>({width: 0, height: 0});
+  const [originalImageDimensions, setOriginalImageDimensions] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
+  const [displayImageDimensions, setDisplayImageDimensions] = useState<{
+    width: number;
+    height: number;
+  }>({ width: 0, height: 0 });
 
   // Reset state when modal opens/closes or media changes
   useEffect(() => {
@@ -76,187 +94,271 @@ export default function ImageCropperModal({
       setIsProcessing(false);
       setAspectRatio(null);
       setQuality(0.9);
-      setOutputWidth(800);
-      setOutputHeight(600);
+      setOutputWidth(mediaItem.width || 800);
+      setOutputHeight(mediaItem.height || 600);
       setMaintainAspect(true);
-      setOriginalImageDimensions({width: 0, height: 0});
-      setDisplayImageDimensions({width: 0, height: 0});
+      setOriginalImageDimensions({ width: 0, height: 0 });
+      setDisplayImageDimensions({ width: 0, height: 0 });
     }
   }, [isOpen, mediaItem]);
 
   // Handle image load and set initial crop
-  const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
-    
-    // Store both original and displayed dimensions for accurate calculations
-    setOriginalImageDimensions({ width: naturalWidth, height: naturalHeight });
-    setDisplayImageDimensions({ width, height });
-    
-    console.log('Image loaded:', {
-      displayed: { width, height },
-      original: { width: naturalWidth, height: naturalHeight }
-    });
-    
-    if (aspectRatio) {
-      const newCrop = centerCrop(
-        makeAspectCrop(
-          {
-            unit: '%',
-            width: 90,
-          },
-          aspectRatio,
-          width,
-          height
-        ),
-        width,
-        height
-      );
-      setCrop(newCrop);
-    }
-    setImageLoaded(true);
-  }, [aspectRatio]);
+  const onImageLoad = useCallback(
+    (e: React.SyntheticEvent<HTMLImageElement>) => {
+      const { width, height, naturalWidth, naturalHeight } = e.currentTarget;
+
+      // Store both original and displayed dimensions for accurate calculations
+      setOriginalImageDimensions({
+        width: naturalWidth,
+        height: naturalHeight,
+      });
+      setDisplayImageDimensions({ width, height });
+
+      console.log("Image loaded:", {
+        displayed: { width, height },
+        original: { width: naturalWidth, height: naturalHeight },
+      });
+
+      // Set initial crop to center of image
+      const initialCrop = aspectRatio
+        ? centerCrop(
+            makeAspectCrop(
+              {
+                unit: "%",
+                width: 80,
+              },
+              aspectRatio,
+              width,
+              height
+            ),
+            width,
+            height
+          )
+        : {
+            unit: "%" as const,
+            x: 10,
+            y: 10,
+            width: 80,
+            height: 80,
+          };
+
+      setCrop(initialCrop);
+      setImageLoaded(true);
+    },
+    [aspectRatio]
+  );
 
   // Handle aspect ratio change
   const handleAspectRatioChange = useCallback((value: string) => {
-    const ratio = value === 'null' ? null : parseFloat(value);
+    const ratio = value === "null" ? null : parseFloat(value);
     setAspectRatio(ratio);
-    
-    if (imgRef.current && ratio) {
+
+    if (imgRef.current) {
       const { width, height } = imgRef.current;
-      const newCrop = centerCrop(
-        makeAspectCrop(
-          {
-            unit: '%',
-            width: 90,
-          },
-          ratio,
+      if (ratio) {
+        const newCrop = centerCrop(
+          makeAspectCrop(
+            {
+              unit: "%",
+              width: 80,
+            },
+            ratio,
+            width,
+            height
+          ),
           width,
           height
-        ),
-        width,
-        height
-      );
-      setCrop(newCrop);
+        );
+        setCrop(newCrop);
+      } else {
+        // Free aspect ratio - set a default crop
+        setCrop({
+          unit: "%",
+          x: 10,
+          y: 10,
+          width: 80,
+          height: 80,
+        });
+      }
     }
   }, []);
 
   // Handle output dimensions change
-  const handleOutputDimensionChange = useCallback((dimension: 'width' | 'height', value: number) => {
-    if (dimension === 'width') {
-      setOutputWidth(value);
-      if (maintainAspect && aspectRatio) {
-        setOutputHeight(Math.round(value / aspectRatio));
+  const handleOutputDimensionChange = useCallback(
+    (dimension: "width" | "height", value: number) => {
+      if (dimension === "width") {
+        setOutputWidth(value);
+        if (maintainAspect && aspectRatio) {
+          setOutputHeight(Math.round(value / aspectRatio));
+        }
+      } else {
+        setOutputHeight(value);
+        if (maintainAspect && aspectRatio) {
+          setOutputWidth(Math.round(value * aspectRatio));
+        }
       }
-    } else {
-      setOutputHeight(value);
-      if (maintainAspect && aspectRatio) {
-        setOutputWidth(Math.round(value * aspectRatio));
-      }
-    }
-  }, [maintainAspect, aspectRatio]);
+    },
+    [maintainAspect, aspectRatio]
+  );
 
-  // FIXED: Create imgix cropped URL with proper coordinate calculation
-  const getCroppedImgixFile = useCallback(async (
-    crop: PixelCrop,
-    fileName: string
-  ): Promise<File> => {
-    if (!mediaItem || !originalImageDimensions.width || !originalImageDimensions.height || !displayImageDimensions.width || !displayImageDimensions.height) {
-      throw new Error('Media item or dimensions not available');
-    }
-
-    console.log('Crop calculation - Starting:', {
-      crop,
-      original: originalImageDimensions,
-      displayed: displayImageDimensions
-    });
-
-    // CRITICAL FIX: Calculate precise scale factors between displayed image and original image
-    // The crop coordinates from ReactCrop are relative to the displayed image size
-    // We need to convert them to coordinates relative to the original image size
-    const scaleX = originalImageDimensions.width / displayImageDimensions.width;
-    const scaleY = originalImageDimensions.height / displayImageDimensions.height;
-
-    console.log('Scale factors:', { scaleX, scaleY });
-
-    // FIXED: Convert crop coordinates from displayed image space to original image space
-    // ReactCrop provides pixel coordinates relative to the displayed/rendered image
-    // We need to scale them up to match the original image dimensions
-    const originalX = Math.round(crop.x * scaleX);
-    const originalY = Math.round(crop.y * scaleY);
-    const originalWidth = Math.round(crop.width * scaleX);
-    const originalHeight = Math.round(crop.height * scaleY);
-
-    console.log('Scaled coordinates:', {
-      originalX,
-      originalY,
-      originalWidth,
-      originalHeight
-    });
-
-    // FIXED: Ensure crop coordinates are within bounds of the original image
-    const clampedX = Math.max(0, Math.min(originalX, originalImageDimensions.width - 1));
-    const clampedY = Math.max(0, Math.min(originalY, originalImageDimensions.height - 1));
-    const clampedWidth = Math.max(1, Math.min(originalWidth, originalImageDimensions.width - clampedX));
-    const clampedHeight = Math.max(1, Math.min(originalHeight, originalImageDimensions.height - clampedY));
-
-    console.log('Final crop coordinates (clamped to original image bounds):', {
-      x: clampedX,
-      y: clampedY,
-      width: clampedWidth,
-      height: clampedHeight
-    });
-
-    // CRITICAL FIX: Build imgix URL with correct crop parameters
-    // Imgix rect parameter format: x,y,width,height (all in original image pixel coordinates)
-    const imgixParams = new URLSearchParams({
-      // CRITICAL: Use 'rect' parameter for precise pixel-based cropping
-      rect: `${clampedX},${clampedY},${clampedWidth},${clampedHeight}`,
-      // Output dimensions (these will resize the cropped area to the desired output size)
-      w: outputWidth.toString(),
-      h: outputHeight.toString(),
-      // Quality and format optimization
-      auto: 'format,compress',
-      q: Math.round(quality * 100).toString(),
-      // FIXED: Use 'crop' fit mode for precise cropping without additional scaling
-      fit: 'crop'
-    });
-
-    const croppedImageUrl = `${mediaItem.imgix_url}?${imgixParams.toString()}`;
-    console.log('Generated imgix URL:', croppedImageUrl);
-
-    try {
-      // Fetch the cropped image from imgix
-      const response = await fetch(croppedImageUrl);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch cropped image: ${response.status} ${response.statusText}`);
+  // Create imgix cropped URL with proper coordinate calculation
+  const getCroppedImgixFile = useCallback(
+    async (crop: PixelCrop, fileName: string): Promise<File> => {
+      if (
+        !mediaItem ||
+        !displayImageDimensions.width ||
+        !displayImageDimensions.height
+      ) {
+        throw new Error("Media item or dimensions not available");
       }
 
-      const blob = await response.blob();
-      
-      // Create file with appropriate name
-      const croppedFileName = fileName.replace(/\.[^/.]+$/, '') + '_cropped.jpg';
-      const file = new File([blob], croppedFileName, {
-        type: 'image/jpeg',
-        lastModified: Date.now(),
+      console.log("=== CROP CALCULATION DEBUG ===");
+      console.log(
+        "Crop from ReactCrop (pixel coords relative to displayed image):",
+        crop
+      );
+      console.log("Displayed image dimensions:", displayImageDimensions);
+      console.log("Original media dimensions:", {
+        width: mediaItem.width,
+        height: mediaItem.height,
       });
-      
-      console.log('Cropped file created:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
+
+      // CRITICAL: Use the actual original image dimensions from mediaItem
+      // These are the true dimensions of the source image before any processing
+      const sourceWidth = mediaItem.width || originalImageDimensions.width;
+      const sourceHeight = mediaItem.height || originalImageDimensions.height;
+
+      if (!sourceWidth || !sourceHeight) {
+        throw new Error("Cannot determine source image dimensions");
+      }
+
+      console.log("Source image dimensions (actual original):", {
+        width: sourceWidth,
+        height: sourceHeight,
       });
-      
-      return file;
-    } catch (error) {
-      console.error('Error fetching cropped image from imgix:', error);
-      throw new Error(`Failed to create cropped image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-    }
-  }, [mediaItem, originalImageDimensions, displayImageDimensions, outputWidth, outputHeight, quality]);
+
+      // Calculate scale factors between displayed image and source image
+      const scaleX = sourceWidth / displayImageDimensions.width;
+      const scaleY = sourceHeight / displayImageDimensions.height;
+
+      console.log("Scale factors (source/display):", { scaleX, scaleY });
+
+      // Convert crop coordinates from displayed image space to source image space
+      const sourceX = Math.round(crop.x * scaleX);
+      const sourceY = Math.round(crop.y * scaleY);
+      const sourceWidth_crop = Math.round(crop.width * scaleX);
+      const sourceHeight_crop = Math.round(crop.height * scaleY);
+
+      console.log("Coordinates in source image space:", {
+        x: sourceX,
+        y: sourceY,
+        width: sourceWidth_crop,
+        height: sourceHeight_crop,
+      });
+
+      // Ensure crop coordinates are within bounds of the source image
+      const clampedX = Math.max(0, Math.min(sourceX, sourceWidth - 1));
+      const clampedY = Math.max(0, Math.min(sourceY, sourceHeight - 1));
+      const clampedWidth = Math.max(
+        1,
+        Math.min(sourceWidth_crop, sourceWidth - clampedX)
+      );
+      const clampedHeight = Math.max(
+        1,
+        Math.min(sourceHeight_crop, sourceHeight - clampedY)
+      );
+
+      console.log("Final clamped coordinates:", {
+        x: clampedX,
+        y: clampedY,
+        width: clampedWidth,
+        height: clampedHeight,
+      });
+
+      // Calculate crop percentages for imgix (more reliable than pixel coordinates)
+      const cropLeft = (clampedX / sourceWidth) * 100;
+      const cropTop = (clampedY / sourceHeight) * 100;
+      const cropWidth = (clampedWidth / sourceWidth) * 100;
+      const cropHeight = (clampedHeight / sourceHeight) * 100;
+
+      console.log("Crop percentages:", {
+        left: cropLeft,
+        top: cropTop,
+        width: cropWidth,
+        height: cropHeight,
+      });
+
+      // Build imgix URL with percentage-based cropping (more reliable)
+      const imgixParams = new URLSearchParams({
+        // Use percentage-based cropping which is more reliable
+        crop: `${cropLeft.toFixed(2)},${cropTop.toFixed(2)},${cropWidth.toFixed(
+          2
+        )},${cropHeight.toFixed(2)}`,
+        // Output dimensions
+        w: outputWidth.toString(),
+        h: outputHeight.toString(),
+        // Quality and format optimization
+        auto: "format,compress",
+        q: Math.round(quality * 100).toString(),
+        // Use 'crop' fit mode for precise cropping
+        fit: "crop",
+      });
+
+      const croppedImageUrl = `${
+        mediaItem.imgix_url
+      }?${imgixParams.toString()}`;
+      console.log("Generated imgix URL:", croppedImageUrl);
+      console.log("=== END CROP CALCULATION DEBUG ===");
+
+      try {
+        // Fetch the cropped image from imgix
+        const response = await fetch(croppedImageUrl);
+        if (!response.ok) {
+          throw new Error(
+            `Failed to fetch cropped image: ${response.status} ${response.statusText}`
+          );
+        }
+
+        const blob = await response.blob();
+
+        // Create file with appropriate name
+        const croppedFileName =
+          fileName.replace(/\.[^/.]+$/, "") + "_cropped.jpg";
+        const file = new File([blob], croppedFileName, {
+          type: "image/jpeg",
+          lastModified: Date.now(),
+        });
+
+        console.log("Cropped file created:", {
+          name: file.name,
+          size: file.size,
+          type: file.type,
+        });
+
+        return file;
+      } catch (error) {
+        console.error("Error fetching cropped image from imgix:", error);
+        throw new Error(
+          `Failed to create cropped image: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+    },
+    [
+      mediaItem,
+      originalImageDimensions,
+      displayImageDimensions,
+      outputWidth,
+      outputHeight,
+      quality,
+    ]
+  );
 
   // Handle crop and save
   const handleCropSave = useCallback(async () => {
     if (!completedCrop || !imgRef.current || !mediaItem) {
-      onError?.('No crop area selected');
+      onError?.("No crop area selected");
       return;
     }
 
@@ -271,12 +373,21 @@ export default function ImageCropperModal({
       onCropComplete?.(croppedImageFile, mediaItem);
       onOpenChange(false);
     } catch (error) {
-      console.error('Error cropping image:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to crop image');
+      console.error("Error cropping image:", error);
+      onError?.(
+        error instanceof Error ? error.message : "Failed to crop image"
+      );
     } finally {
       setIsProcessing(false);
     }
-  }, [completedCrop, mediaItem, getCroppedImgixFile, onCropComplete, onError, onOpenChange]);
+  }, [
+    completedCrop,
+    mediaItem,
+    getCroppedImgixFile,
+    onCropComplete,
+    onError,
+    onOpenChange,
+  ]);
 
   // Handle crop reset
   const handleReset = useCallback(() => {
@@ -297,7 +408,7 @@ export default function ImageCropperModal({
 
       // Create download link
       const url = URL.createObjectURL(croppedImageFile);
-      const link = document.createElement('a');
+      const link = document.createElement("a");
       link.href = url;
       link.download = croppedImageFile.name;
       document.body.appendChild(link);
@@ -305,12 +416,14 @@ export default function ImageCropperModal({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error downloading preview:', error);
-      onError?.(error instanceof Error ? error.message : 'Failed to download preview');
+      console.error("Error downloading preview:", error);
+      onError?.(
+        error instanceof Error ? error.message : "Failed to download preview"
+      );
     }
   }, [completedCrop, mediaItem, getCroppedImgixFile, onError]);
 
-  if (!mediaItem || !mediaItem.type.startsWith('image/')) {
+  if (!mediaItem || !mediaItem.type.startsWith("image/")) {
     return null;
   }
 
@@ -327,36 +440,74 @@ export default function ImageCropperModal({
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Image Cropper - Left Side */}
           <div className="lg:col-span-3 flex flex-col">
-            <div className="flex-1 overflow-auto bg-gray-50 rounded-lg p-4 min-h-[400px]">
-              {mediaItem && (
-                <ReactCrop
-                  crop={crop}
-                  onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => {
-                    if (imgRef.current) {
-                      const pixelCrop = convertToPixelCrop(c, imgRef.current.width, imgRef.current.height);
-                      console.log('Crop completed:', { percentCrop: c, pixelCrop });
-                      setCompletedCrop(pixelCrop);
-                    }
-                  }}
-                  aspect={aspectRatio || undefined}
-                  className="max-w-full max-h-full"
-                >
-                  <img
-                    ref={imgRef}
-                    alt={mediaItem.alt_text || mediaItem.original_name}
-                    src={`${mediaItem.imgix_url}?w=1200&auto=format,compress`}
-                    onLoad={onImageLoad}
-                    className="max-w-full max-h-full object-contain"
-                    style={{ maxHeight: '500px' }}
-                  />
-                </ReactCrop>
-              )}
-              
-              {!imageLoaded && (
+            <div className="flex-1 bg-gray-50 rounded-lg p-4 min-h-[400px] flex items-center justify-center">
+              {mediaItem ? (
+                <div className="w-full h-full flex items-center justify-center relative">
+                  {/* Loading overlay */}
+                  {!imageLoaded && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gray-50 z-10">
+                      <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+                      <span className="ml-2 text-gray-600">
+                        Loading image...
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Image with crop tool */}
+                  <ReactCrop
+                    crop={crop}
+                    onChange={(_, percentCrop) => setCrop(percentCrop)}
+                    onComplete={(c) => {
+                      if (imgRef.current) {
+                        const pixelCrop = convertToPixelCrop(
+                          c,
+                          imgRef.current.width,
+                          imgRef.current.height
+                        );
+                        console.log("Crop completed:", {
+                          percentCrop: c,
+                          pixelCrop,
+                        });
+                        setCompletedCrop(pixelCrop);
+                      }
+                    }}
+                    aspect={aspectRatio || undefined}
+                    minWidth={10}
+                    minHeight={10}
+                    keepSelection
+                    ruleOfThirds
+                    className={`max-w-full max-h-full ${
+                      !imageLoaded ? "opacity-0" : "opacity-100"
+                    } transition-opacity duration-300`}
+                  >
+                    <img
+                      ref={imgRef}
+                      alt={mediaItem.alt_text || mediaItem.original_name}
+                      src={`${mediaItem.imgix_url}?w=1000&auto=format,compress`}
+                      onLoad={onImageLoad}
+                      onError={(e) => {
+                        console.error("Image failed to load:", e);
+                        console.log(
+                          "Image URL:",
+                          `${mediaItem.imgix_url}?w=1000&auto=format,compress`
+                        );
+                        console.log("MediaItem:", mediaItem);
+                        setImageLoaded(false);
+                      }}
+                      className="max-w-full max-h-[500px] object-contain"
+                      style={{
+                        display: "block",
+                        maxWidth: "100%",
+                        maxHeight: "500px",
+                        width: "auto",
+                        height: "auto",
+                      }}
+                    />
+                  </ReactCrop>
+                </div>
+              ) : (
                 <div className="flex items-center justify-center h-64">
-                  <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
-                  <span className="ml-2 text-gray-600">Loading image...</span>
+                  <span className="text-gray-600">No image selected</span>
                 </div>
               )}
             </div>
@@ -368,7 +519,7 @@ export default function ImageCropperModal({
             <div className="space-y-2">
               <Label className="text-sm font-medium">Aspect Ratio</Label>
               <Select
-                value={aspectRatio?.toString() || 'null'}
+                value={aspectRatio?.toString() || "null"}
                 onValueChange={handleAspectRatioChange}
               >
                 <SelectTrigger className="w-full">
@@ -376,7 +527,10 @@ export default function ImageCropperModal({
                 </SelectTrigger>
                 <SelectContent>
                   {ASPECT_RATIOS.map((ratio) => (
-                    <SelectItem key={ratio.label} value={ratio.value?.toString() || 'null'}>
+                    <SelectItem
+                      key={ratio.label}
+                      value={ratio.value?.toString() || "null"}
+                    >
                       {ratio.label}
                     </SelectItem>
                   ))}
@@ -386,27 +540,43 @@ export default function ImageCropperModal({
 
             {/* Output Dimensions */}
             <div className="space-y-3">
-              <Label className="text-sm font-medium">Output Size (pixels)</Label>
+              <Label className="text-sm font-medium">
+                Output Size (pixels)
+              </Label>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <Label htmlFor="width" className="text-xs text-gray-600">Width</Label>
+                  <Label htmlFor="width" className="text-xs text-gray-600">
+                    Width
+                  </Label>
                   <Input
                     id="width"
                     type="number"
                     value={outputWidth}
-                    onChange={(e) => handleOutputDimensionChange('width', parseInt(e.target.value) || 800)}
+                    onChange={(e) =>
+                      handleOutputDimensionChange(
+                        "width",
+                        parseInt(e.target.value) || 800
+                      )
+                    }
                     min="50"
                     max="4000"
                     className="text-sm"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="height" className="text-xs text-gray-600">Height</Label>
+                  <Label htmlFor="height" className="text-xs text-gray-600">
+                    Height
+                  </Label>
                   <Input
                     id="height"
                     type="number"
                     value={outputHeight}
-                    onChange={(e) => handleOutputDimensionChange('height', parseInt(e.target.value) || 600)}
+                    onChange={(e) =>
+                      handleOutputDimensionChange(
+                        "height",
+                        parseInt(e.target.value) || 600
+                      )
+                    }
                     min="50"
                     max="4000"
                     className="text-sm"
@@ -427,7 +597,10 @@ export default function ImageCropperModal({
                 </SelectTrigger>
                 <SelectContent>
                   {QUALITY_PRESETS.map((preset) => (
-                    <SelectItem key={preset.label} value={preset.value.toString()}>
+                    <SelectItem
+                      key={preset.label}
+                      value={preset.value.toString()}
+                    >
                       {preset.label}
                     </SelectItem>
                   ))}
@@ -446,7 +619,7 @@ export default function ImageCropperModal({
                 <RotateCcw className="h-4 w-4" />
                 <span>Reset Crop</span>
               </Button>
-              
+
               <Button
                 onClick={handleDownloadPreview}
                 variant="outline"
@@ -459,40 +632,57 @@ export default function ImageCropperModal({
             </div>
 
             {/* Debug Info */}
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="text-xs text-blue-800">
-                <strong>Original:</strong> {originalImageDimensions.width}×{originalImageDimensions.height}px
-              </p>
-              <p className="text-xs text-blue-800 mt-1">
-                <strong>Output:</strong> {outputWidth}×{outputHeight}px
-              </p>
-              {displayImageDimensions.width > 0 && (
-                <p className="text-xs text-blue-800 mt-1">
-                  <strong>Display:</strong> {Math.round(displayImageDimensions.width)}×{Math.round(displayImageDimensions.height)}px
+            <div className="p-3 bg-blue-50 rounded-lg text-xs">
+              <div className="space-y-1">
+                <p className="text-blue-800">
+                  <strong>Original:</strong> {originalImageDimensions.width}×
+                  {originalImageDimensions.height}px
                 </p>
-              )}
-              {completedCrop && (
-                <>
-                  <p className="text-xs text-blue-800 mt-1">
-                    <strong>Crop (display):</strong> {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}px
+                <p className="text-blue-800">
+                  <strong>Output:</strong> {outputWidth}×{outputHeight}px
+                </p>
+                {displayImageDimensions.width > 0 && (
+                  <p className="text-blue-800">
+                    <strong>Display:</strong>{" "}
+                    {Math.round(displayImageDimensions.width)}×
+                    {Math.round(displayImageDimensions.height)}px
                   </p>
-                  <p className="text-xs text-blue-800 mt-1">
-                    <strong>Crop (original):</strong> {Math.round(completedCrop.width * originalImageDimensions.width / displayImageDimensions.width)}×{Math.round(completedCrop.height * originalImageDimensions.height / displayImageDimensions.height)}px
-                  </p>
-                  <p className="text-xs text-blue-800 mt-1">
-                    <strong>Position (original):</strong> x:{Math.round(completedCrop.x * originalImageDimensions.width / displayImageDimensions.width)}, y:{Math.round(completedCrop.y * originalImageDimensions.height / displayImageDimensions.height)}
-                  </p>
-                </>
-              )}
+                )}
+                {completedCrop &&
+                  displayImageDimensions.width > 0 &&
+                  displayImageDimensions.height > 0 && (
+                    <>
+                      <p className="text-blue-800">
+                        <strong>Crop Area:</strong>{" "}
+                        {Math.round(completedCrop.width)}×
+                        {Math.round(completedCrop.height)}px
+                      </p>
+                      <p className="text-blue-800">
+                        <strong>Crop Position:</strong> (
+                        {Math.round(completedCrop.x)},{" "}
+                        {Math.round(completedCrop.y)})
+                      </p>
+                      <p className="text-blue-800">
+                        <strong>Scale Factors:</strong> x
+                        {(
+                          originalImageDimensions.width /
+                          displayImageDimensions.width
+                        ).toFixed(2)}
+                        , y
+                        {(
+                          originalImageDimensions.height /
+                          displayImageDimensions.height
+                        ).toFixed(2)}
+                      </p>
+                    </>
+                  )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Hidden Canvas for Processing */}
-        <canvas
-          ref={canvasRef}
-          style={{ display: 'none' }}
-        />
+        <canvas ref={canvasRef} style={{ display: "none" }} />
 
         <DialogFooter className="flex-shrink-0">
           <Button
