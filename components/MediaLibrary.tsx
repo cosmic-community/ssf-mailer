@@ -50,7 +50,7 @@ interface MediaLibraryProps {
 }
 
 type ViewMode = 'grid' | 'list'
-type SortMode = '-created_at' | 'created_at' | 'name' | '-name'
+type SortMode = '-created_at' | 'created_at' | 'name' | '-name' | 'size' | '-size'
 
 export default function MediaLibrary({ 
   selectionMode = false, 
@@ -93,7 +93,19 @@ export default function MediaLibrary({
   const [editFolder, setEditFolder] = useState('')
   const [editAltText, setEditAltText] = useState('')
   
-  // Fetch media
+  // Debounced search state
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
+  
+  // Debounce search term
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm)
+    }, 300)
+    
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+  
+  // Fetch media - all server-side via API
   const fetchMedia = async (page: number = 1) => {
     try {
       setLoading(true)
@@ -110,6 +122,11 @@ export default function MediaLibrary({
         params.append('folder', selectedFolder)
       }
       
+      if (debouncedSearchTerm.trim()) {
+        params.append('search', debouncedSearchTerm.trim())
+      }
+      
+      // All processing happens server-side
       const response = await fetch(`/api/media?${params}`)
       const data = await response.json()
       
@@ -117,8 +134,8 @@ export default function MediaLibrary({
         throw new Error(data.error || 'Failed to fetch media')
       }
       
-      setMedia(data.media)
-      setTotalItems(data.total)
+      setMedia(data.media || [])
+      setTotalItems(data.total || 0)
       setCurrentPage(page)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch media')
@@ -128,43 +145,29 @@ export default function MediaLibrary({
     }
   }
   
-  // Fetch folders
+  // Fetch folders - server-side
   const fetchFolders = async () => {
     try {
       const response = await fetch('/api/media?action=folders')
       const data = await response.json()
       
       if (response.ok) {
-        setFolders(data.folders)
+        setFolders(data.folders || [])
       }
     } catch (err) {
       console.error('Failed to fetch folders:', err)
     }
   }
   
-  // Initial load
+  // Load media when dependencies change
   useEffect(() => {
-    fetchMedia()
-    fetchFolders()
-  }, [sortBy, selectedFolder])
+    fetchMedia(currentPage)
+  }, [sortBy, selectedFolder, debouncedSearchTerm, itemsPerPage])
   
-  // Search functionality (debounced)
+  // Load folders on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      if (searchTerm) {
-        // For simplicity, we'll filter on the client side
-        // In a real app, you'd want to implement server-side search
-        const filtered = media.filter(item =>
-          item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          item.original_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          (item.alt_text && item.alt_text.toLowerCase().includes(searchTerm.toLowerCase()))
-        )
-        // Note: This is a simplified approach. Real implementation would re-fetch from server.
-      }
-    }, 300)
-    
-    return () => clearTimeout(timer)
-  }, [searchTerm])
+    fetchFolders()
+  }, [])
   
   // Handle file upload
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,6 +191,7 @@ export default function MediaLibrary({
       if (uploadFolder.trim()) formData.append('folder', uploadFolder.trim())
       if (uploadAltText.trim()) formData.append('alt_text', uploadAltText.trim())
       
+      // Server-side upload processing
       const response = await fetch('/api/media', {
         method: 'POST',
         body: formData
@@ -205,9 +209,11 @@ export default function MediaLibrary({
       setUploadFolder('')
       setUploadAltText('')
       
-      // Refresh media list and folders
-      await fetchMedia(currentPage)
-      await fetchFolders()
+      // Refresh media list and folders from server
+      await Promise.all([
+        fetchMedia(currentPage),
+        fetchFolders()
+      ])
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Upload failed', 'error')
     } finally {
@@ -215,7 +221,7 @@ export default function MediaLibrary({
     }
   }
   
-  // Handle media edit
+  // Handle media edit - server-side
   const handleEditMedia = (mediaItem: MediaItem) => {
     setEditingMedia(mediaItem)
     setEditFolder(mediaItem.folder || '')
@@ -247,15 +253,17 @@ export default function MediaLibrary({
       addToast('Media updated successfully!', 'success')
       setShowEditDialog(false)
       
-      // Refresh media list and folders
-      await fetchMedia(currentPage)
-      await fetchFolders()
+      // Refresh data from server
+      await Promise.all([
+        fetchMedia(currentPage),
+        fetchFolders()
+      ])
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Update failed', 'error')
     }
   }
   
-  // Handle media delete
+  // Handle media delete - server-side
   const handleDeleteMedia = async (mediaItem: MediaItem) => {
     if (!confirm('Are you sure you want to delete this media file? This action cannot be undone.')) {
       return
@@ -274,7 +282,7 @@ export default function MediaLibrary({
       
       addToast('Media deleted successfully!', 'success')
       
-      // Refresh media list
+      // Refresh media list from server
       await fetchMedia(currentPage)
     } catch (err) {
       addToast(err instanceof Error ? err.message : 'Delete failed', 'error')
@@ -353,7 +361,7 @@ export default function MediaLibrary({
                 id="file-upload"
                 className="hidden"
                 onChange={handleFileSelect}
-                accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xlsx,.xls"
+                accept="image/*,application/pdf,.doc,.docx,.txt,.csv,.xlsx,.xls,video/mp4,video/webm,audio/mpeg,audio/wav"
               />
               <Button
                 onClick={() => document.getElementById('file-upload')?.click()}
@@ -403,6 +411,8 @@ export default function MediaLibrary({
                 <SelectItem value="created_at">Oldest first</SelectItem>
                 <SelectItem value="name">Name A-Z</SelectItem>
                 <SelectItem value="-name">Name Z-A</SelectItem>
+                <SelectItem value="-size">Size (largest)</SelectItem>
+                <SelectItem value="size">Size (smallest)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -481,18 +491,19 @@ export default function MediaLibrary({
                 {media.map(item => (
                   <Card 
                     key={item.id} 
-                    className={`cursor-pointer hover:shadow-md transition-shadow ${
+                    className={`cursor-pointer hover:shadow-md transition-shadow group ${
                       selectedMedia?.id === item.id ? 'ring-2 ring-blue-500' : ''
                     }`}
                     onClick={() => handleSelectMedia(item)}
                   >
-                    <CardContent className="p-3">
+                    <CardContent className="p-3 relative">
                       <div className="aspect-square mb-3 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
                         {item.type.startsWith('image/') ? (
                           <img
-                            src={`${item.imgix_url}?w=200&h=200&fit=crop&auto=format,compress`}
+                            src={`${item.imgix_url}?w=400&h=400&fit=crop&auto=format,compress`}
                             alt={item.alt_text || item.original_name}
                             className="w-full h-full object-cover"
+                            loading="lazy"
                           />
                         ) : (
                           <div className="text-gray-400">
@@ -523,6 +534,7 @@ export default function MediaLibrary({
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 bg-white/80 hover:bg-white"
+                          onClick={() => handlePreviewMedia(item)}
                         >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
@@ -574,9 +586,10 @@ export default function MediaLibrary({
                               <div className="flex-shrink-0 h-10 w-10">
                                 {item.type.startsWith('image/') ? (
                                   <img
-                                    src={`${item.imgix_url}?w=80&h=80&fit=crop&auto=format,compress`}
+                                    src={`${item.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
                                     alt={item.alt_text || item.original_name}
                                     className="h-10 w-10 rounded-lg object-cover"
+                                    loading="lazy"
                                   />
                                 ) : (
                                   <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
@@ -660,14 +673,14 @@ export default function MediaLibrary({
                   <Button
                     variant="outline"
                     onClick={() => fetchMedia(currentPage - 1)}
-                    disabled={currentPage === 1}
+                    disabled={currentPage === 1 || loading}
                   >
                     Previous
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => fetchMedia(currentPage + 1)}
-                    disabled={currentPage === totalPages}
+                    disabled={currentPage === totalPages || loading}
                   >
                     Next
                   </Button>
@@ -685,7 +698,7 @@ export default function MediaLibrary({
                       <Button
                         variant="outline"
                         onClick={() => fetchMedia(currentPage - 1)}
-                        disabled={currentPage === 1}
+                        disabled={currentPage === 1 || loading}
                         className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
                       >
                         <ChevronLeft className="h-5 w-5" />
@@ -701,6 +714,7 @@ export default function MediaLibrary({
                             key={pageNumber}
                             variant={isCurrentPage ? 'default' : 'outline'}
                             onClick={() => fetchMedia(pageNumber)}
+                            disabled={loading}
                             className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
                               isCurrentPage
                                 ? 'z-10 bg-blue-50 border-blue-500 text-blue-600'
@@ -715,7 +729,7 @@ export default function MediaLibrary({
                       <Button
                         variant="outline"
                         onClick={() => fetchMedia(currentPage + 1)}
-                        disabled={currentPage === totalPages}
+                        disabled={currentPage === totalPages || loading}
                         className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
                       >
                         <ChevronRight className="h-5 w-5" />
@@ -820,9 +834,10 @@ export default function MediaLibrary({
               <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center min-h-[200px]">
                 {previewMedia.type.startsWith('image/') ? (
                   <img
-                    src={`${previewMedia.imgix_url}?w=500&auto=format,compress`}
+                    src={`${previewMedia.imgix_url}?w=1000&auto=format,compress`}
                     alt={previewMedia.alt_text || previewMedia.original_name}
                     className="max-w-full max-h-[400px] object-contain"
+                    loading="lazy"
                   />
                 ) : (
                   <div className="text-center">
