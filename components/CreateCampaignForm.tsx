@@ -1,18 +1,24 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Badge } from '@/components/ui/badge'
-import { Loader2, Users, Mail, Calendar } from 'lucide-react'
-import { useToast } from '@/hooks/useToast'
-import ToastContainer from '@/components/ToastContainer'
-import { EmailTemplate, EmailContact, EmailList } from '@/types'
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useForm } from "react-hook-form";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Users, Mail, Calendar } from "lucide-react";
+import { useToast } from "@/hooks/useToast";
+import ToastContainer from "@/components/ToastContainer";
+import { EmailTemplate, EmailContact, EmailList } from "@/types";
 
 interface CreateCampaignFormProps {
   templates: EmailTemplate[];
@@ -26,148 +32,171 @@ interface CampaignFormData {
   send_date: string;
 }
 
-const AVAILABLE_TAGS = ['Newsletter', 'Promotions', 'Product Updates', 'VIP Customer'];
+const AVAILABLE_TAGS = [
+  "Newsletter",
+  "Promotions",
+  "Product Updates",
+  "VIP Customer",
+];
 
-export default function CreateCampaignForm({ templates, contacts, lists }: CreateCampaignFormProps) {
-  const router = useRouter()
-  const { toasts, addToast, removeToast } = useToast()
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('')
-  const [selectedLists, setSelectedLists] = useState<string[]>([])
-  const [selectedContacts, setSelectedContacts] = useState<string[]>([])
-  const [selectedTags, setSelectedTags] = useState<string[]>([])
-  const [targetingMode, setTargetingMode] = useState<'lists' | 'contacts' | 'tags'>('lists')
-  
-  const { register, handleSubmit, formState: { errors }, setValue } = useForm<CampaignFormData>({
+export default function CreateCampaignForm({
+  templates,
+  contacts,
+  lists,
+}: CreateCampaignFormProps) {
+  const router = useRouter();
+  const { toasts, addToast, removeToast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+  const [selectedLists, setSelectedLists] = useState<string[]>([]);
+  const [selectedContacts, setSelectedContacts] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [targetingMode, setTargetingMode] = useState<
+    "lists" | "contacts" | "tags"
+  >("lists");
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+    setValue,
+  } = useForm<CampaignFormData>({
     defaultValues: {
-      send_date: ''
-    }
-  })
+      send_date: "",
+    },
+  });
 
   const scrollToTop = () => {
-    window.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const onSubmit = async (data: CampaignFormData) => {
     if (!selectedTemplate) {
-      addToast('Please select an email template', 'error')
-      scrollToTop()
-      return
+      addToast("Please select an email template", "error");
+      scrollToTop();
+      return;
     }
 
     // Validate that we have targets selected
-    const hasListTargets = selectedLists.length > 0
-    const hasContactTargets = selectedContacts.length > 0
-    const hasTagTargets = selectedTags.length > 0
+    const hasListTargets = selectedLists.length > 0;
+    const hasContactTargets = selectedContacts.length > 0;
+    const hasTagTargets = selectedTags.length > 0;
 
     if (!hasListTargets && !hasContactTargets && !hasTagTargets) {
-      addToast('Please select at least one target: lists, contacts, or tags', 'error')
-      scrollToTop()
-      return
+      addToast(
+        "Please select at least one target: lists, contacts, or tags",
+        "error"
+      );
+      scrollToTop();
+      return;
     }
 
-    setIsSubmitting(true)
-    
+    setIsSubmitting(true);
+
     try {
-      const response = await fetch('/api/campaigns', {
-        method: 'POST',
+      const response = await fetch("/api/campaigns", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          ...data,
+          name: data.name,
           template_id: selectedTemplate,
           list_ids: selectedLists,
-          contact_ids: selectedContacts,
-          target_tags: selectedTags
-        })
-      })
+          subject: selectedTemplateObj?.metadata?.subject || "",
+          content: selectedTemplateObj?.metadata?.content || "",
+        }),
+      });
 
       if (response.ok) {
-        const result = await response.json()
-        addToast('Campaign created successfully!', 'success')
-        scrollToTop()
-        
+        const result = await response.json();
+        addToast("Campaign created successfully!", "success");
+        scrollToTop();
+
         // Navigate to the campaign details page after a short delay
         setTimeout(() => {
-          router.push(`/campaigns/${result.data.id}`)
-        }, 1500)
+          router.push(`/campaigns/${result.data.id}`);
+        }, 1500);
       } else {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to create campaign')
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create campaign");
       }
     } catch (error) {
-      console.error('Error creating campaign:', error)
-      addToast(error instanceof Error ? error.message : 'Failed to create campaign. Please try again.', 'error')
-      scrollToTop()
+      console.error("Error creating campaign:", error);
+      addToast(
+        error instanceof Error
+          ? error.message
+          : "Failed to create campaign. Please try again.",
+        "error"
+      );
+      scrollToTop();
     } finally {
-      setIsSubmitting(false)
+      setIsSubmitting(false);
     }
-  }
+  };
 
   const handleTemplateChange = (value: string) => {
-    setSelectedTemplate(value)
-    setValue('template_id', value)
-  }
+    setSelectedTemplate(value);
+    setValue("template_id", value);
+  };
 
   const handleListToggle = (listId: string) => {
-    setSelectedLists(prev => 
-      prev.includes(listId) 
-        ? prev.filter(id => id !== listId)
+    setSelectedLists((prev) =>
+      prev.includes(listId)
+        ? prev.filter((id) => id !== listId)
         : [...prev, listId]
-    )
-  }
+    );
+  };
 
   const handleContactToggle = (contactId: string) => {
-    setSelectedContacts(prev => 
-      prev.includes(contactId) 
-        ? prev.filter(id => id !== contactId)
+    setSelectedContacts((prev) =>
+      prev.includes(contactId)
+        ? prev.filter((id) => id !== contactId)
         : [...prev, contactId]
-    )
-  }
+    );
+  };
 
   const handleTagToggle = (tag: string) => {
-    setSelectedTags(prev => 
-      prev.includes(tag) 
-        ? prev.filter(t => t !== tag)
-        : [...prev, tag]
-    )
-  }
+    setSelectedTags((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag]
+    );
+  };
 
   // Get selected template for preview
-  const selectedTemplateObj = templates.find(t => t.id === selectedTemplate)
+  const selectedTemplateObj = templates.find((t) => t.id === selectedTemplate);
 
   // Calculate total target count
   const getTargetCount = () => {
-    let totalContacts = 0
-    
+    let totalContacts = 0;
+
     // Count from selected lists
-    selectedLists.forEach(listId => {
-      const list = lists.find(l => l.id === listId)
+    selectedLists.forEach((listId) => {
+      const list = lists.find((l) => l.id === listId);
       if (list) {
-        totalContacts += list.metadata.total_contacts || 0
+        totalContacts += list.metadata.total_contacts || 0;
       }
-    })
-    
+    });
+
     // Add individual contacts
-    totalContacts += selectedContacts.length
-    
+    totalContacts += selectedContacts.length;
+
     // For tags, estimate based on contacts that have those tags
     if (selectedTags.length > 0) {
-      const taggedContacts = contacts.filter(contact => 
-        contact.metadata.tags && 
-        selectedTags.some(tag => contact.metadata.tags?.includes(tag))
-      ).length
-      totalContacts += taggedContacts
+      const taggedContacts = contacts.filter(
+        (contact) =>
+          contact.metadata.tags &&
+          selectedTags.some((tag) => contact.metadata.tags?.includes(tag))
+      ).length;
+      totalContacts += taggedContacts;
     }
-    
-    return totalContacts
-  }
+
+    return totalContacts;
+  };
 
   return (
     <>
       <ToastContainer toasts={toasts} onRemove={removeToast} />
-      
+
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         {/* Campaign Name */}
         <div className="space-y-2">
@@ -176,7 +205,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
             id="name"
             type="text"
             placeholder="e.g., Weekly Newsletter - January 2024"
-            {...register('name', { required: 'Campaign name is required' })}
+            {...register("name", { required: "Campaign name is required" })}
           />
           {errors.name && (
             <p className="text-sm text-destructive">{errors.name.message}</p>
@@ -194,19 +223,22 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                 type="button"
                 variant="outline"
                 className="mt-4"
-                onClick={() => router.push('/templates/new')}
+                onClick={() => router.push("/templates/new")}
               >
                 Create Template
               </Button>
             </div>
           ) : (
             <div className="grid gap-4">
-              <Select value={selectedTemplate} onValueChange={handleTemplateChange}>
+              <Select
+                value={selectedTemplate}
+                onValueChange={handleTemplateChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select an email template" />
                 </SelectTrigger>
                 <SelectContent>
-                  {templates.map(template => (
+                  {templates.map((template) => (
                     <SelectItem key={template.id} value={template.id}>
                       {template.metadata.name}
                     </SelectItem>
@@ -216,20 +248,61 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
 
               {/* Template Preview */}
               {selectedTemplateObj && (
-                <div className="border rounded-lg p-4 bg-gray-50">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-medium text-gray-900">Template Preview</h4>
-                    <Badge variant="outline">
-                      {selectedTemplateObj.metadata.template_type.value}
-                    </Badge>
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-gray-100 px-4 py-3 border-b flex items-center justify-between">
+                    <h4 className="font-medium text-gray-900">
+                      Template Preview
+                    </h4>
+                    <div className="flex items-center space-x-2">
+                      <Badge variant="outline" className="mr-2">
+                        Read Only
+                      </Badge>
+                      <Badge variant="outline">
+                        {selectedTemplateObj.metadata.template_type.value}
+                      </Badge>
+                    </div>
                   </div>
-                  <p className="text-sm text-gray-600 mb-2">
-                    <strong>Subject:</strong> {selectedTemplateObj.metadata.subject}
-                  </p>
-                  <div className="text-sm text-gray-600 max-h-24 overflow-y-auto">
-                    <div dangerouslySetInnerHTML={{ 
-                      __html: selectedTemplateObj.metadata.content.substring(0, 200) + '...' 
-                    }} />
+                  <div className="p-4 space-y-4">
+                    {/* Subject Line */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">
+                        Subject Line
+                      </Label>
+                      <div className="p-3 bg-gray-50 rounded-md border text-sm">
+                        {selectedTemplateObj.metadata.subject || "No subject"}
+                      </div>
+                    </div>
+
+                    {/* HTML Content Preview */}
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium text-gray-700">
+                        Email Content Preview
+                      </Label>
+                      <div className="border rounded-lg overflow-hidden">
+                        <div className="bg-gray-100 px-3 py-2 border-b">
+                          <span className="text-xs font-medium text-gray-600">
+                            HTML Email Content (Read Only)
+                          </span>
+                        </div>
+                        <div
+                          className="p-4 max-h-96 overflow-y-auto bg-white"
+                          dangerouslySetInnerHTML={{
+                            __html:
+                              selectedTemplateObj.metadata.content ||
+                              "No content",
+                          }}
+                          style={{
+                            fontFamily: "system-ui, -apple-system, sans-serif",
+                            lineHeight: "1.5",
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <p className="text-xs text-blue-600 bg-blue-50 p-2 rounded">
+                      💡 You will be able to edit both the subject and content
+                      after creating the campaign.
+                    </p>
                   </div>
                 </div>
               )}
@@ -250,33 +323,33 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
           <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
             <button
               type="button"
-              onClick={() => setTargetingMode('lists')}
+              onClick={() => setTargetingMode("lists")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                targetingMode === 'lists'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                targetingMode === "lists"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               By Lists
             </button>
             <button
               type="button"
-              onClick={() => setTargetingMode('contacts')}
+              onClick={() => setTargetingMode("contacts")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                targetingMode === 'contacts'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                targetingMode === "contacts"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               By Contacts
             </button>
             <button
               type="button"
-              onClick={() => setTargetingMode('tags')}
+              onClick={() => setTargetingMode("tags")}
               className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                targetingMode === 'tags'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                targetingMode === "tags"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-600 hover:text-gray-900"
               }`}
             >
               By Tags
@@ -284,7 +357,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
           </div>
 
           {/* Lists Targeting */}
-          {targetingMode === 'lists' && (
+          {targetingMode === "lists" && (
             <div className="space-y-3">
               <Label>Select Email Lists</Label>
               {lists.length === 0 ? (
@@ -295,14 +368,14 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                     type="button"
                     variant="outline"
                     className="mt-4"
-                    onClick={() => router.push('/contacts')}
+                    onClick={() => router.push("/contacts")}
                   >
                     Create List
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
-                  {lists.map(list => (
+                  {lists.map((list) => (
                     <div key={list.id} className="flex items-center space-x-3">
                       <Checkbox
                         id={list.id}
@@ -310,7 +383,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                         onCheckedChange={() => handleListToggle(list.id)}
                       />
                       <div className="flex-1">
-                        <Label 
+                        <Label
                           htmlFor={list.id}
                           className="text-sm font-medium cursor-pointer"
                         >
@@ -338,7 +411,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
           )}
 
           {/* Contacts Targeting */}
-          {targetingMode === 'contacts' && (
+          {targetingMode === "contacts" && (
             <div className="space-y-3">
               <Label>Select Individual Contacts</Label>
               {contacts.length === 0 ? (
@@ -349,7 +422,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                     type="button"
                     variant="outline"
                     className="mt-4"
-                    onClick={() => router.push('/contacts/new')}
+                    onClick={() => router.push("/contacts/new")}
                   >
                     Add Contact
                   </Button>
@@ -357,42 +430,52 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
               ) : (
                 <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
                   {contacts
-                    .filter(contact => contact.metadata.status.value === 'Active')
-                    .map(contact => (
-                    <div key={contact.id} className="flex items-center space-x-3">
-                      <Checkbox
-                        id={contact.id}
-                        checked={selectedContacts.includes(contact.id)}
-                        onCheckedChange={() => handleContactToggle(contact.id)}
-                      />
-                      <div className="flex-1">
-                        <Label 
-                          htmlFor={contact.id}
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          {contact.metadata.first_name} {contact.metadata.last_name}
-                        </Label>
-                        <p className="text-xs text-gray-500">
-                          {contact.metadata.email}
-                        </p>
+                    .filter(
+                      (contact) => contact.metadata.status.value === "Active"
+                    )
+                    .map((contact) => (
+                      <div
+                        key={contact.id}
+                        className="flex items-center space-x-3"
+                      >
+                        <Checkbox
+                          id={contact.id}
+                          checked={selectedContacts.includes(contact.id)}
+                          onCheckedChange={() =>
+                            handleContactToggle(contact.id)
+                          }
+                        />
+                        <div className="flex-1">
+                          <Label
+                            htmlFor={contact.id}
+                            className="text-sm font-medium cursor-pointer"
+                          >
+                            {contact.metadata.first_name}{" "}
+                            {contact.metadata.last_name}
+                          </Label>
+                          <p className="text-xs text-gray-500">
+                            {contact.metadata.email}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               )}
             </div>
           )}
 
           {/* Tags Targeting */}
-          {targetingMode === 'tags' && (
+          {targetingMode === "tags" && (
             <div className="space-y-3">
               <Label>Select Tags</Label>
               <div className="grid grid-cols-2 gap-3">
-                {AVAILABLE_TAGS.map(tag => {
-                  const taggedContactsCount = contacts.filter(contact => 
-                    contact.metadata.tags?.includes(tag) && contact.metadata.status.value === 'Active'
-                  ).length
-                  
+                {AVAILABLE_TAGS.map((tag) => {
+                  const taggedContactsCount = contacts.filter(
+                    (contact) =>
+                      contact.metadata.tags?.includes(tag) &&
+                      contact.metadata.status.value === "Active"
+                  ).length;
+
                   return (
                     <div key={tag} className="flex items-center space-x-2">
                       <Checkbox
@@ -401,7 +484,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                         onCheckedChange={() => handleTagToggle(tag)}
                       />
                       <div className="flex-1">
-                        <Label 
+                        <Label
                           htmlFor={tag}
                           className="text-sm font-medium cursor-pointer"
                         >
@@ -412,14 +495,16 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
                         </p>
                       </div>
                     </div>
-                  )
+                  );
                 })}
               </div>
             </div>
           )}
 
           {/* Target Summary */}
-          {(selectedLists.length > 0 || selectedContacts.length > 0 || selectedTags.length > 0) && (
+          {(selectedLists.length > 0 ||
+            selectedContacts.length > 0 ||
+            selectedTags.length > 0) && (
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
               <div className="flex items-center space-x-2">
                 <Users className="h-5 w-5 text-blue-600" />
@@ -429,13 +514,22 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
               </div>
               <div className="mt-2 space-y-1 text-sm text-blue-800">
                 {selectedLists.length > 0 && (
-                  <p>{selectedLists.length} email list{selectedLists.length > 1 ? 's' : ''} selected</p>
+                  <p>
+                    {selectedLists.length} email list
+                    {selectedLists.length > 1 ? "s" : ""} selected
+                  </p>
                 )}
                 {selectedContacts.length > 0 && (
-                  <p>{selectedContacts.length} individual contact{selectedContacts.length > 1 ? 's' : ''} selected</p>
+                  <p>
+                    {selectedContacts.length} individual contact
+                    {selectedContacts.length > 1 ? "s" : ""} selected
+                  </p>
                 )}
                 {selectedTags.length > 0 && (
-                  <p>{selectedTags.length} tag{selectedTags.length > 1 ? 's' : ''} selected</p>
+                  <p>
+                    {selectedTags.length} tag
+                    {selectedTags.length > 1 ? "s" : ""} selected
+                  </p>
                 )}
               </div>
             </div>
@@ -451,7 +545,7 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
               id="send_date"
               type="datetime-local"
               className="pl-10"
-              {...register('send_date')}
+              {...register("send_date")}
               min={new Date().toISOString().slice(0, 16)}
             />
           </div>
@@ -462,28 +556,21 @@ export default function CreateCampaignForm({ templates, contacts, lists }: Creat
 
         {/* Submit Buttons */}
         <div className="flex justify-end space-x-4 pt-6 border-t">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => router.back()}
-          >
+          <Button type="button" variant="outline" onClick={() => router.back()}>
             Cancel
           </Button>
-          <Button
-            type="submit"
-            disabled={isSubmitting || !selectedTemplate}
-          >
+          <Button type="submit" disabled={isSubmitting || !selectedTemplate}>
             {isSubmitting ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating Campaign...
               </>
             ) : (
-              'Create Campaign'
+              "Create Campaign"
             )}
           </Button>
         </div>
       </form>
     </>
-  )
+  );
 }

@@ -32,8 +32,8 @@ export default async function HomePage() {
               Welcome to Cosmic Email Marketing
             </h1>
             <p className="text-xl text-slate-600 mb-8 max-w-3xl mx-auto">
-              Professional email campaigns made simple. Manage contacts, create
-              beautiful templates, and track your success all in one place.
+              Manage contacts, create beautiful templates, and track your
+              success all in one place.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/contacts/new" className="btn-secondary">

@@ -32,13 +32,8 @@ import {
   Minimize,
 } from "lucide-react";
 import ConfirmationModal from "@/components/ConfirmationModal";
-import HtmlEditingToolbar from "./HtmlEditingToolbar";
+import ContentEditor from "./shared/ContentEditor";
 import { useToast } from "@/hooks/useToast";
-import {
-  applyFormat,
-  cleanupHtml,
-  applyStylesToContent,
-} from "@/utils/htmlFormatting";
 import { useTemplateSettings } from "@/hooks/useTemplateSettings";
 
 interface ContextItem {
@@ -86,7 +81,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
-  const mainPreviewRef = useRef<HTMLDivElement>(null);
 
   // Form state - SINGLE SOURCE OF TRUTH
   const [formData, setFormData] = useState({
@@ -109,17 +103,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   // Track if form has unsaved changes
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Track which editor is currently being used to prevent conflicts
-  const [activeEditor, setActiveEditor] = useState<"main" | null>(null);
-
-  // CRITICAL: Add content sync timeout to ensure all changes are captured
-  const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isUpdatingFromStateRef = useRef<boolean>(false);
-  const cursorPositionRef = useRef<{
-    selection: Selection | null;
-    range: Range | null;
-  }>({ selection: null, range: null });
 
   // Check if form has changes
   const hasFormChanges = () => {
@@ -246,41 +229,10 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     });
   }, []);
 
-  // Initialize content in contentEditable div
-  useEffect(() => {
-    if (mainPreviewRef.current && !isUpdatingFromStateRef.current) {
-      const currentMainContent = mainPreviewRef.current.innerHTML;
-      const expectedContent =
-        formData.content || "<p>Start typing your email content here...</p>";
-
-      // Only update if content is actually different and we're not actively editing
-      if (
-        currentMainContent !== expectedContent &&
-        activeEditor !== "main" &&
-        document.activeElement !== mainPreviewRef.current
-      ) {
-        // Save cursor position before updating
-        const wasActive = document.activeElement === mainPreviewRef.current;
-        if (wasActive) {
-          saveCursorPosition();
-        }
-
-        isUpdatingFromStateRef.current = true;
-        mainPreviewRef.current.innerHTML = expectedContent;
-        applyStylesToContent(mainPreviewRef.current, primaryColor);
-
-        // Restore cursor position after update
-        if (wasActive) {
-          setTimeout(() => {
-            restoreCursorPosition();
-            isUpdatingFromStateRef.current = false;
-          }, 0);
-        } else {
-          isUpdatingFromStateRef.current = false;
-        }
-      }
-    }
-  }, [formData.content, primaryColor, activeEditor]);
+  // Handle content change from shared editor
+  const handleContentChange = (content: string) => {
+    setFormData((prev) => ({ ...prev, content }));
+  };
 
   // Auto-focus AI prompt when AI section is shown
   const handleAISectionFocus = () => {
@@ -289,86 +241,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
         aiPromptRef.current.focus();
       }
     }, 100);
-  };
-
-  // Save current cursor position
-  const saveCursorPosition = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      cursorPositionRef.current = {
-        selection: selection,
-        range: range.cloneRange(),
-      };
-    }
-  };
-
-  // Restore cursor position
-  const restoreCursorPosition = () => {
-    const { selection, range } = cursorPositionRef.current;
-    if (selection && range) {
-      try {
-        selection.removeAllRanges();
-        selection.addRange(range);
-      } catch (error) {
-        // Ignore errors if range is no longer valid
-        console.warn("Could not restore cursor position:", error);
-      }
-    }
-  };
-
-  // CRITICAL: Enhanced content sync function to ensure all changes are captured
-  const syncContentToState = (content: string) => {
-    // Clear any existing timeout
-    if (contentSyncTimeoutRef.current) {
-      clearTimeout(contentSyncTimeoutRef.current);
-    }
-
-    // Set a short timeout to batch rapid changes
-    contentSyncTimeoutRef.current = setTimeout(() => {
-      // Double check that we're not in a state update cycle
-      if (!isUpdatingFromStateRef.current) {
-        setFormData((prev) => ({
-          ...prev,
-          content: content,
-        }));
-      }
-    }, 100); // Increased to 100ms for better debouncing
-  };
-
-  // FIXED: Handle format application from toolbar with proper conflict prevention and content sync
-  const handleFormatApply = (
-    format: string,
-    value?: string,
-    targetRef?: React.RefObject<HTMLDivElement>
-  ) => {
-    let previewDiv: HTMLDivElement | null = null;
-
-    // Use the target ref if provided, otherwise use main preview
-    previewDiv = targetRef?.current || mainPreviewRef.current;
-
-    if (!previewDiv) return;
-
-    // Mark main editor as active to prevent conflicts
-    setActiveEditor("main");
-
-    try {
-      // Apply formatting directly to the contentEditable div
-      applyFormat(previewDiv, format, value, primaryColor);
-
-      // Get the updated content and sync with React state immediately
-      const updatedContent = previewDiv.innerHTML;
-
-      // CRITICAL: Use the enhanced sync function for immediate state update
-      syncContentToState(updatedContent);
-    } catch (error) {
-      console.error("Format application error:", error);
-    } finally {
-      // Clear active editor after a brief delay to allow for proper state sync
-      setTimeout(() => {
-        setActiveEditor(null);
-      }, 100);
-    }
   };
 
   const handleInputChange = (field: string, value: any) => {
@@ -648,20 +520,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       return;
     }
 
-    // CRITICAL: Before submitting, ensure any pending content changes are captured
-    if (mainPreviewRef.current) {
-      const currentContent = mainPreviewRef.current.innerHTML;
-      if (currentContent !== formData.content) {
-        // Sync the latest content from the editor
-        setFormData((prev) => ({
-          ...prev,
-          content: currentContent,
-        }));
-
-        // Wait a brief moment for state update
-        await new Promise((resolve) => setTimeout(resolve, 100));
-      }
-    }
+    // Content is already synced via the shared ContentEditor
 
     setIsSubmitting(true);
 
@@ -675,7 +534,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           body: JSON.stringify({
             name: formData.name.trim(),
             subject: formData.subject.trim(),
-            content: mainPreviewRef.current?.innerHTML || formData.content, // Use the most current content
+            content: formData.content,
             template_type: formData.template_type,
             active: formData.active,
           }),
@@ -686,8 +545,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           throw new Error(errorData.error || "Failed to update template");
         }
 
-        const finalContent =
-          mainPreviewRef.current?.innerHTML || formData.content;
+        const finalContent = formData.content;
 
         setOriginalFormData({
           name: formData.name.trim(),
@@ -760,65 +618,6 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
     }
     router.back();
   };
-
-  // ENHANCED: ContentEditable input handler with better content sync
-  const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
-    // Prevent recursive updates
-    if (isUpdatingFromStateRef.current) {
-      return;
-    }
-
-    // Set main editor as active to prevent conflicts
-    setActiveEditor("main");
-
-    // Save cursor position before any state changes
-    saveCursorPosition();
-
-    const updatedContent = e.currentTarget.innerHTML;
-
-    // CRITICAL: Use enhanced sync function for immediate state update
-    syncContentToState(updatedContent);
-
-    // Clear active editor after state update
-    setTimeout(() => {
-      setActiveEditor(null);
-    }, 100);
-  };
-
-  // ENHANCED: Handle content change events from toolbar operations
-  useEffect(() => {
-    const handleContentChanged = (event: CustomEvent) => {
-      const { content } = event.detail;
-      if (content && content !== formData.content) {
-        syncContentToState(content);
-      }
-    };
-
-    if (mainPreviewRef.current) {
-      mainPreviewRef.current.addEventListener(
-        "contentChanged",
-        handleContentChanged as EventListener
-      );
-    }
-
-    return () => {
-      if (mainPreviewRef.current) {
-        mainPreviewRef.current.removeEventListener(
-          "contentChanged",
-          handleContentChanged as EventListener
-        );
-      }
-    };
-  }, [formData.content]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (contentSyncTimeoutRef.current) {
-        clearTimeout(contentSyncTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Simple read-only full-screen preview modal
   const FullScreenPreview = () => (
@@ -1214,103 +1013,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
             </div>
 
             {/* Right Column: Template Content with Toolbar - 2/3 width */}
-            <div className="space-y-4 lg:col-span-2">
-              <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
-                <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div className="text-sm text-gray-600">
-                      <strong>Subject:</strong>{" "}
-                      {formData.subject || "No subject"}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <div className="text-xs text-gray-500">
-                        {formData.template_type}
-                      </div>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={toggleFullScreen}
-                        size="sm"
-                        className="flex items-center space-x-2"
-                      >
-                        <Maximize className="h-4 w-4" />
-                        <span>Preview</span>
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Sticky formatting toolbar */}
-                <div className="sticky top-0 bg-gray-50 px-4 py-3 border-b border-gray-200 z-10">
-                  <HtmlEditingToolbar
-                    onFormatApply={(format, value) =>
-                      handleFormatApply(format, value, mainPreviewRef)
-                    }
-                    className=""
-                    primaryColor={primaryColor}
-                  />
-                </div>
-
-                <div className="p-4 max-h-80 overflow-y-auto">
-                  <div
-                    ref={mainPreviewRef}
-                    className="prose max-w-none text-sm cursor-text"
-                    contentEditable={!isAIEditing}
-                    data-editor-instance="main"
-                    style={{
-                      pointerEvents: isAIEditing ? "none" : "auto",
-                      userSelect: isAIEditing ? "none" : "text",
-                      outline: "none",
-                      minHeight: "200px",
-                    }}
-                    onInput={handleContentEditableInput}
-                    suppressContentEditableWarning={true}
-                  />
-                  {/* Preview unsubscribe footer */}
-                  {formData.content && (
-                    <div className="mt-6 pt-3 border-t border-gray-200 text-center text-xs text-gray-500">
-                      <p>
-                        You received this email because you subscribed to our
-                        mailing list.
-                        <br />
-                        <span className="underline cursor-pointer">
-                          Unsubscribe
-                        </span>{" "}
-                        from future emails.
-                      </p>
-                      <p className="text-xs text-gray-400 mt-1">
-                        ↑ This unsubscribe link will be added automatically to
-                        all campaign emails
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              {formData.content && (
-                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="flex items-start space-x-2">
-                    <Info className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div className="text-sm text-blue-800">
-                      <p className="font-medium mb-1">✨ Enhanced Editing</p>
-                      <p className="text-xs">
-                        {isAIEditing ? (
-                          <span className="text-purple-700 font-medium">
-                            AI is editing content...
-                          </span>
-                        ) : (
-                          <>
-                            Ready to edit! Type directly in the content area and
-                            select text to use the formatting toolbar. Click{" "}
-                            <strong>Full Screen</strong> for a larger editing
-                            view.
-                          </>
-                        )}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            <ContentEditor
+              content={formData.content}
+              subject={formData.subject}
+              templateType={formData.template_type}
+              isAIEditing={isAIEditing}
+              streamingContent={streamingContent}
+              onContentChange={handleContentChange}
+              onPreview={toggleFullScreen}
+              showPreviewButton={true}
+            />
           </div>
         </CardContent>
       </Card>

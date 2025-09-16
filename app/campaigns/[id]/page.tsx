@@ -8,6 +8,7 @@ import {
   getEmailTemplate,
 } from "@/lib/cosmic";
 import EditCampaignForm from "@/components/EditCampaignForm";
+import EditCampaignContentForm from "@/components/EditCampaignContentForm";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import DeleteCampaignButton from "@/components/DeleteCampaignButton";
 import TestEmailModal from "@/components/TestEmailModal";
@@ -132,20 +133,20 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
 
     const parts = [];
     if (listCount > 0) {
-      parts.push(`${listCount} list${listCount === 1 ? '' : 's'}`);
+      parts.push(`${listCount} list${listCount === 1 ? "" : "s"}`);
     }
     if (contactCount > 0) {
-      parts.push(`${contactCount} contact${contactCount === 1 ? '' : 's'}`);
+      parts.push(`${contactCount} contact${contactCount === 1 ? "" : "s"}`);
     }
     if (tagCount > 0) {
-      parts.push(`${tagCount} tag${tagCount === 1 ? '' : 's'}`);
+      parts.push(`${tagCount} tag${tagCount === 1 ? "" : "s"}`);
     }
 
     if (parts.length === 0) {
       return "0 recipients";
     }
 
-    return parts.join(' + ');
+    return parts.join(" + ");
   };
 
   return (
@@ -221,6 +222,11 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
               lists={lists}
             />
 
+            {/* Campaign Content Editor */}
+            <div className="mt-8">
+              <EditCampaignContentForm campaign={campaign} />
+            </div>
+
             {/* Template Preview Section */}
             {templateContent && (
               <Card className="mt-8">
@@ -240,7 +246,8 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   )}
                   {(status === "Draft" || status === "Scheduled") && (
                     <p className="text-sm text-gray-600">
-                      Live preview of the current template content - updates automatically when template is modified
+                      Live preview of the current template content - updates
+                      automatically when template is modified
                     </p>
                   )}
                 </CardHeader>
@@ -307,7 +314,8 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                         <div className="flex items-center space-x-1">
                           <Eye className="h-3 w-3" />
                           <span>
-                            ✨ Live content - this preview updates automatically when you modify the template
+                            ✨ Live content - this preview updates automatically
+                            when you modify the template
                           </span>
                         </div>
                       </div>
