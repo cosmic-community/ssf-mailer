@@ -667,10 +667,10 @@ export default function MediaLibrary({
                     onClick={() => handleSelectMedia(item)}
                   >
                     <CardContent className="p-3 relative">
-                      <div className="aspect-square mb-3 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
+                      <div className="aspect-[4/3] mb-3 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
                         {item.type.startsWith('image/') ? (
                           <img
-                            src={`${item.imgix_url}?w=400&h=400&fit=crop&auto=format,compress`}
+                            src={`${item.imgix_url}?w=400&h=300&fit=crop&auto=format,compress`}
                             alt={item.alt_text || item.original_name}
                             className="w-full h-full object-cover"
                             loading="lazy"
