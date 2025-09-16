@@ -90,19 +90,6 @@ export interface EmailTemplate extends CosmicObject {
   };
 }
 
-// Template snapshot interface for preserving sent content
-export interface TemplateSnapshot {
-  name: string;
-  subject: string;
-  content: string;
-  template_type: {
-    key: string;
-    value: TemplateType;
-  };
-  snapshot_date: string;
-  original_template_id: string;
-}
-
 // Campaign statistics interface - added missing opened property
 export interface CampaignStats {
   sent?: number;
@@ -143,7 +130,6 @@ export interface MarketingCampaign extends CosmicObject {
     name: string;
     campaign_content?: CampaignContent; // NEW: stores decoupled content
     template?: string | EmailTemplate; // DEPRECATED: for backward compatibility
-    template_snapshot?: TemplateSnapshot;
     target_lists?: EmailList[] | string[]; // NEW: target lists for sending
     target_contacts?: string[]; // Store contact IDs as the primary field
     target_tags?: string[];
@@ -167,7 +153,6 @@ export interface EmailCampaign extends CosmicObject {
     name: string;
     campaign_content?: CampaignContent; // NEW: stores decoupled content
     template?: string | EmailTemplate; // DEPRECATED: for backward compatibility
-    template_snapshot?: TemplateSnapshot;
     target_lists?: EmailList[] | string[];
     target_contacts?: string[];
     target_tags?: string[];
@@ -280,7 +265,7 @@ export interface UpdateSettingsData {
   terms_of_service_url?: string;
   google_analytics_id?: string;
   email_signature?: string;
-  test_emails?: string; // Changed from string[] to string for comma-separated format
+  test_emails?: string | string[]; // Allow both comma-separated string and array formats
 }
 
 // List management data types

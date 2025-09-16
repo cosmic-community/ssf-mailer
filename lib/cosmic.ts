@@ -12,7 +12,6 @@ import {
   UpdateSettingsData,
   BulkListUpdateData,
   CampaignStats,
-  TemplateSnapshot,
   CosmicResponse,
   MediaItem,
 } from "@/types";
@@ -49,12 +48,12 @@ export async function getMedia(options?: {
     const limit = options?.limit || 50;
     const skip = options?.skip || 0;
     const folder = options?.folder;
-    const sort = options?.sort || '-created_at';
+    const sort = options?.sort || "-created_at";
     const search = options?.search?.trim();
 
     // Build query object for Cosmic API
     let query: any = {};
-    
+
     // Add folder filter if specified
     if (folder) {
       query.folder = folder;
@@ -64,33 +63,53 @@ export async function getMedia(options?: {
     if (search) {
       // Use Cosmic's search capabilities - search in name and original_name
       query.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { original_name: { $regex: search, $options: 'i' } }
+        { name: { $regex: search, $options: "i" } },
+        { original_name: { $regex: search, $options: "i" } },
       ];
     }
 
     // Fetch media with server-side query
     const result = await cosmic.media
       .find(query)
-      .props(['id', 'name', 'original_name', 'url', 'imgix_url', 'size', 'type', 'folder', 'alt_text', 'width', 'height', 'created_at', 'metadata'])
+      .props([
+        "id",
+        "name",
+        "original_name",
+        "url",
+        "imgix_url",
+        "size",
+        "type",
+        "folder",
+        "alt_text",
+        "width",
+        "height",
+        "created_at",
+        "metadata",
+      ])
       .limit(limit)
       .skip(skip);
 
     // Handle server-side sorting since Cosmic media API has limited sorting options
     let mediaItems = result.media as MediaItem[];
-    
+
     // Apply sorting on server
-    if (sort === '-created_at') {
-      mediaItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } else if (sort === 'created_at') {
-      mediaItems.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-    } else if (sort === 'name') {
+    if (sort === "-created_at") {
+      mediaItems.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+    } else if (sort === "created_at") {
+      mediaItems.sort(
+        (a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+    } else if (sort === "name") {
       mediaItems.sort((a, b) => a.name.localeCompare(b.name));
-    } else if (sort === '-name') {
+    } else if (sort === "-name") {
       mediaItems.sort((a, b) => b.name.localeCompare(a.name));
-    } else if (sort === 'size') {
+    } else if (sort === "size") {
       mediaItems.sort((a, b) => a.size - b.size);
-    } else if (sort === '-size') {
+    } else if (sort === "-size") {
       mediaItems.sort((a, b) => b.size - a.size);
     }
 
@@ -121,7 +140,21 @@ export async function getSingleMedia(id: string): Promise<MediaItem | null> {
   try {
     const result = await cosmic.media
       .findOne({ id })
-      .props(['id', 'name', 'original_name', 'url', 'imgix_url', 'size', 'type', 'folder', 'alt_text', 'width', 'height', 'created_at', 'metadata']);
+      .props([
+        "id",
+        "name",
+        "original_name",
+        "url",
+        "imgix_url",
+        "size",
+        "type",
+        "folder",
+        "alt_text",
+        "width",
+        "height",
+        "created_at",
+        "metadata",
+      ]);
 
     return result.media as MediaItem;
   } catch (error) {
@@ -145,14 +178,14 @@ export async function uploadMedia(
     // Convert File to Buffer (Node.js compatible)
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
-    
+
     // Create the upload payload with proper structure for Cosmic SDK
     const uploadData: any = {
       media: {
         originalname: file.name,
         buffer: buffer,
         mimetype: file.type,
-      }
+      },
     };
 
     // Add optional parameters
@@ -166,18 +199,18 @@ export async function uploadMedia(
 
     // Add server-side metadata including upload tracking
     const serverMetadata = {
-      uploaded_via: 'media_library_server',
+      uploaded_via: "media_library_server",
       upload_timestamp: new Date().toISOString(),
       file_size: file.size,
       mime_type: file.type,
-      ...options?.metadata
+      ...options?.metadata,
     };
 
     uploadData.metadata = serverMetadata;
 
     // Execute server-side upload to Cosmic
     const result = await cosmic.media.insertOne(uploadData);
-    
+
     if (!result.media) {
       throw new Error("Upload failed - no media returned from server");
     }
@@ -185,7 +218,11 @@ export async function uploadMedia(
     return result.media as MediaItem;
   } catch (error) {
     console.error("Error uploading media:", error);
-    throw new Error(`Failed to upload media to server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to upload media to server: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 }
 
@@ -204,12 +241,12 @@ export async function updateMedia(
       metadata: {
         ...updates.metadata,
         last_modified: new Date().toISOString(),
-        modified_via: 'media_library_server'
-      }
+        modified_via: "media_library_server",
+      },
     };
 
     const result = await cosmic.media.updateOne(id, serverUpdates);
-    
+
     if (!result.media) {
       throw new Error("Update failed - no media returned from server");
     }
@@ -217,7 +254,11 @@ export async function updateMedia(
     return result.media as MediaItem;
   } catch (error) {
     console.error(`Error updating media ${id}:`, error);
-    throw new Error(`Failed to update media on server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to update media on server: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 }
 
@@ -226,7 +267,11 @@ export async function deleteMedia(id: string): Promise<void> {
     await cosmic.media.deleteOne(id);
   } catch (error) {
     console.error(`Error deleting media ${id}:`, error);
-    throw new Error(`Failed to delete media on server: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    throw new Error(
+      `Failed to delete media on server: ${
+        error instanceof Error ? error.message : "Unknown error"
+      }`
+    );
   }
 }
 
@@ -234,9 +279,7 @@ export async function deleteMedia(id: string): Promise<void> {
 export async function getMediaFolders(): Promise<string[]> {
   try {
     // Fetch all media to get unique folders - could be optimized with aggregation
-    const result = await cosmic.media
-      .find({})
-      .props(['folder']);
+    const result = await cosmic.media.find({}).props(["folder"]);
 
     // Server-side folder aggregation
     const folderSet = new Set<string>();
@@ -277,9 +320,9 @@ export async function searchMedia(searchOptions: {
     // Add text search
     if (query?.trim()) {
       searchQuery.$or = [
-        { name: { $regex: query.trim(), $options: 'i' } },
-        { original_name: { $regex: query.trim(), $options: 'i' } },
-        { alt_text: { $regex: query.trim(), $options: 'i' } }
+        { name: { $regex: query.trim(), $options: "i" } },
+        { original_name: { $regex: query.trim(), $options: "i" } },
+        { alt_text: { $regex: query.trim(), $options: "i" } },
       ];
     }
 
@@ -288,20 +331,34 @@ export async function searchMedia(searchOptions: {
       searchQuery.folder = folder;
     }
 
-    // Add type filter  
+    // Add type filter
     if (type) {
-      searchQuery.type = { $regex: type, $options: 'i' };
+      searchQuery.type = { $regex: type, $options: "i" };
     }
 
     const result = await cosmic.media
       .find(searchQuery)
-      .props(['id', 'name', 'original_name', 'url', 'imgix_url', 'size', 'type', 'folder', 'alt_text', 'width', 'height', 'created_at', 'metadata'])
+      .props([
+        "id",
+        "name",
+        "original_name",
+        "url",
+        "imgix_url",
+        "size",
+        "type",
+        "folder",
+        "alt_text",
+        "width",
+        "height",
+        "created_at",
+        "metadata",
+      ])
       .limit(limit)
       .skip(skip);
 
     return {
       media: result.media as MediaItem[],
-      total: result.total || 0
+      total: result.total || 0,
     };
   } catch (error) {
     console.error("Error searching media:", error);
@@ -319,25 +376,25 @@ export async function getMediaStats(): Promise<{
   try {
     const result = await cosmic.media
       .find({})
-      .props(['type', 'folder', 'size']);
+      .props(["type", "folder", "size"]);
 
     const stats = {
       total: result.media.length,
       totalSize: 0,
       byType: {} as Record<string, number>,
-      byFolder: {} as Record<string, number>
+      byFolder: {} as Record<string, number>,
     };
 
     // Server-side aggregation
     result.media.forEach((item: any) => {
       stats.totalSize += item.size || 0;
-      
+
       // Count by type
-      const mainType = item.type?.split('/')[0] || 'unknown';
+      const mainType = item.type?.split("/")[0] || "unknown";
       stats.byType[mainType] = (stats.byType[mainType] || 0) + 1;
-      
+
       // Count by folder
-      const folder = item.folder || 'uncategorized';
+      const folder = item.folder || "uncategorized";
       stats.byFolder[folder] = (stats.byFolder[folder] || 0) + 1;
     });
 
@@ -364,8 +421,8 @@ export async function getEmailLists(): Promise<EmailList[]> {
           ...list,
           metadata: {
             ...list.metadata,
-            total_contacts: contactCount
-          }
+            total_contacts: contactCount,
+          },
         } as EmailList;
       })
     );
@@ -391,13 +448,13 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
 
     // Update the contact count for this list
     const contactCount = await getListContactCount(id);
-    
+
     return {
       ...object,
       metadata: {
         ...object.metadata,
-        total_contacts: contactCount
-      }
+        total_contacts: contactCount,
+      },
     } as EmailList;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
@@ -408,7 +465,9 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
   }
 }
 
-export async function createEmailList(data: CreateListData): Promise<EmailList> {
+export async function createEmailList(
+  data: CreateListData
+): Promise<EmailList> {
   try {
     const { object } = await cosmic.objects.insertOne({
       title: data.name,
@@ -421,7 +480,7 @@ export async function createEmailList(data: CreateListData): Promise<EmailList> 
           value: data.list_type,
         },
         active: data.active !== false,
-        created_date: new Date().toISOString().split('T')[0],
+        created_date: new Date().toISOString().split("T")[0],
         total_contacts: 0,
       },
     });
@@ -448,7 +507,8 @@ export async function updateEmailList(
     const metadataUpdates: any = {};
 
     if (data.name !== undefined) metadataUpdates.name = data.name;
-    if (data.description !== undefined) metadataUpdates.description = data.description;
+    if (data.description !== undefined)
+      metadataUpdates.description = data.description;
     if (data.active !== undefined) metadataUpdates.active = data.active;
 
     if (data.list_type !== undefined) {
@@ -484,9 +544,9 @@ export async function getListContactCount(listId: string): Promise<number> {
   try {
     // Count contacts that have this list ID in their lists array
     const { objects } = await cosmic.objects
-      .find({ 
+      .find({
         type: "email-contacts",
-        "metadata.lists": listId
+        "metadata.lists": listId,
       })
       .props(["id"]);
 
@@ -504,7 +564,7 @@ export async function getListContactCount(listId: string): Promise<number> {
 export async function updateListContactCount(listId: string): Promise<void> {
   try {
     const contactCount = await getListContactCount(listId);
-    
+
     await cosmic.objects.updateOne(listId, {
       metadata: {
         total_contacts: contactCount,
@@ -552,7 +612,7 @@ export async function getEmailContacts(options?: {
     // Add search filter if provided
     if (search) {
       // For Cosmic CMS, we'll use a broad search approach
-      // Since Cosmic doesn't support complex OR queries easily, 
+      // Since Cosmic doesn't support complex OR queries easily,
       // we'll fetch more data and filter client-side as a fallback
       // But first try to search by email which is most common
       if (search.includes("@")) {
@@ -585,28 +645,34 @@ export async function getEmailContacts(options?: {
         .limit(1000); // Get more records for comprehensive search
 
       const allContacts = broadResult.objects as EmailContact[];
-      
+
       // Filter contacts that match search across multiple fields
-      const filteredContacts = allContacts.filter(contact => {
+      const filteredContacts = allContacts.filter((contact) => {
         const searchLower = search.toLowerCase();
         const firstName = contact.metadata.first_name?.toLowerCase() || "";
         const lastName = contact.metadata.last_name?.toLowerCase() || "";
         const email = contact.metadata.email?.toLowerCase() || "";
-        
-        const matchesSearch = 
+
+        const matchesSearch =
           firstName.includes(searchLower) ||
           lastName.includes(searchLower) ||
           email.includes(searchLower);
 
-        const matchesStatus = !status || status === "all" || 
+        const matchesStatus =
+          !status ||
+          status === "all" ||
           contact.metadata.status?.value === status;
 
-        const matchesList = !list_id || 
-          (contact.metadata.lists && 
-           (Array.isArray(contact.metadata.lists) 
-             ? contact.metadata.lists.some((list: any) => 
-                 typeof list === 'string' ? list === list_id : list.id === list_id)
-             : false));
+        const matchesList =
+          !list_id ||
+          (contact.metadata.lists &&
+            (Array.isArray(contact.metadata.lists)
+              ? contact.metadata.lists.some((list: any) =>
+                  typeof list === "string"
+                    ? list === list_id
+                    : list.id === list_id
+                )
+              : false));
 
         return matchesSearch && matchesStatus && matchesList;
       });
@@ -672,7 +738,8 @@ export async function createEmailContact(
         },
         lists: data.list_ids || [],
         tags: data.tags || [],
-        subscribe_date: data.subscribe_date || new Date().toISOString().split('T')[0],
+        subscribe_date:
+          data.subscribe_date || new Date().toISOString().split("T")[0],
         notes: data.notes || "",
       },
     });
@@ -721,9 +788,10 @@ export async function updateEmailContact(
     if (data.list_ids !== undefined) {
       const current = await getEmailContact(id);
       if (current && current.metadata.lists) {
-        oldListIds = Array.isArray(current.metadata.lists) 
-          ? current.metadata.lists.map((list: any) => 
-              typeof list === 'string' ? list : list.id)
+        oldListIds = Array.isArray(current.metadata.lists)
+          ? current.metadata.lists.map((list: any) =>
+              typeof list === "string" ? list : list.id
+            )
           : [];
       }
     }
@@ -752,17 +820,17 @@ export async function updateEmailContact(
     }
 
     const { object } = await cosmic.objects.updateOne(id, updateData);
-    
+
     // Update contact counts for affected lists
     if (data.list_ids !== undefined) {
       const newListIds = data.list_ids;
       const allAffectedListIds = [...new Set([...oldListIds, ...newListIds])];
-      
+
       for (const listId of allAffectedListIds) {
         await updateListContactCount(listId);
       }
     }
-    
+
     return object as EmailContact;
   } catch (error) {
     console.error(`Error updating email contact ${id}:`, error);
@@ -775,11 +843,12 @@ export async function deleteEmailContact(id: string): Promise<void> {
     // Get the contact to find associated lists
     const contact = await getEmailContact(id);
     let affectedListIds: string[] = [];
-    
+
     if (contact && contact.metadata.lists) {
-      affectedListIds = Array.isArray(contact.metadata.lists) 
-        ? contact.metadata.lists.map((list: any) => 
-            typeof list === 'string' ? list : list.id)
+      affectedListIds = Array.isArray(contact.metadata.lists)
+        ? contact.metadata.lists.map((list: any) =>
+            typeof list === "string" ? list : list.id
+          )
         : [];
     }
 
@@ -813,19 +882,22 @@ export async function bulkUpdateContactLists(
       }
 
       // Get current list IDs
-      const currentListIds = contact.metadata.lists 
-        ? (Array.isArray(contact.metadata.lists) 
-            ? contact.metadata.lists.map((list: any) => 
-                typeof list === 'string' ? list : list.id)
-            : [])
+      const currentListIds = contact.metadata.lists
+        ? Array.isArray(contact.metadata.lists)
+          ? contact.metadata.lists.map((list: any) =>
+              typeof list === "string" ? list : list.id
+            )
+          : []
         : [];
 
       // Calculate new list IDs
       let newListIds = [...currentListIds];
-      
+
       // Remove lists
-      newListIds = newListIds.filter(id => !data.list_ids_to_remove.includes(id));
-      
+      newListIds = newListIds.filter(
+        (id) => !data.list_ids_to_remove.includes(id)
+      );
+
       // Add new lists (avoid duplicates)
       for (const listId of data.list_ids_to_add) {
         if (!newListIds.includes(listId)) {
@@ -838,7 +910,11 @@ export async function bulkUpdateContactLists(
       results.updated++;
     } catch (error) {
       console.error(`Error updating contact ${contactId}:`, error);
-      results.errors.push(`Failed to update contact ${contactId}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      results.errors.push(
+        `Failed to update contact ${contactId}: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     }
   }
 
@@ -846,12 +922,14 @@ export async function bulkUpdateContactLists(
 }
 
 // Get contacts by list ID - enhanced with better error handling
-export async function getContactsByListId(listId: string): Promise<EmailContact[]> {
+export async function getContactsByListId(
+  listId: string
+): Promise<EmailContact[]> {
   try {
     const { objects } = await cosmic.objects
-      .find({ 
+      .find({
         type: "email-contacts",
-        "metadata.lists": listId
+        "metadata.lists": listId,
       })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
       .depth(1);
@@ -1087,12 +1165,16 @@ export async function createMarketingCampaign(
   try {
     console.log("Creating marketing campaign with data:", data);
 
-    // Validate template exists
+    let template: EmailTemplate | null = null;
+    let templateType = { key: "custom", value: "Custom" as const };
+
+    // Validate template exists and get its data for copying
     if (data.template_id) {
-      const template = await getEmailTemplate(data.template_id);
+      template = await getEmailTemplate(data.template_id);
       if (!template) {
         throw new Error("Selected email template not found");
       }
+      templateType = template.metadata.template_type;
     }
 
     // Validate list IDs if provided
@@ -1154,19 +1236,26 @@ export async function createMarketingCampaign(
     }
 
     console.log(
-      `Creating campaign with ${validListIds.length} lists, ${validContactIds.length} contacts and ${
-        data.target_tags?.length || 0
-      } tags`
+      `Creating campaign with ${validListIds.length} lists, ${
+        validContactIds.length
+      } contacts and ${data.target_tags?.length || 0} tags`
     );
 
+    // Create campaign with decoupled content
     const { object } = await cosmic.objects.insertOne({
       title: data.name,
       type: "marketing-campaigns",
       metadata: {
         name: data.name,
-        template: data.template_id, // Changed: store template ID in 'template' field
-        target_lists: validListIds, // NEW: Store list IDs
-        target_contacts: validContactIds, // Store only IDs in target_contacts field
+        // Store campaign content separately from template
+        campaign_content: {
+          subject: data.subject || template?.metadata.subject || "",
+          content: data.content || template?.metadata.content || "",
+          template_type: templateType,
+          original_template_id: data.template_id || undefined, // Track original template for reference only
+        },
+        target_lists: validListIds,
+        target_contacts: validContactIds,
         target_tags: data.target_tags || [],
         status: {
           key: "draft",
@@ -1197,8 +1286,7 @@ export async function createMarketingCampaign(
 export async function updateCampaignStatus(
   id: string,
   status: "Draft" | "Scheduled" | "Sending" | "Sent" | "Cancelled",
-  stats?: CampaignStats,
-  templateSnapshot?: TemplateSnapshot
+  stats?: CampaignStats
 ): Promise<void> {
   try {
     const metadataUpdates: any = {
@@ -1210,10 +1298,6 @@ export async function updateCampaignStatus(
 
     if (stats) {
       metadataUpdates.stats = stats;
-    }
-
-    if (templateSnapshot) {
-      metadataUpdates.template_snapshot = templateSnapshot;
     }
 
     await cosmic.objects.updateOne(id, {
@@ -1346,19 +1430,27 @@ export async function deleteEmailCampaign(id: string): Promise<void> {
 }
 
 // Get all contacts that would be targeted by a campaign with real-time count
-export async function getCampaignTargetContacts(campaign: MarketingCampaign): Promise<EmailContact[]> {
+export async function getCampaignTargetContacts(
+  campaign: MarketingCampaign
+): Promise<EmailContact[]> {
   try {
     const allContacts: EmailContact[] = [];
     const addedContactIds = new Set<string>();
 
     // Add contacts from target lists
-    if (campaign.metadata.target_lists && campaign.metadata.target_lists.length > 0) {
+    if (
+      campaign.metadata.target_lists &&
+      campaign.metadata.target_lists.length > 0
+    ) {
       for (const listRef of campaign.metadata.target_lists) {
-        const listId = typeof listRef === 'string' ? listRef : listRef.id;
+        const listId = typeof listRef === "string" ? listRef : listRef.id;
         const listContacts = await getContactsByListId(listId);
-        
+
         for (const contact of listContacts) {
-          if (!addedContactIds.has(contact.id) && contact.metadata.status.value === 'Active') {
+          if (
+            !addedContactIds.has(contact.id) &&
+            contact.metadata.status.value === "Active"
+          ) {
             allContacts.push(contact);
             addedContactIds.add(contact.id);
           }
@@ -1367,12 +1459,15 @@ export async function getCampaignTargetContacts(campaign: MarketingCampaign): Pr
     }
 
     // Add individual target contacts
-    if (campaign.metadata.target_contacts && campaign.metadata.target_contacts.length > 0) {
+    if (
+      campaign.metadata.target_contacts &&
+      campaign.metadata.target_contacts.length > 0
+    ) {
       for (const contactId of campaign.metadata.target_contacts) {
         if (!addedContactIds.has(contactId)) {
           try {
             const contact = await getEmailContact(contactId);
-            if (contact && contact.metadata.status.value === 'Active') {
+            if (contact && contact.metadata.status.value === "Active") {
               allContacts.push(contact);
               addedContactIds.add(contactId);
             }
@@ -1384,15 +1479,24 @@ export async function getCampaignTargetContacts(campaign: MarketingCampaign): Pr
     }
 
     // Add contacts with matching tags
-    if (campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0) {
+    if (
+      campaign.metadata.target_tags &&
+      campaign.metadata.target_tags.length > 0
+    ) {
       // This is a simplified implementation - in a real system you'd want more efficient querying
-      const { contacts: allContactsResult } = await getEmailContacts({ limit: 1000 });
-      
+      const { contacts: allContactsResult } = await getEmailContacts({
+        limit: 1000,
+      });
+
       for (const contact of allContactsResult) {
-        if (!addedContactIds.has(contact.id) && 
-            contact.metadata.status.value === 'Active' &&
-            contact.metadata.tags &&
-            campaign.metadata.target_tags.some(tag => contact.metadata.tags?.includes(tag))) {
+        if (
+          !addedContactIds.has(contact.id) &&
+          contact.metadata.status.value === "Active" &&
+          contact.metadata.tags &&
+          campaign.metadata.target_tags.some((tag) =>
+            contact.metadata.tags?.includes(tag)
+          )
+        ) {
           allContacts.push(contact);
           addedContactIds.add(contact.id);
         }
