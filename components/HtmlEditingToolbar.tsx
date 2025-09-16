@@ -18,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bold, Italic, Link, Image, ExternalLink, Palette, Upload } from "lucide-react";
+import { Bold, Italic, Link, Image, ExternalLink, Palette, Upload, Type } from "lucide-react";
 import MediaLibrary from "@/components/MediaLibrary";
 import { MediaItem } from "@/types";
 
@@ -48,6 +48,30 @@ interface ImageDialogData {
   isOpen: boolean;
   element?: HTMLImageElement; // For editing existing images
 }
+
+// Font options for email templates
+const EMAIL_FONTS = [
+  { value: "inherit", label: "Default", family: "inherit" },
+  // Web-safe fonts
+  { value: "arial", label: "Arial", family: "Arial, Helvetica, sans-serif" },
+  { value: "helvetica", label: "Helvetica", family: "Helvetica, Arial, sans-serif" },
+  { value: "times", label: "Times New Roman", family: "Times, 'Times New Roman', serif" },
+  { value: "georgia", label: "Georgia", family: "Georgia, serif" },
+  { value: "courier", label: "Courier New", family: "'Courier New', Courier, monospace" },
+  { value: "verdana", label: "Verdana", family: "Verdana, Geneva, sans-serif" },
+  { value: "tahoma", label: "Tahoma", family: "Tahoma, Geneva, sans-serif" },
+  { value: "trebuchet", label: "Trebuchet MS", family: "'Trebuchet MS', Helvetica, sans-serif" },
+  // Google Fonts (with fallbacks for email compatibility)
+  { value: "quicksand", label: "Quicksand", family: "'Quicksand', Helvetica, Arial, sans-serif" },
+  { value: "opensans", label: "Open Sans", family: "'Open Sans', Helvetica, Arial, sans-serif" },
+  { value: "roboto", label: "Roboto", family: "'Roboto', Arial, sans-serif" },
+  { value: "lato", label: "Lato", family: "'Lato', Arial, sans-serif" },
+  { value: "montserrat", label: "Montserrat", family: "'Montserrat', Helvetica, sans-serif" },
+  { value: "poppins", label: "Poppins", family: "'Poppins', Arial, sans-serif" },
+  { value: "futura", label: "Futura", family: "'Futura', 'Futura PT', Helvetica, Arial, sans-serif" },
+  { value: "playfair", label: "Playfair Display", family: "'Playfair Display', Georgia, serif" },
+  { value: "merriweather", label: "Merriweather", family: "'Merriweather', Georgia, serif" },
+];
 
 // Utility function to convert RGB color to hex
 function rgbToHex(rgb: string): string {
@@ -98,8 +122,9 @@ export default function HtmlEditingToolbar({
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
 
-  // Font size state
+  // Font size and font family state
   const [fontSize, setFontSize] = useState<string>("16");
+  const [fontFamily, setFontFamily] = useState<string>("inherit");
 
   // Media selection state
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
@@ -561,6 +586,55 @@ export default function HtmlEditingToolbar({
           >
             <Italic className="h-4 w-4" />
           </Button>
+        </div>
+
+        {/* Font Family */}
+        <div className="flex items-center space-x-1 px-2 border-r border-gray-200">
+          <Select
+            value={fontFamily}
+            onValueChange={(value) => {
+              // Save current state before applying font family
+              const editableDiv = document.querySelector(
+                '[contenteditable="true"]'
+              ) as HTMLElement;
+              if (editableDiv) {
+                saveToUndoStack(editableDiv.innerHTML);
+              }
+
+              const selectedFont = EMAIL_FONTS.find(font => font.value === value);
+              if (selectedFont) {
+                setFontFamily(value);
+                onFormatApply("font-family", selectedFont.family);
+              }
+            }}
+          >
+            <SelectTrigger className="h-8 w-28 text-xs">
+              <div className="flex items-center space-x-1">
+                <Type className="h-3 w-3" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="inherit">Default</SelectItem>
+              <SelectItem value="arial" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>Arial</SelectItem>
+              <SelectItem value="helvetica" style={{ fontFamily: 'Helvetica, Arial, sans-serif' }}>Helvetica</SelectItem>
+              <SelectItem value="times" style={{ fontFamily: 'Times, "Times New Roman", serif' }}>Times New Roman</SelectItem>
+              <SelectItem value="georgia" style={{ fontFamily: 'Georgia, serif' }}>Georgia</SelectItem>
+              <SelectItem value="courier" style={{ fontFamily: '"Courier New", Courier, monospace' }}>Courier New</SelectItem>
+              <SelectItem value="verdana" style={{ fontFamily: 'Verdana, Geneva, sans-serif' }}>Verdana</SelectItem>
+              <SelectItem value="tahoma" style={{ fontFamily: 'Tahoma, Geneva, sans-serif' }}>Tahoma</SelectItem>
+              <SelectItem value="trebuchet" style={{ fontFamily: '"Trebuchet MS", Helvetica, sans-serif' }}>Trebuchet MS</SelectItem>
+              <SelectItem value="quicksand" style={{ fontFamily: '"Quicksand", Helvetica, Arial, sans-serif' }}>Quicksand</SelectItem>
+              <SelectItem value="opensans" style={{ fontFamily: '"Open Sans", Helvetica, Arial, sans-serif' }}>Open Sans</SelectItem>
+              <SelectItem value="roboto" style={{ fontFamily: '"Roboto", Arial, sans-serif' }}>Roboto</SelectItem>
+              <SelectItem value="lato" style={{ fontFamily: '"Lato", Arial, sans-serif' }}>Lato</SelectItem>
+              <SelectItem value="montserrat" style={{ fontFamily: '"Montserrat", Helvetica, sans-serif' }}>Montserrat</SelectItem>
+              <SelectItem value="poppins" style={{ fontFamily: '"Poppins", Arial, sans-serif' }}>Poppins</SelectItem>
+              <SelectItem value="futura" style={{ fontFamily: '"Futura", "Futura PT", Helvetica, Arial, sans-serif' }}>Futura</SelectItem>
+              <SelectItem value="playfair" style={{ fontFamily: '"Playfair Display", Georgia, serif' }}>Playfair Display</SelectItem>
+              <SelectItem value="merriweather" style={{ fontFamily: '"Merriweather", Georgia, serif' }}>Merriweather</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {/* Text Alignment Dropdown */}

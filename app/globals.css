@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@300;400;500;600;700&family=Open+Sans:wght@300;400;500;600;700;800&family=Roboto:wght@100;300;400;500;700;900&family=Lato:wght@100;300;400;700;900&family=Montserrat:wght@100;200;300;400;500;600;700;800;900&family=Poppins:wght@100;200;300;400;500;600;700;800;900&family=Playfair+Display:wght@400;500;600;700;800;900&family=Merriweather:wght@300;400;700;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -33,6 +35,17 @@
     --ring: 215 28% 17%;
 
     --radius: 0.5rem;
+
+    /* Font family variables for email templates */
+    --font-quicksand: 'Quicksand', Helvetica, Arial, sans-serif;
+    --font-opensans: 'Open Sans', Helvetica, Arial, sans-serif;
+    --font-roboto: 'Roboto', Arial, sans-serif;
+    --font-lato: 'Lato', Arial, sans-serif;
+    --font-montserrat: 'Montserrat', Helvetica, sans-serif;
+    --font-poppins: 'Poppins', Arial, sans-serif;
+    --font-futura: 'Futura', 'Futura PT', Helvetica, Arial, sans-serif;
+    --font-playfair: 'Playfair Display', Georgia, serif;
+    --font-merriweather: 'Merriweather', Georgia, serif;
   }
 
   .dark {
@@ -72,6 +85,45 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+/* Email template font utility classes */
+@layer utilities {
+  .font-quicksand {
+    font-family: var(--font-quicksand);
+  }
+  
+  .font-opensans {
+    font-family: var(--font-opensans);
+  }
+  
+  .font-roboto {
+    font-family: var(--font-roboto);
+  }
+  
+  .font-lato {
+    font-family: var(--font-lato);
+  }
+  
+  .font-montserrat {
+    font-family: var(--font-montserrat);
+  }
+  
+  .font-poppins {
+    font-family: var(--font-poppins);
+  }
+  
+  .font-futura {
+    font-family: var(--font-futura);
+  }
+  
+  .font-playfair {
+    font-family: var(--font-playfair);
+  }
+  
+  .font-merriweather {
+    font-family: var(--font-merriweather);
   }
 }
 
