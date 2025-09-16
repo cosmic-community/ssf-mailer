@@ -915,113 +915,115 @@ export default function MediaLibrary({
       
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[600px] max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Upload Files ({uploadFiles.length} selected)</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            {/* Global Settings */}
-            <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
-              <div className="space-y-2">
-                <Label htmlFor="upload-folder">Folder for all files (optional)</Label>
-                <Input
-                  id="upload-folder"
-                  value={uploadFolder}
-                  onChange={(e) => setUploadFolder(e.target.value)}
-                  placeholder="e.g., images, documents"
-                />
+          <div className="flex-1 overflow-y-auto py-4">
+            <div className="space-y-4">
+              {/* Global Settings */}
+              <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
+                <div className="space-y-2">
+                  <Label htmlFor="upload-folder">Folder for all files (optional)</Label>
+                  <Input
+                    id="upload-folder"
+                    value={uploadFolder}
+                    onChange={(e) => setUploadFolder(e.target.value)}
+                    placeholder="e.g., images, documents"
+                  />
+                </div>
               </div>
-            </div>
 
-            {/* File List */}
-            <div className="space-y-3 max-h-60 overflow-y-auto">
-              {uploadFiles.map((file, index) => {
-                // Add null check for file
-                if (!file) {
-                  return (
-                    <div key={`missing-file-${index}`} className="p-4 bg-red-50 rounded-lg">
-                      <p className="text-sm text-red-600">File at index {index} is missing</p>
-                    </div>
-                  )
-                }
-                
-                const fileKey = `${file.name}-${index}`
-                const isImage = file.type.startsWith('image/')
-                
-                return (
-                  <div key={fileKey} className="p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-start space-x-3">
-                      <div className="flex-shrink-0">
-                        {isImage ? (
-                          <ImageIcon className="h-8 w-8 text-blue-600" />
-                        ) : file.type === 'application/pdf' ? (
-                          <FileText className="h-8 w-8 text-red-600" />
-                        ) : (
-                          <File className="h-8 w-8 text-gray-600" />
-                        )}
+              {/* File List */}
+              <div className="space-y-3">
+                {uploadFiles.map((file, index) => {
+                  // Add null check for file
+                  if (!file) {
+                    return (
+                      <div key={`missing-file-${index}`} className="p-4 bg-red-50 rounded-lg">
+                        <p className="text-sm text-red-600">File at index {index} is missing</p>
                       </div>
-                      <div className="flex-1 min-w-0 space-y-2">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900 truncate">
-                            {file.name}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {formatFileSize(file.size)}
-                          </p>
+                    )
+                  }
+                  
+                  const fileKey = `${file.name}-${index}`
+                  const isImage = file.type.startsWith('image/')
+                  
+                  return (
+                    <div key={fileKey} className="p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-start space-x-3">
+                        <div className="flex-shrink-0">
+                          {isImage ? (
+                            <ImageIcon className="h-8 w-8 text-blue-600" />
+                          ) : file.type === 'application/pdf' ? (
+                            <FileText className="h-8 w-8 text-red-600" />
+                          ) : (
+                            <File className="h-8 w-8 text-gray-600" />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0 space-y-2">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900 truncate">
+                              {file.name}
+                            </p>
+                            <p className="text-sm text-gray-500">
+                              {formatFileSize(file.size)}
+                            </p>
+                          </div>
+                          
+                          {/* Alt text for images */}
+                          {isImage && (
+                            <div className="space-y-1">
+                              <Label htmlFor={`alt-text-${fileKey}`} className="text-xs">
+                                Alt Text (optional)
+                              </Label>
+                              <Input
+                                id={`alt-text-${fileKey}`}
+                                value={uploadAltTexts[fileKey] || ''}
+                                onChange={(e) => setUploadAltTexts(prev => ({
+                                  ...prev,
+                                  [fileKey]: e.target.value
+                                }))}
+                                placeholder="Describe the image"
+                                className="text-sm"
+                              />
+                            </div>
+                          )}
+                          
+                          {/* Progress indicator */}
+                          {uploading && (
+                            <div className="space-y-1">
+                              {getUploadProgressIndicator(file, index)}
+                            </div>
+                          )}
                         </div>
                         
-                        {/* Alt text for images */}
-                        {isImage && (
-                          <div className="space-y-1">
-                            <Label htmlFor={`alt-text-${fileKey}`} className="text-xs">
-                              Alt Text (optional)
-                            </Label>
-                            <Input
-                              id={`alt-text-${fileKey}`}
-                              value={uploadAltTexts[fileKey] || ''}
-                              onChange={(e) => setUploadAltTexts(prev => ({
-                                ...prev,
-                                [fileKey]: e.target.value
-                              }))}
-                              placeholder="Describe the image"
-                              className="text-sm"
-                            />
-                          </div>
-                        )}
-                        
-                        {/* Progress indicator */}
-                        {uploading && (
-                          <div className="space-y-1">
-                            {getUploadProgressIndicator(file, index)}
-                          </div>
+                        {/* Remove file button */}
+                        {!uploading && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setUploadFiles(files => files.filter((_, i) => i !== index))
+                              setUploadAltTexts(prev => {
+                                const newAltTexts = { ...prev }
+                                delete newAltTexts[fileKey]
+                                return newAltTexts
+                              })
+                            }}
+                            className="p-1 h-auto"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
-                      
-                      {/* Remove file button */}
-                      {!uploading && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setUploadFiles(files => files.filter((_, i) => i !== index))
-                            setUploadAltTexts(prev => {
-                              const newAltTexts = { ...prev }
-                              delete newAltTexts[fileKey]
-                              return newAltTexts
-                            })
-                          }}
-                          className="p-1 h-auto"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button 
               variant="outline" 
               onClick={() => setShowUploadDialog(false)}
@@ -1042,8 +1044,8 @@ export default function MediaLibrary({
       
       {/* Preview Dialog */}
       <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
-        <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center justify-between">
               <span>Media Preview</span>
               <Button
@@ -1056,141 +1058,143 @@ export default function MediaLibrary({
             </DialogTitle>
           </DialogHeader>
           {previewMedia && (
-            <div className="space-y-4">
-              {/* Media Preview */}
-              <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center min-h-[200px]">
-                {previewMedia.type.startsWith('image/') ? (
-                  <img
-                    src={`${previewMedia.imgix_url}?w=1000&auto=format,compress`}
-                    alt={previewMedia.alt_text || previewMedia.original_name}
-                    className="max-w-full max-h-[400px] object-contain"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="text-center">
-                    <div className="text-gray-400 mb-4">
-                      {getFileTypeIcon(previewMedia.type)}
+            <div className="flex-1 overflow-y-auto">
+              <div className="space-y-4">
+                {/* Media Preview */}
+                <div className="bg-gray-50 rounded-lg p-4 flex items-center justify-center min-h-[200px]">
+                  {previewMedia.type.startsWith('image/') ? (
+                    <img
+                      src={`${previewMedia.imgix_url}?w=1000&auto=format,compress`}
+                      alt={previewMedia.alt_text || previewMedia.original_name}
+                      className="max-w-full max-h-[400px] object-contain"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="text-center">
+                      <div className="text-gray-400 mb-4">
+                        {getFileTypeIcon(previewMedia.type)}
+                      </div>
+                      <p className="text-sm text-gray-600">
+                        Preview not available for this file type
+                      </p>
                     </div>
+                  )}
+                </div>
+                
+                {/* Media Details */}
+                <div className="space-y-3">
+                  <div>
+                    <Label className="text-sm font-medium">File Name</Label>
+                    <p className="text-sm text-gray-600">{previewMedia.original_name}</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium">Type</Label>
+                      <p className="text-sm text-gray-600">{previewMedia.type}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium">Size</Label>
+                      <p className="text-sm text-gray-600">{formatFileSize(previewMedia.size)}</p>
+                    </div>
+                  </div>
+                  
+                  {previewMedia.width && previewMedia.height && (
+                    <div>
+                      <Label className="text-sm font-medium">Dimensions</Label>
+                      <p className="text-sm text-gray-600">
+                        {previewMedia.width} × {previewMedia.height} pixels
+                      </p>
+                    </div>
+                  )}
+                  
+                  {previewMedia.folder && (
+                    <div>
+                      <Label className="text-sm font-medium">Folder</Label>
+                      <p className="text-sm text-gray-600">{previewMedia.folder}</p>
+                    </div>
+                  )}
+                  
+                  {previewMedia.alt_text && (
+                    <div>
+                      <Label className="text-sm font-medium">Alt Text</Label>
+                      <p className="text-sm text-gray-600">{previewMedia.alt_text}</p>
+                    </div>
+                  )}
+                  
+                  <div>
+                    <Label className="text-sm font-medium">Uploaded</Label>
                     <p className="text-sm text-gray-600">
-                      Preview not available for this file type
+                      {new Date(previewMedia.created_at).toLocaleString()}
                     </p>
                   </div>
-                )}
-              </div>
-              
-              {/* Media Details */}
-              <div className="space-y-3">
-                <div>
-                  <Label className="text-sm font-medium">File Name</Label>
-                  <p className="text-sm text-gray-600">{previewMedia.original_name}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
+                  
                   <div>
-                    <Label className="text-sm font-medium">Type</Label>
-                    <p className="text-sm text-gray-600">{previewMedia.type}</p>
+                    <Label className="text-sm font-medium">URL</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        value={previewMedia.url}
+                        readOnly
+                        className="text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleCopyUrl(previewMedia.url)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
                   </div>
+                  
                   <div>
-                    <Label className="text-sm font-medium">Size</Label>
-                    <p className="text-sm text-gray-600">{formatFileSize(previewMedia.size)}</p>
-                  </div>
-                </div>
-                
-                {previewMedia.width && previewMedia.height && (
-                  <div>
-                    <Label className="text-sm font-medium">Dimensions</Label>
-                    <p className="text-sm text-gray-600">
-                      {previewMedia.width} × {previewMedia.height} pixels
-                    </p>
-                  </div>
-                )}
-                
-                {previewMedia.folder && (
-                  <div>
-                    <Label className="text-sm font-medium">Folder</Label>
-                    <p className="text-sm text-gray-600">{previewMedia.folder}</p>
-                  </div>
-                )}
-                
-                {previewMedia.alt_text && (
-                  <div>
-                    <Label className="text-sm font-medium">Alt Text</Label>
-                    <p className="text-sm text-gray-600">{previewMedia.alt_text}</p>
-                  </div>
-                )}
-                
-                <div>
-                  <Label className="text-sm font-medium">Uploaded</Label>
-                  <p className="text-sm text-gray-600">
-                    {new Date(previewMedia.created_at).toLocaleString()}
-                  </p>
-                </div>
-                
-                <div>
-                  <Label className="text-sm font-medium">URL</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      value={previewMedia.url}
-                      readOnly
-                      className="text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleCopyUrl(previewMedia.url)}
-                    >
-                      Copy
-                    </Button>
+                    <Label className="text-sm font-medium">Optimized URL (imgix)</Label>
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        value={previewMedia.imgix_url}
+                        readOnly
+                        className="text-xs"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleCopyUrl(previewMedia.imgix_url)}
+                      >
+                        Copy
+                      </Button>
+                    </div>
                   </div>
                 </div>
                 
-                <div>
-                  <Label className="text-sm font-medium">Optimized URL (imgix)</Label>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      value={previewMedia.imgix_url}
-                      readOnly
-                      className="text-xs"
-                    />
-                    <Button
-                      size="sm"
-                      onClick={() => handleCopyUrl(previewMedia.imgix_url)}
-                    >
-                      Copy
-                    </Button>
-                  </div>
+                {/* Action Buttons */}
+                <div className="flex gap-2 pt-4 border-t">
+                  <Button
+                    variant="outline"
+                    onClick={() => handleDownloadMedia(previewMedia)}
+                    className="flex-1"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Download
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setShowPreviewDialog(false)
+                      handleEditMedia(previewMedia)
+                    }}
+                    className="flex-1"
+                  >
+                    <Edit3 className="h-4 w-4 mr-2" />
+                    Edit
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={() => {
+                      setShowPreviewDialog(false)
+                      handleDeleteMedia(previewMedia)
+                    }}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 </div>
-              </div>
-              
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-4 border-t">
-                <Button
-                  variant="outline"
-                  onClick={() => handleDownloadMedia(previewMedia)}
-                  className="flex-1"
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Download
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowPreviewDialog(false)
-                    handleEditMedia(previewMedia)
-                  }}
-                  className="flex-1"
-                >
-                  <Edit3 className="h-4 w-4 mr-2" />
-                  Edit
-                </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setShowPreviewDialog(false)
-                    handleDeleteMedia(previewMedia)
-                  }}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           )}
@@ -1199,45 +1203,47 @@ export default function MediaLibrary({
       
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[425px] max-h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Media</DialogTitle>
           </DialogHeader>
           {editingMedia && (
-            <div className="space-y-4 py-4">
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-900">
-                  {editingMedia.original_name}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {formatFileSize(editingMedia.size)}
-                </p>
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="edit-folder">Folder</Label>
-                <Input
-                  id="edit-folder"
-                  value={editFolder}
-                  onChange={(e) => setEditFolder(e.target.value)}
-                  placeholder="Leave empty to remove from folder"
-                />
-              </div>
-              
-              {editingMedia.type.startsWith('image/') && (
+            <div className="flex-1 overflow-y-auto py-4">
+              <div className="space-y-4">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm font-medium text-gray-900">
+                    {editingMedia.original_name}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    {formatFileSize(editingMedia.size)}
+                  </p>
+                </div>
+                
                 <div className="space-y-2">
-                  <Label htmlFor="edit-alt-text">Alt Text</Label>
+                  <Label htmlFor="edit-folder">Folder</Label>
                   <Input
-                    id="edit-alt-text"
-                    value={editAltText}
-                    onChange={(e) => setEditAltText(e.target.value)}
-                    placeholder="Describe the image"
+                    id="edit-folder"
+                    value={editFolder}
+                    onChange={(e) => setEditFolder(e.target.value)}
+                    placeholder="Leave empty to remove from folder"
                   />
                 </div>
-              )}
+                
+                {editingMedia.type.startsWith('image/') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-alt-text">Alt Text</Label>
+                    <Input
+                      id="edit-alt-text"
+                      value={editAltText}
+                      onChange={(e) => setEditAltText(e.target.value)}
+                      placeholder="Describe the image"
+                    />
+                  </div>
+                )}
+              </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button 
               variant="outline" 
               onClick={() => setShowEditDialog(false)}
