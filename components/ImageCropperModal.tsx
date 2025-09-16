@@ -155,7 +155,7 @@ export default function ImageCropperModal({
     }
   }, [maintainAspect, aspectRatio]);
 
-  // Create imgix cropped URL and convert to File with precise coordinate calculation
+  // FIXED: Create imgix cropped URL with proper coordinate calculation
   const getCroppedImgixFile = useCallback(async (
     crop: PixelCrop,
     fileName: string
@@ -170,43 +170,46 @@ export default function ImageCropperModal({
       displayed: displayImageDimensions
     });
 
-    // Calculate precise scale factors between displayed image and original image
+    // CRITICAL FIX: Calculate precise scale factors
+    // The displayed image might be scaled down/up from the original
     const scaleX = originalImageDimensions.width / displayImageDimensions.width;
     const scaleY = originalImageDimensions.height / displayImageDimensions.height;
 
     console.log('Scale factors:', { scaleX, scaleY });
 
-    // Calculate crop coordinates in original image space with proper rounding
-    const cropX = Math.round(crop.x * scaleX);
-    const cropY = Math.round(crop.y * scaleY);
-    const cropWidth = Math.round(crop.width * scaleX);
-    const cropHeight = Math.round(crop.height * scaleY);
+    // FIXED: Convert crop coordinates from displayed image space to original image space
+    // ReactCrop provides pixel coordinates relative to the displayed image
+    const originalX = Math.round(crop.x * scaleX);
+    const originalY = Math.round(crop.y * scaleY);
+    const originalWidth = Math.round(crop.width * scaleX);
+    const originalHeight = Math.round(crop.height * scaleY);
 
-    // Ensure crop coordinates don't exceed original image boundaries
-    const finalCropX = Math.max(0, Math.min(cropX, originalImageDimensions.width - 1));
-    const finalCropY = Math.max(0, Math.min(cropY, originalImageDimensions.height - 1));
-    const finalCropWidth = Math.max(1, Math.min(cropWidth, originalImageDimensions.width - finalCropX));
-    const finalCropHeight = Math.max(1, Math.min(cropHeight, originalImageDimensions.height - finalCropY));
+    // FIXED: Ensure crop coordinates are within bounds
+    const clampedX = Math.max(0, Math.min(originalX, originalImageDimensions.width - 1));
+    const clampedY = Math.max(0, Math.min(originalY, originalImageDimensions.height - 1));
+    const clampedWidth = Math.max(1, Math.min(originalWidth, originalImageDimensions.width - clampedX));
+    const clampedHeight = Math.max(1, Math.min(originalHeight, originalImageDimensions.height - clampedY));
 
-    console.log('Final crop coordinates:', {
-      x: finalCropX,
-      y: finalCropY,
-      width: finalCropWidth,
-      height: finalCropHeight
+    console.log('Final crop coordinates (original image space):', {
+      x: clampedX,
+      y: clampedY,
+      width: clampedWidth,
+      height: clampedHeight
     });
 
-    // Build imgix URL with precise crop parameters
+    // FIXED: Build imgix URL with correct crop parameters
+    // Imgix rect parameter format: x,y,width,height (all in original image coordinates)
     const imgixParams = new URLSearchParams({
-      // Crop parameters (in original image coordinates) - imgix uses x,y,width,height format
-      rect: `${finalCropX},${finalCropY},${finalCropWidth},${finalCropHeight}`,
-      // Output size
+      // CRITICAL: Use correct imgix crop parameter
+      rect: `${clampedX},${clampedY},${clampedWidth},${clampedHeight}`,
+      // Output dimensions
       w: outputWidth.toString(),
       h: outputHeight.toString(),
-      // Quality and format
+      // Quality and format optimization
       auto: 'format,compress',
       q: Math.round(quality * 100).toString(),
-      // Fit mode - use fill to ensure exact dimensions
-      fit: 'fill'
+      // FIXED: Use 'crop' instead of 'fill' for precise cropping
+      fit: 'crop'
     });
 
     const croppedImageUrl = `${mediaItem.imgix_url}?${imgixParams.toString()}`;
@@ -216,7 +219,7 @@ export default function ImageCropperModal({
       // Fetch the cropped image from imgix
       const response = await fetch(croppedImageUrl);
       if (!response.ok) {
-        throw new Error(`Failed to fetch cropped image: ${response.statusText}`);
+        throw new Error(`Failed to fetch cropped image: ${response.status} ${response.statusText}`);
       }
 
       const blob = await response.blob();
@@ -455,7 +458,7 @@ export default function ImageCropperModal({
               )}
               {completedCrop && (
                 <p className="text-xs text-blue-800 mt-1">
-                  <strong>Crop:</strong> {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}px
+                  <strong>Crop:</strong> {Math.round(completedCrop.width)}×{Math.round(completedCrop.height)}px (display space)
                 </p>
               )}
             </div>
