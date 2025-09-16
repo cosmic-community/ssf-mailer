@@ -755,17 +755,17 @@ export default function HtmlEditingToolbar({
           }
         }}
       >
-        <DialogContent className="sm:max-w-[900px] max-h-[80vh]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[900px] max-h-[85vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center space-x-2">
               <Image className="h-5 w-5 text-green-600" />
               <span>{imageDialog.element ? "Edit Image" : "Insert Image"}</span>
             </DialogTitle>
           </DialogHeader>
           
-          <div className="pt-4">
+          <div className="flex-1 overflow-hidden flex flex-col pt-4">
             <Tabs value={activeImageTab} onValueChange={(value) => setActiveImageTab(value as "url" | "media")}>
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
                 <TabsTrigger value="media" className="flex items-center space-x-2">
                   <Upload className="h-4 w-4" />
                   <span>Media Library</span>
@@ -776,80 +776,82 @@ export default function HtmlEditingToolbar({
                 </TabsTrigger>
               </TabsList>
               
-              <TabsContent value="media" className="space-y-4 mt-4">
-                <div className="border rounded-lg p-4 max-h-[400px] overflow-y-auto">
-                  <MediaLibrary 
-                    selectionMode={true}
-                    onSelect={handleMediaSelect}
-                    selectedMedia={selectedMedia}
-                  />
-                </div>
-                
-                {selectedMedia && (
-                  <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
-                        {selectedMedia.type.startsWith('image/') ? (
-                          <img
-                            src={`${selectedMedia.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
-                            alt={selectedMedia.alt_text || selectedMedia.original_name}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            <Image className="h-8 w-8" />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {selectedMedia.original_name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {(selectedMedia.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                        {selectedMedia.alt_text && (
-                          <p className="text-xs text-gray-600 mt-1">
-                            Alt: {selectedMedia.alt_text}
+              <div className="flex-1 overflow-y-auto mt-4">
+                <TabsContent value="media" className="space-y-4 mt-0">
+                  <div className="border rounded-lg p-4 max-h-[350px] overflow-y-auto">
+                    <MediaLibrary 
+                      selectionMode={true}
+                      onSelect={handleMediaSelect}
+                      selectedMedia={selectedMedia}
+                    />
+                  </div>
+                  
+                  {selectedMedia && (
+                    <div className="space-y-3 p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                          {selectedMedia.type.startsWith('image/') ? (
+                            <img
+                              src={`${selectedMedia.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
+                              alt={selectedMedia.alt_text || selectedMedia.original_name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              <Image className="h-8 w-8" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {selectedMedia.original_name}
                           </p>
-                        )}
+                          <p className="text-xs text-gray-500">
+                            {(selectedMedia.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                          {selectedMedia.alt_text && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Alt: {selectedMedia.alt_text}
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  )}
+                </TabsContent>
+                
+                <TabsContent value="url" className="space-y-4 mt-0">
+                  <div className="space-y-2">
+                    <Label htmlFor="image-url">Image URL *</Label>
+                    <Input
+                      id="image-url"
+                      value={imageDialog.url}
+                      onChange={(e) =>
+                        setImageDialog((prev) => ({ ...prev, url: e.target.value }))
+                      }
+                      onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
+                      placeholder="https://example.com/image.jpg"
+                      autoFocus={activeImageTab === "url"}
+                    />
                   </div>
-                )}
-              </TabsContent>
-              
-              <TabsContent value="url" className="space-y-4 mt-4">
-                <div className="space-y-2">
-                  <Label htmlFor="image-url">Image URL *</Label>
-                  <Input
-                    id="image-url"
-                    value={imageDialog.url}
-                    onChange={(e) =>
-                      setImageDialog((prev) => ({ ...prev, url: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
-                    placeholder="https://example.com/image.jpg"
-                    autoFocus={activeImageTab === "url"}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="image-alt-url">Alt Text</Label>
-                  <Input
-                    id="image-alt-url"
-                    value={imageDialog.alt}
-                    onChange={(e) =>
-                      setImageDialog((prev) => ({ ...prev, alt: e.target.value }))
-                    }
-                    onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
-                    placeholder="Describe the image"
-                  />
-                </div>
-              </TabsContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="image-alt-url">Alt Text</Label>
+                    <Input
+                      id="image-alt-url"
+                      value={imageDialog.alt}
+                      onChange={(e) =>
+                        setImageDialog((prev) => ({ ...prev, alt: e.target.value }))
+                      }
+                      onKeyDown={(e) => handleKeyDown(e, handleImageSave)}
+                      placeholder="Describe the image"
+                    />
+                  </div>
+                </TabsContent>
+              </div>
             </Tabs>
             
-            {/* Link URL field (shared between tabs) */}
-            <div className="space-y-2 mt-4">
+            {/* Link URL field (shared between tabs) - Now inside the scrollable area */}
+            <div className="space-y-2 mt-4 flex-shrink-0">
               <Label htmlFor="image-link">Link URL (optional)</Label>
               <Input
                 id="image-link"
@@ -864,30 +866,31 @@ export default function HtmlEditingToolbar({
                 Make the image clickable by adding a link URL
               </p>
             </div>
-            
-            <div className="flex justify-end space-x-2 pt-6 border-t">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setImageDialog({ url: "", alt: "", link: "", isOpen: false });
-                  setSelectedMedia(null);
-                  setActiveImageTab("media");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleImageSave}
-                disabled={
-                  activeImageTab === "media" 
-                    ? !selectedMedia 
-                    : !imageDialog.url.trim()
-                }
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {imageDialog.element ? "Update Image" : "Insert Image"}
-              </Button>
-            </div>
+          </div>
+          
+          {/* Fixed footer outside the scrollable area */}
+          <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200 flex-shrink-0 bg-white">
+            <Button
+              variant="outline"
+              onClick={() => {
+                setImageDialog({ url: "", alt: "", link: "", isOpen: false });
+                setSelectedMedia(null);
+                setActiveImageTab("media");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleImageSave}
+              disabled={
+                activeImageTab === "media" 
+                  ? !selectedMedia 
+                  : !imageDialog.url.trim()
+              }
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {imageDialog.element ? "Update Image" : "Insert Image"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
