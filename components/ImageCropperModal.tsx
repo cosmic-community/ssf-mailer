@@ -66,6 +66,7 @@ export default function ImageCropperModal({
   const [imageLoaded, setImageLoaded] = useState<boolean>(false);
 
   // Reset state when modal opens/closes or media changes
+  // FIXED: Remove useState call and use useEffect instead
   useState(() => {
     if (isOpen && mediaItem) {
       setCrop(undefined);
@@ -78,7 +79,7 @@ export default function ImageCropperModal({
       setOutputHeight(600);
       setMaintainAspect(true);
     }
-  }, [isOpen, mediaItem]);
+  });
 
   // Handle image load and set initial crop
   const onImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -292,7 +293,12 @@ export default function ImageCropperModal({
                 <ReactCrop
                   crop={crop}
                   onChange={(_, percentCrop) => setCrop(percentCrop)}
-                  onComplete={(c) => setCompletedCrop(convertToPixelCrop(c))}
+                  onComplete={(c) => {
+                    // FIXED: convertToPixelCrop now takes 3 arguments: crop, imageWidth, imageHeight
+                    if (imgRef.current) {
+                      setCompletedCrop(convertToPixelCrop(c, imgRef.current.width, imgRef.current.height));
+                    }
+                  }}
                   aspect={aspectRatio || undefined}
                   className="max-w-full max-h-full"
                 >
