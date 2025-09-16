@@ -1020,9 +1020,9 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           <CardTitle>Template Content</CardTitle>
         </CardHeader>
         <CardContent className="px-6 pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Left Column: Edit Content with AI */}
-            <div className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: Edit Content with AI - 1/3 width */}
+            <div className="space-y-6 lg:col-span-1">
               <Card className="border-purple-200 bg-purple-50/50">
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2 text-purple-800">
@@ -1213,8 +1213,8 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
               </Card>
             </div>
 
-            {/* Right Column: Template Content with Toolbar */}
-            <div className="space-y-4">
+            {/* Right Column: Template Content with Toolbar - 2/3 width */}
+            <div className="space-y-4 lg:col-span-2">
               <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
                   <div className="flex items-center justify-between">
