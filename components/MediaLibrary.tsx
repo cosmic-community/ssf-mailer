@@ -41,11 +41,13 @@ import {
   X,
   Cloud,
   AlertCircle,
-  CheckCircle
+  CheckCircle,
+  Crop
 } from 'lucide-react'
 import { MediaItem } from '@/types'
 import { useToast } from '@/hooks/useToast'
 import ToastContainer from '@/components/ToastContainer'
+import ImageCropperModal from '@/components/ImageCropperModal'
 
 interface MediaLibraryProps {
   selectionMode?: boolean
@@ -97,6 +99,10 @@ export default function MediaLibrary({
   const [editingMedia, setEditingMedia] = useState<MediaItem | null>(null)
   const [editFolder, setEditFolder] = useState('')
   const [editAltText, setEditAltText] = useState('')
+  
+  // Image cropper state
+  const [showCropperModal, setShowCropperModal] = useState(false)
+  const [cropperMedia, setCropperMedia] = useState<MediaItem | null>(null)
   
   // Debounced search state
   const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('')
@@ -317,6 +323,56 @@ export default function MediaLibrary({
     } finally {
       setUploading(false)
     }
+  }
+
+  // Handle crop completion
+  const handleCropComplete = async (croppedImageFile: File, originalMedia: MediaItem) => {
+    try {
+      // Upload the cropped image
+      const formData = new FormData()
+      formData.append('file', croppedImageFile)
+      
+      // Preserve the folder from original media
+      if (originalMedia.folder) {
+        formData.append('folder', originalMedia.folder)
+      }
+      
+      // Set alt text based on original
+      const croppedAltText = originalMedia.alt_text 
+        ? `${originalMedia.alt_text} (cropped)` 
+        : `${originalMedia.original_name} (cropped)`
+      formData.append('alt_text', croppedAltText)
+      
+      const response = await fetch('/api/media', {
+        method: 'POST',
+        body: formData
+      })
+      
+      const data = await response.json()
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload cropped image')
+      }
+      
+      addToast('Cropped image saved successfully!', 'success')
+      
+      // Refresh media list
+      await fetchMedia(currentPage)
+      
+    } catch (error) {
+      console.error('Error saving cropped image:', error)
+      addToast(error instanceof Error ? error.message : 'Failed to save cropped image', 'error')
+    }
+  }
+
+  // Handle media crop
+  const handleCropMedia = (mediaItem: MediaItem) => {
+    if (!mediaItem.type.startsWith('image/')) {
+      addToast('Only images can be cropped', 'error')
+      return
+    }
+    setCropperMedia(mediaItem)
+    setShowCropperModal(true)
   }
   
   // Handle media edit - server-side
@@ -801,6 +857,16 @@ export default function MediaLibrary({
                               >
                                 <Eye className="h-4 w-4" />
                               </Button>
+                              {item.type.startsWith('image/') && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => handleCropMedia(item)}
+                                  title="Crop Image"
+                                >
+                                  <Crop className="h-4 w-4" />
+                                </Button>
+                              )}
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -1174,6 +1240,19 @@ export default function MediaLibrary({
                     <Download className="h-4 w-4 mr-2" />
                     Download
                   </Button>
+                  {previewMedia.type.startsWith('image/') && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setShowPreviewDialog(false)
+                        handleCropMedia(previewMedia)
+                      }}
+                      className="flex-1"
+                    >
+                      <Crop className="h-4 w-4 mr-2" />
+                      Crop
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     onClick={() => {
@@ -1259,6 +1338,15 @@ export default function MediaLibrary({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={showCropperModal}
+        onOpenChange={setShowCropperModal}
+        mediaItem={cropperMedia}
+        onCropComplete={handleCropComplete}
+        onError={(error) => addToast(error, 'error')}
+      />
     </>
   )
 }

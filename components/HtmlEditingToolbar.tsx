@@ -18,8 +18,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bold, Italic, Link, Image, ExternalLink, Palette, Upload, Type } from "lucide-react";
+import { Bold, Italic, Link, Image, ExternalLink, Palette, Upload, Type, Crop } from "lucide-react";
 import MediaLibrary from "@/components/MediaLibrary";
+import ImageCropperModal from "@/components/ImageCropperModal";
 import { MediaItem } from "@/types";
 
 interface HtmlEditingToolbarProps {
@@ -129,6 +130,10 @@ export default function HtmlEditingToolbar({
   // Media selection state
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [activeImageTab, setActiveImageTab] = useState<"url" | "media">("media");
+  
+  // Image cropping state
+  const [showCropperModal, setShowCropperModal] = useState(false);
+  const [cropperMedia, setCropperMedia] = useState<MediaItem | null>(null);
 
   // Listen for edit events from links and images
   React.useEffect(() => {
@@ -413,6 +418,58 @@ export default function HtmlEditingToolbar({
       url: media.imgix_url || media.url,
       alt: media.alt_text || media.original_name || "Image"
     }));
+  };
+
+  // Handle crop button click in media library
+  const handleMediaCrop = (media: MediaItem) => {
+    if (!media.type.startsWith('image/')) {
+      return;
+    }
+    setCropperMedia(media);
+    setShowCropperModal(true);
+  };
+
+  // Handle crop completion
+  const handleCropComplete = async (croppedImageFile: File, originalMedia: MediaItem) => {
+    try {
+      // Upload the cropped image
+      const formData = new FormData();
+      formData.append('file', croppedImageFile);
+      
+      // Preserve folder from original if it exists
+      if (originalMedia.folder) {
+        formData.append('folder', originalMedia.folder);
+      }
+      
+      // Set alt text based on original
+      const croppedAltText = originalMedia.alt_text 
+        ? `${originalMedia.alt_text} (cropped)` 
+        : `${originalMedia.original_name} (cropped)`;
+      formData.append('alt_text', croppedAltText);
+      
+      const response = await fetch('/api/media', {
+        method: 'POST',
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to upload cropped image');
+      }
+      
+      // Use the cropped image
+      setSelectedMedia(data.media as MediaItem);
+      setImageDialog(prev => ({
+        ...prev,
+        url: data.media.imgix_url || data.media.url,
+        alt: data.media.alt_text || data.media.original_name || "Image"
+      }));
+      
+    } catch (error) {
+      console.error('Error saving cropped image:', error);
+      // You might want to show a toast notification here
+    }
   };
 
   const handleImageSave = () => {
@@ -818,7 +875,7 @@ export default function HtmlEditingToolbar({
         </DialogContent>
       </Dialog>
 
-      {/* Image Dialog with Media Library Integration */}
+      {/* Image Dialog with Media Library Integration and Cropping */}
       <Dialog
         open={imageDialog.isOpen}
         onOpenChange={(open) => {
@@ -889,6 +946,18 @@ export default function HtmlEditingToolbar({
                             </p>
                           )}
                         </div>
+                        {selectedMedia.type.startsWith('image/') && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleMediaCrop(selectedMedia)}
+                            className="flex items-center space-x-1"
+                          >
+                            <Crop className="h-4 w-4" />
+                            <span>Crop</span>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   )}
@@ -968,6 +1037,18 @@ export default function HtmlEditingToolbar({
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Image Cropper Modal */}
+      <ImageCropperModal
+        isOpen={showCropperModal}
+        onOpenChange={setShowCropperModal}
+        mediaItem={cropperMedia}
+        onCropComplete={handleCropComplete}
+        onError={(error) => {
+          console.error('Crop error:', error);
+          // You might want to show a toast notification here
+        }}
+      />
     </>
   );
 }
