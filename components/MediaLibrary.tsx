@@ -39,7 +39,7 @@ import {
   ChevronRight,
   RefreshCw,
   X,
-  CloudUpload,
+  Cloud,
   AlertCircle,
   CheckCircle
 } from 'lucide-react'
@@ -248,6 +248,13 @@ export default function MediaLibrary({
       // Upload files one by one to track progress
       for (let i = 0; i < uploadFiles.length; i++) {
         const file = uploadFiles[i]
+        
+        // Add null check for file
+        if (!file) {
+          errors.push(`File at index ${i}: File is undefined`)
+          continue
+        }
+        
         const fileKey = `${file.name}-${i}`
         
         try {
@@ -434,6 +441,10 @@ export default function MediaLibrary({
 
   // Get upload progress indicator
   const getUploadProgressIndicator = (file: File, index: number) => {
+    if (!file) {
+      return <div className="w-full bg-gray-200 rounded-full h-1" />
+    }
+    
     const fileKey = `${file.name}-${index}`
     const progress = uploadProgress[fileKey]
     
@@ -490,7 +501,7 @@ export default function MediaLibrary({
         >
           <input {...getInputProps()} />
           
-          <CloudUpload 
+          <Cloud 
             className={`mx-auto h-12 w-12 mb-4 ${
               isDragActive ? 'text-blue-500' : 'text-gray-400'
             }`} 
@@ -925,6 +936,15 @@ export default function MediaLibrary({
             {/* File List */}
             <div className="space-y-3 max-h-60 overflow-y-auto">
               {uploadFiles.map((file, index) => {
+                // Add null check for file
+                if (!file) {
+                  return (
+                    <div key={`missing-file-${index}`} className="p-4 bg-red-50 rounded-lg">
+                      <p className="text-sm text-red-600">File at index {index} is missing</p>
+                    </div>
+                  )
+                }
+                
                 const fileKey = `${file.name}-${index}`
                 const isImage = file.type.startsWith('image/')
                 
