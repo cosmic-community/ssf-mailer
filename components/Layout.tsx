@@ -1,217 +1,175 @@
-'use client'
+"use client"
 
-import { useState, useEffect } from 'react'
-import { useRouter, usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import { 
-  Home, 
-  Users, 
   Mail, 
+  Users, 
+  FileText, 
   Send, 
   Settings, 
   Menu, 
   X,
-  BarChart3
+  BarChart3,
+  Image as ImageIcon
 } from 'lucide-react'
-import LogoutButton from './LogoutButton'
-import CosmicBadge from './CosmicBadge'
+import { Button } from '@/components/ui/button'
+import LogoutButton from '@/components/LogoutButton'
 
 interface LayoutProps {
   children: React.ReactNode
-  showNav?: boolean
 }
 
-export default function Layout({ children, showNav = true }: LayoutProps) {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+export default function Layout({ children }: LayoutProps) {
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
-  const router = useRouter()
   const pathname = usePathname()
 
-  // Check authentication status
   useEffect(() => {
-    const checkAuth = async () => {
-      try {
-        const response = await fetch('/api/auth/check', {
-          method: 'GET',
-          credentials: 'include'
-        })
-        setIsAuthenticated(response.ok)
-      } catch (error) {
-        setIsAuthenticated(false)
-      }
-    }
+    checkAuth()
+  }, [])
 
-    // Only check auth on client side and if not on login page
-    if (typeof window !== 'undefined' && pathname !== '/login') {
-      checkAuth()
-    } else if (pathname === '/login') {
+  const checkAuth = async () => {
+    try {
+      const response = await fetch('/api/auth/check')
+      setIsAuthenticated(response.ok)
+    } catch (error) {
       setIsAuthenticated(false)
     }
-  }, [pathname])
-
-  const navigation = [
-    { name: 'Dashboard', href: '/', icon: Home },
-    { name: 'Contacts', href: '/contacts', icon: Users },
-    { name: 'Templates', href: '/templates', icon: Mail },
-    { name: 'Campaigns', href: '/campaigns', icon: Send },
-    // { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-    { name: 'Settings', href: '/settings', icon: Settings },
-  ]
-
-  const isActive = (href: string) => {
-    if (href === '/') {
-      return pathname === '/'
-    }
-    return pathname?.startsWith(href)
   }
 
-  const handleNavClick = (href: string, e: React.MouseEvent) => {
-    // Allow Cmd+Click (Mac) or Ctrl+Click (Windows/Linux) to open in new tab
-    if (e.metaKey || e.ctrlKey) {
-      return // Let the browser handle it naturally
-    }
-    
-    // For regular clicks, prevent default and use programmatic navigation
-    e.preventDefault()
-    
-    // Force a hard navigation to ensure proper route handling
-    if (href === '/') {
-      router.push('/')
-      router.refresh()
-    } else {
-      router.push(href)
-    }
-    setMobileMenuOpen(false)
-  }
-
-  // Don't show nav if explicitly disabled, user not authenticated, or still checking auth
-  if (!showNav || isAuthenticated === false || isAuthenticated === null) {
+  // Show loading state while checking authentication
+  if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen bg-gray-50">
-        <main className="w-full">
-          {children}
-        </main>
-        <CosmicBadge bucketSlug={process.env.NEXT_PUBLIC_COSMIC_BUCKET_SLUG || ''} />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
       </div>
     )
   }
 
+  // Show login page if not authenticated
+  if (!isAuthenticated && pathname !== '/login' && pathname !== '/subscribe' && pathname !== '/subscribe/success') {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+          <div className="text-center mb-6">
+            <Mail className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Email Marketing</h1>
+            <p className="text-gray-600">Please log in to continue</p>
+          </div>
+          <Link 
+            href="/login"
+            className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors inline-block text-center"
+          >
+            Go to Login
+          </Link>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't show navigation for certain pages
+  if (pathname === '/login' || pathname === '/subscribe' || pathname === '/subscribe/success') {
+    return children
+  }
+
+  const navigation = [
+    { name: 'Dashboard', href: '/', icon: BarChart3 },
+    { name: 'Campaigns', href: '/campaigns', icon: Send },
+    { name: 'Contacts', href: '/contacts', icon: Users },
+    { name: 'Templates', href: '/templates', icon: FileText },
+    { name: 'Media Library', href: '/media', icon: ImageIcon },
+    { name: 'Settings', href: '/settings', icon: Settings },
+  ]
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Top Navigation Bar */}
-      <header className="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-50">
-        <div className="mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            {/* Logo */}
+    <div className="flex h-screen bg-gray-100">
+      {/* Mobile sidebar backdrop */}
+      {sidebarOpen && (
+        <div 
+          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div className={`
+        fixed inset-y-0 left-0 z-50 w-64 bg-white shadow-lg transform transition-transform duration-300 ease-in-out
+        lg:translate-x-0 lg:static lg:inset-0
+        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+      `}>
+        <div className="flex flex-col h-full">
+          {/* Logo */}
+          <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
             <div className="flex items-center">
-              <Link href="/" className="flex items-center space-x-2" onClick={(e) => handleNavClick('/', e)}>
-                <Mail className="h-8 w-8 text-blue-600" />
-                <span className="text-xl font-bold text-gray-900">Cosmic Email Marketing</span>
-              </Link>
+              <Mail className="h-8 w-8 text-blue-600" />
+              <span className="ml-2 text-xl font-semibold text-gray-900">EmailHub</span>
             </div>
+            <button 
+              className="lg:hidden"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <X className="h-6 w-6 text-gray-400" />
+            </button>
+          </div>
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center space-x-8">
-              {navigation.map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    onClick={(e) => handleNavClick(item.href, e)}
-                    className={`
-                      flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                      ${isActive(item.href)
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                      }
-                    `}
-                  >
-                    <Icon className="mr-2 h-4 w-4" />
-                    {item.name}
-                  </Link>
-                )
-              })}
-            </nav>
+          {/* Navigation */}
+          <nav className="flex-1 px-4 py-4 space-y-1">
+            {navigation.map((item) => {
+              const isActive = pathname === item.href || (item.href !== '/' && pathname.startsWith(item.href))
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`
+                    flex items-center px-2 py-2 text-sm font-medium rounded-md transition-colors
+                    ${isActive 
+                      ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700' 
+                      : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                    }
+                  `}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <item.icon className={`mr-3 h-5 w-5 ${isActive ? 'text-blue-500' : 'text-gray-400'}`} />
+                  {item.name}
+                </Link>
+              )
+            })}
+          </nav>
 
-            {/* Right side - Desktop logout */}
-            <div className="hidden md:flex items-center">
-              <LogoutButton />
-            </div>
-
-            {/* Mobile menu button */}
-            <div className="md:hidden">
-              <button
-                onClick={() => setMobileMenuOpen(true)}
-                className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-              >
-                <Menu className="h-6 w-6" />
-              </button>
-            </div>
+          {/* User section */}
+          <div className="flex-shrink-0 p-4 border-t border-gray-200">
+            <LogoutButton />
           </div>
         </div>
+      </div>
 
-        {/* Mobile Navigation Overlay */}
-        {mobileMenuOpen && (
-          <div className="md:hidden">
-            <div 
-              className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75"
-              onClick={() => setMobileMenuOpen(false)}
-            />
-            <div className="fixed top-0 right-0 bottom-0 w-64 bg-white shadow-xl z-50 overflow-y-auto">
-              {/* Mobile menu header */}
-              <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-                <Link href="/" className="flex items-center space-x-2" onClick={(e) => handleNavClick('/', e)}>
-                  <Mail className="h-6 w-6 text-blue-600" />
-                  <span className="text-lg font-bold text-gray-900">Cosmic Email Marketing</span>
-                </Link>
-                <button
-                  onClick={() => setMobileMenuOpen(false)}
-                  className="p-2 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100"
-                >
-                  <X className="h-5 w-5" />
-                </button>
-              </div>
-
-              {/* Mobile menu items */}
-              <nav className="mt-6 px-3">
-                {navigation.map((item) => {
-                  const Icon = item.icon
-                  return (
-                    <Link
-                      key={item.name}
-                      href={item.href}
-                      className={`
-                        flex items-center px-3 py-2 mb-1 text-sm font-medium rounded-md transition-colors
-                        ${isActive(item.href)
-                          ? 'bg-blue-50 text-blue-700'
-                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-                        }
-                      `}
-                      onClick={(e) => handleNavClick(item.href, e)}
-                    >
-                      <Icon className="mr-3 h-5 w-5" />
-                      {item.name}
-                    </Link>
-                  )
-                })}
-              </nav>
-
-              {/* Mobile logout */}
-              <div className="absolute bottom-4 left-3 right-3">
-                <LogoutButton />
-              </div>
-            </div>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden lg:ml-0">
+        {/* Mobile header */}
+        <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-2 flex items-center justify-between">
+          <button 
+            onClick={() => setSidebarOpen(true)}
+            className="text-gray-500 hover:text-gray-600"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          <div className="flex items-center">
+            <Mail className="h-6 w-6 text-blue-600" />
+            <span className="ml-2 font-semibold text-gray-900">EmailHub</span>
           </div>
-        )}
-      </header>
+          <div className="w-6" /> {/* Spacer */}
+        </div>
 
-      {/* Main content area */}
-      <main className="flex-1">
-        {children}
-      </main>
-
-      <CosmicBadge bucketSlug={process.env.NEXT_PUBLIC_COSMIC_BUCKET_SLUG || ''} />
+        {/* Page content */}
+        <main className="flex-1 overflow-y-auto">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }

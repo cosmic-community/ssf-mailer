@@ -14,6 +14,7 @@ import {
   CampaignStats,
   TemplateSnapshot,
   CosmicResponse,
+  MediaItem,
 } from "@/types";
 
 if (
@@ -30,6 +31,174 @@ export const cosmic = createBucketClient({
   readKey: process.env.COSMIC_READ_KEY,
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
+
+// Media Management Functions
+export async function getMedia(options?: {
+  limit?: number;
+  skip?: number;
+  folder?: string;
+  sort?: string;
+}): Promise<{
+  media: MediaItem[];
+  total: number;
+  limit: number;
+  skip: number;
+}> {
+  try {
+    const limit = options?.limit || 50;
+    const skip = options?.skip || 0;
+    const folder = options?.folder;
+    const sort = options?.sort || '-created_at';
+
+    // Build query object
+    let query: any = {};
+    if (folder) {
+      query.folder = folder;
+    }
+
+    const result = await cosmic.media
+      .find(query)
+      .props(['id', 'name', 'original_name', 'url', 'imgix_url', 'size', 'type', 'folder', 'alt_text', 'width', 'height', 'created_at', 'metadata'])
+      .limit(limit)
+      .skip(skip);
+
+    // Sort manually if needed since Cosmic media API may not support all sorting options
+    let mediaItems = result.media as MediaItem[];
+    
+    if (sort === '-created_at') {
+      mediaItems.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } else if (sort === 'created_at') {
+      mediaItems.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    } else if (sort === 'name') {
+      mediaItems.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sort === '-name') {
+      mediaItems.sort((a, b) => b.name.localeCompare(a.name));
+    }
+
+    return {
+      media: mediaItems,
+      total: result.total || mediaItems.length,
+      limit,
+      skip,
+    };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return {
+        media: [],
+        total: 0,
+        limit: options?.limit || 50,
+        skip: options?.skip || 0,
+      };
+    }
+    console.error("Error fetching media:", error);
+    throw new Error("Failed to fetch media");
+  }
+}
+
+export async function getSingleMedia(id: string): Promise<MediaItem | null> {
+  try {
+    const result = await cosmic.media
+      .findOne({ id })
+      .props(['id', 'name', 'original_name', 'url', 'imgix_url', 'size', 'type', 'folder', 'alt_text', 'width', 'height', 'created_at', 'metadata']);
+
+    return result.media as MediaItem;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return null;
+    }
+    console.error(`Error fetching media ${id}:`, error);
+    throw new Error("Failed to fetch media");
+  }
+}
+
+export async function uploadMedia(
+  file: File,
+  options?: {
+    folder?: string;
+    alt_text?: string;
+    metadata?: Record<string, any>;
+  }
+): Promise<MediaItem> {
+  try {
+    // Create a media object compatible with Cosmic's expected format
+    const mediaObject = {
+      originalname: file.name,
+      buffer: await file.arrayBuffer(),
+    };
+
+    const uploadData: any = {
+      media: mediaObject,
+    };
+
+    if (options?.folder) {
+      uploadData.folder = options.folder;
+    }
+
+    if (options?.alt_text) {
+      uploadData.alt_text = options.alt_text;
+    }
+
+    if (options?.metadata) {
+      uploadData.metadata = options.metadata;
+    }
+
+    const result = await cosmic.media.insertOne(uploadData);
+    return result.media as MediaItem;
+  } catch (error) {
+    console.error("Error uploading media:", error);
+    throw new Error("Failed to upload media");
+  }
+}
+
+export async function updateMedia(
+  id: string,
+  updates: {
+    folder?: string;
+    alt_text?: string;
+    metadata?: Record<string, any>;
+  }
+): Promise<MediaItem> {
+  try {
+    const result = await cosmic.media.updateOne(id, updates);
+    return result.media as MediaItem;
+  } catch (error) {
+    console.error(`Error updating media ${id}:`, error);
+    throw new Error("Failed to update media");
+  }
+}
+
+export async function deleteMedia(id: string): Promise<void> {
+  try {
+    await cosmic.media.deleteOne(id);
+  } catch (error) {
+    console.error(`Error deleting media ${id}:`, error);
+    throw new Error("Failed to delete media");
+  }
+}
+
+// Get media folders (unique folder names)
+export async function getMediaFolders(): Promise<string[]> {
+  try {
+    const result = await cosmic.media
+      .find({})
+      .props(['folder']);
+
+    const folders = new Set<string>();
+    result.media.forEach((item: any) => {
+      if (item.folder) {
+        folders.add(item.folder);
+      }
+    });
+
+    return Array.from(folders).sort();
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return [];
+    }
+    console.error("Error fetching media folders:", error);
+    return [];
+  }
+}
 
 // Email Lists
 export async function getEmailLists(): Promise<EmailList[]> {

@@ -13,6 +13,24 @@ interface CosmicObject {
 // Template type union
 export type TemplateType = 'Welcome Email' | 'Newsletter' | 'Promotional' | 'Transactional';
 
+// Media Item interface
+export interface MediaItem {
+  id: string;
+  name: string;
+  original_name: string;
+  size: number;
+  type: string;
+  bucket?: string;
+  created_at: string;
+  folder?: string;
+  alt_text?: string;
+  width?: number;
+  height?: number;
+  url: string;
+  imgix_url: string;
+  metadata?: Record<string, any>;
+}
+
 // Email List interface
 export interface EmailList extends CosmicObject {
   type: 'email-lists';
@@ -268,6 +286,10 @@ export function isMarketingCampaign(obj: CosmicObject): obj is MarketingCampaign
 
 export function isSettings(obj: CosmicObject): obj is Settings {
   return obj.type === 'settings';
+}
+
+export function isMediaItem(obj: any): obj is MediaItem {
+  return obj && typeof obj.id === 'string' && typeof obj.url === 'string';
 }
 
 // Utility types
