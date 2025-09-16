@@ -396,7 +396,6 @@ export default function EditCampaignContentForm({
                   onClick={startEditingSession}
                   variant="outline"
                   size="sm"
-                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
                 >
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Content

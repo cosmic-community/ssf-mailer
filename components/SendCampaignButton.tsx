@@ -84,11 +84,6 @@ export default function SendCampaignButton({
       return;
     }
 
-    if (!campaign.metadata.template) {
-      addToast("Campaign has no email template selected", "error");
-      return;
-    }
-
     setIsLoading(true);
 
     try {
@@ -127,11 +122,6 @@ export default function SendCampaignButton({
   const handleSchedule = async () => {
     if (!hasTargets) {
       addToast("Campaign has no target recipients", "error");
-      return;
-    }
-
-    if (!campaign.metadata.template) {
-      addToast("Campaign has no email template selected", "error");
       return;
     }
 
@@ -363,21 +353,7 @@ export default function SendCampaignButton({
         </div>
       )}
 
-      {!campaign.metadata.template && (
-        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg">
-          <div className="flex items-start">
-            <AlertCircle className="h-5 w-5 text-orange-600 mt-0.5 mr-2 flex-shrink-0" />
-            <div className="text-sm text-orange-800">
-              <div className="font-medium">No template selected</div>
-              <div className="mt-1">
-                Please select an email template before sending.
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {hasTargets && campaign.metadata.template && (
+      {hasTargets && (
         <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
           <div className="text-sm text-gray-700 text-center">
             <div className="font-medium">Ready to send to:</div>
@@ -389,7 +365,7 @@ export default function SendCampaignButton({
       {/* Send Now Button */}
       <Button
         onClick={() => setShowConfirmModal(true)}
-        disabled={isLoading || !hasTargets || !campaign.metadata.template}
+        disabled={isLoading || !hasTargets}
         className="w-full"
       >
         {isLoading ? (
@@ -409,7 +385,7 @@ export default function SendCampaignButton({
       {campaign.metadata.send_date && isScheduledForFuture() && (
         <Button
           onClick={handleSchedule}
-          disabled={isLoading || !hasTargets || !campaign.metadata.template}
+          disabled={isLoading || !hasTargets}
           variant="outline"
           className="w-full"
         >
