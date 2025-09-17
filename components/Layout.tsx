@@ -90,13 +90,16 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
-            <div className="flex items-center">
-              <Mail className="h-8 w-8 text-blue-600" />
-              <div className="ml-2 text-xl font-semibold text-gray-900">
+            <div className="flex items-center min-w-0 flex-1">
+              <Mail className="h-8 w-8 text-blue-600 flex-shrink-0" />
+              <div 
+                className="ml-2 text-xl font-semibold text-gray-900 truncate"
+                title={companyName}
+              >
                 {companyName}
               </div>
             </div>
-            <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
+            <button className="lg:hidden ml-2 flex-shrink-0" onClick={() => setSidebarOpen(false)}>
               <X className="h-6 w-6 text-gray-400" />
             </button>
           </div>
@@ -145,17 +148,20 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
         <div className="lg:hidden bg-white shadow-sm border-b border-gray-200 px-4 py-2 flex items-center justify-between">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="text-gray-500 hover:text-gray-600"
+            className="text-gray-500 hover:text-gray-600 flex-shrink-0"
           >
             <Menu className="h-6 w-6" />
           </button>
-          <div className="flex items-center">
-            <Mail className="h-6 w-6 text-blue-600" />
-            <div className="ml-2 font-semibold text-gray-900">
+          <div className="flex items-center min-w-0 flex-1 justify-center">
+            <Mail className="h-6 w-6 text-blue-600 flex-shrink-0" />
+            <div 
+              className="ml-2 font-semibold text-gray-900 truncate"
+              title={companyName}
+            >
               {companyName}
             </div>
           </div>
-          <div className="w-6" /> {/* Spacer */}
+          <div className="w-6 flex-shrink-0" /> {/* Spacer */}
         </div>
 
         {/* Page content */}
