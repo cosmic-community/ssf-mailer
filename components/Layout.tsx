@@ -18,18 +18,16 @@ import LogoutButton from "@/components/LogoutButton";
 
 interface LayoutProps {
   children: React.ReactNode;
+  companyName?: string;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, companyName = "Email Marketing" }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
-  const [companyName, setCompanyName] = useState<string>("Email Marketing");
-  const [isLoadingCompanyName, setIsLoadingCompanyName] = useState<boolean>(true);
   const pathname = usePathname();
 
   useEffect(() => {
     checkAuth();
-    fetchCompanyName();
   }, [pathname]);
 
   const checkAuth = async () => {
@@ -38,25 +36,6 @@ export default function Layout({ children }: LayoutProps) {
       setIsAuthenticated(response.ok);
     } catch (error) {
       setIsAuthenticated(false);
-    }
-  };
-
-  const fetchCompanyName = async () => {
-    setIsLoadingCompanyName(true);
-    try {
-      const response = await fetch("/api/settings");
-      if (response.ok) {
-        const data = await response.json();
-        const settingsCompanyName = data.settings?.metadata?.company_name;
-        if (settingsCompanyName?.trim()) {
-          setCompanyName(settingsCompanyName);
-        }
-      }
-    } catch (error) {
-      console.error("Failed to fetch company name:", error);
-      // Keep default "Email Marketing" on error
-    } finally {
-      setIsLoadingCompanyName(false);
     }
   };
 
@@ -114,13 +93,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-600" />
               <div className="ml-2 text-xl font-semibold text-gray-900">
-                {isLoadingCompanyName ? (
-                  <div className="animate-pulse">
-                    <div className="h-6 bg-gray-300 rounded w-32"></div>
-                  </div>
-                ) : (
-                  companyName
-                )}
+                {companyName}
               </div>
             </div>
             <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -179,13 +152,7 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center">
             <Mail className="h-6 w-6 text-blue-600" />
             <div className="ml-2 font-semibold text-gray-900">
-              {isLoadingCompanyName ? (
-                <div className="animate-pulse">
-                  <div className="h-5 bg-gray-300 rounded w-24"></div>
-                </div>
-              ) : (
-                companyName
-              )}
+              {companyName}
             </div>
           </div>
           <div className="w-6" /> {/* Spacer */}
