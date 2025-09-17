@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
 import Layout from '@/components/Layout'
-import ToastProvider from '@/components/ToastProvider'
+import { Toaster } from '@/components/ui/toaster'
 import { getSettings } from '@/lib/cosmic'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -37,11 +37,10 @@ export default async function RootLayout({
         <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>" />
       </head>
       <body className={inter.className}>
-        <ToastProvider>
-          <Layout companyName={companyName}>
-            {children}
-          </Layout>
-        </ToastProvider>
+        <Layout companyName={companyName}>
+          {children}
+        </Layout>
+        <Toaster />
       </body>
     </html>
   )
