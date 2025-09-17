@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import ConfirmationModal from '@/components/ConfirmationModal'
-import { Eye, Edit, Calendar, Users, Mail, TrendingUp, Copy, MoreVertical } from 'lucide-react'
+import { Eye, Edit, Calendar, Users, Mail, TrendingUp, Copy, MoreVertical, Clock } from 'lucide-react'
 
 interface CampaignsListProps {
   campaigns: MarketingCampaign[]
@@ -118,6 +118,35 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
     }
   }
 
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'Not sent'
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return 'Invalid date'
+    }
+  }
+
+  const getSentDate = (campaign: MarketingCampaign) => {
+    // For sent campaigns, we can use the modified_at date as an approximation
+    // or look for a specific sent_at field if it exists in the campaign stats
+    if (campaign.metadata.status.value === 'Sent') {
+      // If there's a specific sent date in stats or metadata, use that
+      if (campaign.metadata.stats && campaign.metadata.sending_progress?.last_updated) {
+        return campaign.metadata.sending_progress.last_updated
+      }
+      // Otherwise use the modified date as an approximation
+      return campaign.modified_at
+    }
+    return null
+  }
+
   const getRecipientCount = (campaign: MarketingCampaign) => {
     const contactCount = campaign.metadata.target_contacts?.length || 0
     const tagCount = campaign.metadata.target_tags?.length || 0
@@ -164,132 +193,143 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
         </div>
       )}
 
-      {campaigns.map((campaign) => (
-        <div key={campaign.id} className="relative">
-          <Link href={`/campaigns/${campaign.id}`} className="block">
-            <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-slate-500">
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  {/* Campaign Info - Left Side */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <h3 className="text-lg font-semibold text-gray-900 truncate">
-                        {campaign.metadata.name}
-                      </h3>
-                      <Badge 
-                        variant="outline" 
-                        className={`${getStatusColor(campaign.metadata.status.value)} text-xs font-medium px-2 py-1`}
-                      >
-                        {campaign.metadata.status.value}
-                      </Badge>
-                    </div>
-                    
-                    <div className="flex items-center space-x-6 text-sm text-gray-600">
-                      <div className="flex items-center space-x-1">
-                        <Mail className="h-4 w-4" />
-                        <span>{getTemplateName(campaign)}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-1">
-                        <Users className="h-4 w-4" />
-                        <span>{getRecipientCount(campaign)}</span>
-                      </div>
-                      
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>{formatDate(campaign.metadata.send_date || '')}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Stats - Right Side */}
-                  <div className="flex items-center space-x-8 ml-6">
-                    {campaign.metadata.status.value === 'Sent' && campaign.metadata.stats ? (
-                      <>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-gray-900">
-                            {campaign.metadata.stats.sent || 0}
-                          </div>
-                          <div className="text-xs text-gray-500">sent</div>
-                        </div>
-                        <div className="text-center">
-                          <div className="text-2xl font-bold text-blue-600">
-                            {campaign.metadata.stats.click_rate || '0%'}
-                          </div>
-                          <div className="text-xs text-gray-500">click rate</div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="text-center">
-                        <div className="text-2xl font-bold text-gray-400">—</div>
-                        <div className="text-xs text-gray-500">no stats yet</div>
-                      </div>
-                    )}
-                    
-                    {/* Action Buttons */}
-                    <div className="flex items-center space-x-2">
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        className="text-slate-600 hover:text-slate-800 hover:bg-slate-100"
-                      >
-                        <Eye className="h-4 w-4 mr-1" />
-                        View
-                      </Button>
-                      
-                      {/* Actions Dropdown */}
-                      <div className="relative">
-                        <Button 
-                          variant="ghost" 
-                          size="sm"
-                          onClick={(e) => toggleActions(e, campaign.id)}
-                          className="text-slate-600 hover:text-slate-800 hover:bg-slate-100"
+      {campaigns.map((campaign) => {
+        const sentDate = getSentDate(campaign)
+        
+        return (
+          <div key={campaign.id} className="relative">
+            <Link href={`/campaigns/${campaign.id}`} className="block">
+              <Card className="hover:shadow-md transition-shadow duration-200 border-l-4 border-l-slate-500">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    {/* Campaign Info - Left Side */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-3 mb-2">
+                        <h3 className="text-lg font-semibold text-gray-900 truncate">
+                          {campaign.metadata.name}
+                        </h3>
+                        <Badge 
+                          variant="outline" 
+                          className={`${getStatusColor(campaign.metadata.status.value)} text-xs font-medium px-2 py-1`}
                         >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
+                          {campaign.metadata.status.value}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center space-x-6 text-sm text-gray-600">
+                        <div className="flex items-center space-x-1">
+                          <Mail className="h-4 w-4" />
+                          <span>{getTemplateName(campaign)}</span>
+                        </div>
                         
-                        {showActionsId === campaign.id && (
-                          <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
-                            <div className="py-1">
-                              {canDuplicate(campaign) && (
-                                <button
-                                  onClick={(e) => handleDuplicate(e, campaign)}
-                                  disabled={duplicatingId === campaign.id}
-                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
-                                >
-                                  {duplicatingId === campaign.id ? (
-                                    <>
-                                      <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-r-transparent mr-3" />
-                                      <span>Duplicating...</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="h-4 w-4 mr-3" />
-                                      <span>Duplicate Campaign</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                              <Link
-                                href={`/campaigns/${campaign.id}`}
-                                className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Edit className="h-4 w-4 mr-3" />
-                                <span>Edit Campaign</span>
-                              </Link>
-                            </div>
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-4 w-4" />
+                          <span>{getRecipientCount(campaign)}</span>
+                        </div>
+                        
+                        {campaign.metadata.status.value === 'Sent' && sentDate ? (
+                          <div className="flex items-center space-x-1">
+                            <Clock className="h-4 w-4" />
+                            <span>Sent {formatDateTime(sentDate)}</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center space-x-1">
+                            <Calendar className="h-4 w-4" />
+                            <span>{formatDate(campaign.metadata.send_date || '')}</span>
                           </div>
                         )}
                       </div>
                     </div>
+
+                    {/* Stats - Right Side */}
+                    <div className="flex items-center space-x-8 ml-6">
+                      {campaign.metadata.status.value === 'Sent' && campaign.metadata.stats ? (
+                        <>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-gray-900">
+                              {campaign.metadata.stats.sent || 0}
+                            </div>
+                            <div className="text-xs text-gray-500">sent</div>
+                          </div>
+                          <div className="text-center">
+                            <div className="text-2xl font-bold text-blue-600">
+                              {campaign.metadata.stats.click_rate || '0%'}
+                            </div>
+                            <div className="text-xs text-gray-500">click rate</div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="text-center">
+                          <div className="text-2xl font-bold text-gray-400">—</div>
+                          <div className="text-xs text-gray-500">no stats yet</div>
+                        </div>
+                      )}
+                      
+                      {/* Action Buttons */}
+                      <div className="flex items-center space-x-2">
+                        <Button 
+                          variant="ghost" 
+                          size="sm"
+                          className="text-slate-600 hover:text-slate-800 hover:bg-slate-100"
+                        >
+                          <Eye className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        
+                        {/* Actions Dropdown */}
+                        <div className="relative">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={(e) => toggleActions(e, campaign.id)}
+                            className="text-slate-600 hover:text-slate-800 hover:bg-slate-100"
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                          
+                          {showActionsId === campaign.id && (
+                            <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-md shadow-lg z-10">
+                              <div className="py-1">
+                                {canDuplicate(campaign) && (
+                                  <button
+                                    onClick={(e) => handleDuplicate(e, campaign)}
+                                    disabled={duplicatingId === campaign.id}
+                                    className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50"
+                                  >
+                                    {duplicatingId === campaign.id ? (
+                                      <>
+                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-r-transparent mr-3" />
+                                        <span>Duplicating...</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-4 w-4 mr-3" />
+                                        <span>Duplicate Campaign</span>
+                                      </>
+                                    )}
+                                  </button>
+                                )}
+                                <Link
+                                  href={`/campaigns/${campaign.id}`}
+                                  className="flex items-center w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <Edit className="h-4 w-4 mr-3" />
+                                  <span>Edit Campaign</span>
+                                </Link>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        </div>
-      ))}
+                </CardContent>
+              </Card>
+            </Link>
+          </div>
+        )
+      })}
 
       {/* Duplicate Confirmation Modal */}
       {showDuplicateConfirm && (
