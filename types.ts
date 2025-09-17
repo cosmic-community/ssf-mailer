@@ -66,6 +66,8 @@ export interface EmailContact extends CosmicObject {
     tags?: string[] | null;
     subscribe_date?: string;
     notes?: string | null;
+    unsubscribed_date?: string; // Date when contact unsubscribed
+    unsubscribe_campaign?: string | MarketingCampaign; // Campaign that triggered unsubscribe
   };
 }
 

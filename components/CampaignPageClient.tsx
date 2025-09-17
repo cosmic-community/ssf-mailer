@@ -12,7 +12,7 @@ import EditCampaignContentForm from "@/components/EditCampaignContentForm";
 import CampaignActions from "@/components/CampaignActions";
 import TimeAgo from "@/components/TimeAgo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Clock } from "lucide-react";
+import { TrendingUp, Clock, UserMinus, Mail } from "lucide-react";
 
 interface CampaignPageClientProps {
   campaign: MarketingCampaign;
@@ -20,6 +20,7 @@ interface CampaignPageClientProps {
   contacts: EmailContact[];
   lists: EmailList[];
   stats?: any;
+  unsubscribedContacts?: EmailContact[];
 }
 
 export default function CampaignPageClient({
@@ -28,6 +29,7 @@ export default function CampaignPageClient({
   contacts,
   lists,
   stats,
+  unsubscribedContacts = [],
 }: CampaignPageClientProps) {
   const [formData, setFormData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -53,9 +55,12 @@ export default function CampaignPageClient({
   const getSentDate = () => {
     // For sent campaigns, we can use the modified_at date as an approximation
     // or look for a specific sent date in stats or metadata
-    if (status === 'Sent') {
+    if (status === "Sent") {
       // If there's a specific sent date in stats or metadata, use that
-      if (campaign.metadata.stats && campaign.metadata.sending_progress?.last_updated) {
+      if (
+        campaign.metadata.stats &&
+        campaign.metadata.sending_progress?.last_updated
+      ) {
         return campaign.metadata.sending_progress.last_updated;
       }
       // Otherwise use the modified date as an approximation
@@ -82,6 +87,72 @@ export default function CampaignPageClient({
         <div className="mt-8">
           <EditCampaignContentForm campaign={campaign} />
         </div>
+
+        {/* Unsubscribed Contacts Section - Only show for sent campaigns with unsubscribed contacts */}
+        {status === "Sent" && unsubscribedContacts.length > 0 && (
+          <div className="mt-8">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <UserMinus className="h-5 w-5 text-red-500" />
+                  <span>Unsubscribed Contacts</span>
+                  <span className="text-sm font-normal text-gray-500">
+                    ({unsubscribedContacts.length})
+                  </span>
+                </CardTitle>
+                <p className="text-sm text-gray-600">
+                  Contacts who unsubscribed from this campaign
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {unsubscribedContacts.map((contact) => (
+                    <div
+                      key={contact.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center">
+                          <UserMinus className="h-4 w-4 text-red-600" />
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">
+                            {contact.metadata.first_name}{" "}
+                            {contact.metadata.last_name}
+                          </div>
+                          <div className="flex items-center space-x-1 text-sm text-gray-500">
+                            <Mail className="h-3 w-3" />
+                            <span>{contact.metadata.email}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs text-gray-500">
+                          Unsubscribed
+                        </div>
+                        {(contact.metadata as any).unsubscribed_date && (
+                          <div className="text-xs text-gray-400">
+                            <TimeAgo
+                              date={(contact.metadata as any).unsubscribed_date}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {unsubscribedContacts.length >= 50 && (
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-gray-500">
+                      Showing first 50 unsubscribed contacts
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {/* Right Column - Actions & Stats */}

@@ -703,6 +703,62 @@ export async function getEmailContacts(options?: {
   }
 }
 
+export async function getUnsubscribedContactsByCampaign(
+  campaignId: string,
+  options?: {
+    limit?: number;
+    skip?: number;
+  }
+): Promise<{
+  contacts: EmailContact[];
+  total: number;
+  limit: number;
+  skip: number;
+}> {
+  try {
+    const limit = options?.limit || 10;
+    const skip = options?.skip || 0;
+
+    // Build query to find contacts unsubscribed from this specific campaign
+    const query = {
+      type: "email-contacts",
+      $and: [
+        {
+          "metadata.unsubscribe_campaign": campaignId,
+        },
+      ],
+    };
+
+    const result = await cosmic.objects
+      .find(query)
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1)
+      .limit(limit)
+      .skip(skip);
+
+    const contacts = result.objects as EmailContact[];
+    const total = result.total || 0;
+
+    return {
+      contacts,
+      total,
+      limit,
+      skip,
+    };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return {
+        contacts: [],
+        total: 0,
+        limit: options?.limit || 10,
+        skip: options?.skip || 0,
+      };
+    }
+    console.error("Error fetching unsubscribed contacts:", error);
+    throw new Error("Failed to fetch unsubscribed contacts");
+  }
+}
+
 export async function getEmailContact(
   id: string
 ): Promise<EmailContact | null> {
