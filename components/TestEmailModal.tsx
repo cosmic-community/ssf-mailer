@@ -13,6 +13,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Settings } from "@/types";
+import { TestTube } from "lucide-react";
 
 interface TestEmailModalProps {
   campaignId: string;
@@ -162,8 +163,9 @@ export default function TestEmailModal({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="btn-outline">
-          🧪 Send Test Email
+        <Button variant="outline" className="w-full border-gray-300 hover:bg-gray-50">
+          <TestTube className="h-4 w-4 mr-2" />
+          Send Test Email
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[500px]">
