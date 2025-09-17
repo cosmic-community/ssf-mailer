@@ -112,11 +112,6 @@ export default function EditCampaignForm({
       : ("now" as const),
   });
 
-  console.log("Campaign metadata:", campaign.metadata);
-  console.log("Target list IDs:", getTargetListIds());
-  console.log("Target contact IDs:", getTargetContactIds());
-  console.log("Form data initialized:", formData);
-
   // Filter out unsubscribed contacts
   const activeContacts = contacts.filter(
     (contact) => contact.metadata?.status?.value !== "Unsubscribed"
@@ -134,56 +129,65 @@ export default function EditCampaignForm({
     )
   );
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    setIsLoading(true);
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      setError("");
+      setIsLoading(true);
 
-    try {
-      const response = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name: formData.name,
-          list_ids: formData.target_type === "lists" ? formData.list_ids : [],
-          contact_ids:
-            formData.target_type === "contacts" ? formData.contact_ids : [],
-          target_tags:
-            formData.target_type === "tags" ? formData.target_tags : [],
-          send_date:
-            formData.schedule_type === "scheduled" ? formData.send_date : "",
-        }),
-      });
+      try {
+        const response = await fetch(`/api/campaigns/${campaign.id}`, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: formData.name,
+            list_ids: formData.target_type === "lists" ? formData.list_ids : [],
+            contact_ids:
+              formData.target_type === "contacts" ? formData.contact_ids : [],
+            target_tags:
+              formData.target_type === "tags" ? formData.target_tags : [],
+            send_date:
+              formData.schedule_type === "scheduled" ? formData.send_date : "",
+          }),
+        });
 
-      if (!response.ok) {
-        throw new Error("Failed to update campaign");
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || "Failed to update campaign");
+        }
+
+        await response.json();
+
+        // Show success message using shadcn/ui toast system
+        toast({
+          title: "Success!",
+          description: "🎉 Campaign updated successfully!",
+          variant: "success",
+        });
+
+        // Trigger router refresh to update all components with fresh data
+        // This will cause the SendCampaignButton to re-render with updated campaign data
+        router.refresh();
+      } catch (err) {
+        const errorMessage =
+          err instanceof Error
+            ? err.message
+            : "Failed to update campaign. Please try again.";
+        setError(errorMessage);
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
+        console.error("Campaign update error:", err);
+      } finally {
+        setIsLoading(false);
       }
-
-      // Show success message using shadcn/ui toast system
-      toast({
-        title: "Success!",
-        description: "🎉 Campaign updated successfully!",
-        variant: "success",
-      });
-
-      // Trigger router refresh to update all components with fresh data
-      // This will cause the SendCampaignButton to re-render with updated campaign data
-      router.refresh();
-    } catch (err) {
-      const errorMessage = "Failed to update campaign. Please try again.";
-      setError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
-      console.error("Campaign update error:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    },
+    [formData, campaign.id, toast, router]
+  );
 
   const handleListToggle = (listId: string) => {
     setFormData((prev) => ({
@@ -263,14 +267,14 @@ export default function EditCampaignForm({
   // Create a submit handler that can be called from outside
   const handleExternalSubmit = useCallback(async () => {
     await handleSubmit({ preventDefault: () => {} } as React.FormEvent);
-  }, []);
+  }, [handleSubmit]);
 
   // Notify parent component of form data changes
   useEffect(() => {
     if (onFormDataChange) {
       onFormDataChange(formData, isLoading, handleExternalSubmit);
     }
-  }, [formData, isLoading]);
+  }, [formData, isLoading, handleExternalSubmit, onFormDataChange]);
 
   return (
     <div className="card max-w-4xl">
