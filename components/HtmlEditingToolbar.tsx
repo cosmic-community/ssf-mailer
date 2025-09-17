@@ -481,8 +481,16 @@ export default function HtmlEditingToolbar({
         // Replace the link element with just the text
         parentElement.replaceChild(textNode, linkDialog.element);
         
-        // Trigger content change event to update the parent component
-        const editableDiv = parentElement.closest('[contenteditable="true"]') as HTMLElement;
+        // FIXED: Type guard for closest() method call
+        // Check if parentElement is an Element (has closest method) before calling closest
+        let editableDiv: HTMLElement | null = null;
+        if (parentElement.nodeType === Node.ELEMENT_NODE) {
+          editableDiv = (parentElement as Element).closest('[contenteditable="true"]') as HTMLElement;
+        } else if (parentElement.parentNode && parentElement.parentNode.nodeType === Node.ELEMENT_NODE) {
+          // If parentElement is not an Element, try its parent
+          editableDiv = (parentElement.parentNode as Element).closest('[contenteditable="true"]') as HTMLElement;
+        }
+        
         if (editableDiv) {
           const contentChangeEvent = new CustomEvent('contentChanged', {
             detail: { content: editableDiv.innerHTML }
