@@ -28,6 +28,7 @@ import {
   Upload,
   Type,
   Crop,
+  Unlink,
 } from "lucide-react";
 import MediaLibrary from "@/components/MediaLibrary";
 import ImageCropperModal from "@/components/ImageCropperModal";
@@ -456,6 +457,50 @@ export default function HtmlEditingToolbar({
       );
     }
 
+    setLinkDialog({
+      url: "",
+      text: "",
+      isOpen: false,
+      color: primaryColor,
+    });
+
+    // Clear saved selection
+    setSavedSelection(null);
+  };
+
+  const handleLinkUnlink = () => {
+    if (linkDialog.element) {
+      // Get the link text content before removing the link
+      const linkText = linkDialog.element.textContent || "";
+      const parentElement = linkDialog.element.parentNode;
+      
+      if (parentElement) {
+        // Create a text node with the link's text content
+        const textNode = document.createTextNode(linkText);
+        
+        // Replace the link element with just the text
+        parentElement.replaceChild(textNode, linkDialog.element);
+        
+        // FIXED: Type guard for closest() method call
+        // Check if parentElement is an Element (has closest method) before calling closest
+        let editableDiv: HTMLElement | null = null;
+        if (parentElement.nodeType === Node.ELEMENT_NODE) {
+          editableDiv = (parentElement as Element).closest('[contenteditable="true"]') as HTMLElement;
+        } else if (parentElement.parentNode && parentElement.parentNode.nodeType === Node.ELEMENT_NODE) {
+          // If parentElement is not an Element, try its parent
+          editableDiv = (parentElement.parentNode as Element).closest('[contenteditable="true"]') as HTMLElement;
+        }
+        
+        if (editableDiv) {
+          const contentChangeEvent = new CustomEvent('contentChanged', {
+            detail: { content: editableDiv.innerHTML }
+          });
+          editableDiv.dispatchEvent(contentChangeEvent);
+        }
+      }
+    }
+
+    // Close the dialog
     setLinkDialog({
       url: "",
       text: "",
@@ -987,27 +1032,44 @@ export default function HtmlEditingToolbar({
                 </div>
               </div>
             </div>
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                variant="outline"
-                onClick={() =>
-                  setLinkDialog({
-                    url: "",
-                    text: "",
-                    isOpen: false,
-                    color: primaryColor,
-                  })
-                }
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={handleLinkSave}
-                disabled={!linkDialog.url.trim() || !linkDialog.text.trim()}
-                className="bg-blue-600 hover:bg-blue-700"
-              >
-                {linkDialog.element ? "Update Link" : "Add Link"}
-              </Button>
+            <div className="flex justify-between pt-4">
+              <div className="flex space-x-2">
+                {linkDialog.element && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleLinkUnlink}
+                    size="sm"
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                    title="Remove link but keep text"
+                  >
+                    <Unlink className="h-4 w-4 mr-2" />
+                    Unlink
+                  </Button>
+                )}
+              </div>
+              <div className="flex space-x-2">
+                <Button
+                  variant="outline"
+                  onClick={() =>
+                    setLinkDialog({
+                      url: "",
+                      text: "",
+                      isOpen: false,
+                      color: primaryColor,
+                    })
+                  }
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleLinkSave}
+                  disabled={!linkDialog.url.trim() || !linkDialog.text.trim()}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {linkDialog.element ? "Update Link" : "Add Link"}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
