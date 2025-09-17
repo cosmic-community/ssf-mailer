@@ -55,9 +55,6 @@ export default function EditCampaignContentForm({
   const [editingSessionActive, setEditingSessionActive] = useState(false);
   const { addToast } = useToast();
 
-  // Simple editing states - start in view mode
-  const [isMainEditing, setIsMainEditing] = useState(false);
-
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
 
@@ -196,7 +193,6 @@ export default function EditCampaignContentForm({
   // Start editing session
   const startEditingSession = () => {
     setEditingSessionActive(true);
-    setIsMainEditing(true);
     setIsFullScreen(true); // Open directly in full screen
     setError("");
     setSuccess("");
@@ -205,7 +201,6 @@ export default function EditCampaignContentForm({
   // End editing session
   const endEditingSession = () => {
     setEditingSessionActive(false);
-    setIsMainEditing(false);
     setIsFullScreen(false); // Exit full screen when ending session
     setIsAIEditing(false);
     setAiPrompt("");
@@ -722,9 +717,9 @@ export default function EditCampaignContentForm({
               </div>
             </form>
           ) : (
-            /* Read-only view */
+            /* Read-only view - NEVER editable inline */
             <div className="space-y-6">
-              {/* Subject Preview */}
+              {/* Subject Preview - NEVER editable */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">
                   Subject Line
@@ -734,7 +729,7 @@ export default function EditCampaignContentForm({
                 </div>
               </div>
 
-              {/* Content Preview */}
+              {/* Content Preview - NEVER editable */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">
                   Email Content

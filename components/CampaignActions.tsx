@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import SendCampaignButton from "@/components/SendCampaignButton";
+import TestEmailModal from "@/components/TestEmailModal";
 import { Save } from "lucide-react";
 
 interface CampaignActionsProps {
@@ -41,6 +42,7 @@ export default function CampaignActions({
   onSubmit,
 }: CampaignActionsProps) {
   const canEdit = campaign.metadata?.status?.value === "Draft";
+  const status = campaign.metadata?.status?.value || "Draft";
 
   return (
     <div className="space-y-4">
@@ -67,6 +69,14 @@ export default function CampaignActions({
 
       {/* Send Campaign Button */}
       <SendCampaignButton campaign={campaign} />
+
+      {/* Send Test Email - Only show for draft campaigns */}
+      {status === "Draft" && (
+        <TestEmailModal
+          campaignId={campaign.id}
+          campaignName={campaign.metadata.name}
+        />
+      )}
     </div>
   );
 }

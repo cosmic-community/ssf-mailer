@@ -10,7 +10,6 @@ import {
 import CampaignPageClient from "@/components/CampaignPageClient";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import DeleteCampaignButton from "@/components/DeleteCampaignButton";
-import TestEmailModal from "@/components/TestEmailModal";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -181,16 +180,6 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   </span>
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {/* Only show test email button for draft campaigns */}
-              {status === "Draft" && (
-                <TestEmailModal
-                  campaignId={campaign.id}
-                  campaignName={campaign.metadata.name}
-                />
-              )}
             </div>
           </div>
         </div>
