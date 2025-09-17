@@ -133,6 +133,37 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
     return parts.join(" + ");
   };
 
+  const getSentDate = () => {
+    // For sent campaigns, we can use the modified_at date as an approximation
+    // or look for a specific sent date in stats or metadata
+    if (status === 'Sent') {
+      // If there's a specific sent date in stats or metadata, use that
+      if (campaign.metadata.stats && campaign.metadata.sending_progress?.last_updated) {
+        return campaign.metadata.sending_progress.last_updated;
+      }
+      // Otherwise use the modified date as an approximation
+      return campaign.modified_at;
+    }
+    return null;
+  };
+
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'Not sent';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
+  const sentDate = getSentDate();
+
   return (
     <div className="min-h-screen bg-gray-50 pb-16">
       {/* Page Header */}
@@ -173,12 +204,19 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   <span>{getRecipientCount()}</span>
                 </div>
 
-                <div className="flex items-center space-x-1">
-                  <Calendar className="h-4 w-4" />
-                  <span>
-                    Created {new Date(campaign.created_at).toLocaleDateString()}
-                  </span>
-                </div>
+                {status === 'Sent' && sentDate ? (
+                  <div className="flex items-center space-x-1">
+                    <Clock className="h-4 w-4" />
+                    <span>Sent {formatDateTime(sentDate)}</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="h-4 w-4" />
+                    <span>
+                      Created {new Date(campaign.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
