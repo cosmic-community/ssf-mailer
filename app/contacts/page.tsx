@@ -5,7 +5,6 @@ import { RefreshCw, Upload } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
 import CreateListModal from "@/components/CreateListModal";
-import ContactsExportButton from "@/components/ContactsExportButton";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = "force-dynamic";
@@ -54,12 +53,6 @@ export default async function ContactsPage({
               </p>
             </div>
             <div className="flex space-x-3">
-              <ContactsExportButton
-                searchTerm={search}
-                statusFilter={status}
-                listFilter={listId}
-                totalContacts={total}
-              />
               <CreateListModal />
               <CSVUploadModal />
               <CreateContactModal />
