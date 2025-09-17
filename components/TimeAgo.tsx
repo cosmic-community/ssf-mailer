@@ -78,7 +78,7 @@ export default function TimeAgo({ date, className = "" }: TimeAgoProps) {
     <span 
       className={className}
       title={exactTime}
-      style={{ cursor: 'help' }}
+      style={{ cursor: 'pointer' }}
     >
       {timeAgo}
     </span>
