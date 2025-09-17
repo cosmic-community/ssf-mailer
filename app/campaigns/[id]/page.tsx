@@ -6,6 +6,7 @@ import {
   getEmailContacts,
   getEmailLists,
   getEmailTemplate,
+  getUnsubscribedContactsByCampaign,
 } from "@/lib/cosmic";
 import CampaignPageClient from "@/components/CampaignPageClient";
 import SendCampaignButton from "@/components/SendCampaignButton";
@@ -39,14 +40,22 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
   const { id } = await params;
 
   // Fetch campaign with all related data
-  const [campaign, templates, contactsResult, lists] = await Promise.all([
+  const [
+    campaign,
+    templates,
+    contactsResult,
+    lists,
+    unsubscribedContactsResult,
+  ] = await Promise.all([
     getEmailCampaign(id),
     getEmailTemplates(),
     getEmailContacts({ limit: 1000 }),
     getEmailLists(),
+    getUnsubscribedContactsByCampaign(id, { limit: 50 }),
   ]);
 
   const contacts = contactsResult.contacts;
+  const unsubscribedContacts = unsubscribedContactsResult.contacts;
 
   if (!campaign) {
     notFound();
@@ -137,9 +146,12 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
   const getSentDate = () => {
     // For sent campaigns, we can use the modified_at date as an approximation
     // or look for a specific sent date in stats or metadata
-    if (status === 'Sent') {
+    if (status === "Sent") {
       // If there's a specific sent date in stats or metadata, use that
-      if (campaign.metadata.stats && campaign.metadata.sending_progress?.last_updated) {
+      if (
+        campaign.metadata.stats &&
+        campaign.metadata.sending_progress?.last_updated
+      ) {
         return campaign.metadata.sending_progress.last_updated;
       }
       // Otherwise use the modified date as an approximation
@@ -190,7 +202,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   <span>{getRecipientCount()}</span>
                 </div>
 
-                {status === 'Sent' && sentDate ? (
+                {status === "Sent" && sentDate ? (
                   <div className="flex items-center space-x-1">
                     <Clock className="h-4 w-4" />
                     <span>
@@ -201,7 +213,8 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                   <div className="flex items-center space-x-1">
                     <Calendar className="h-4 w-4" />
                     <span>
-                      Created {new Date(campaign.created_at).toLocaleDateString()}
+                      Created{" "}
+                      {new Date(campaign.created_at).toLocaleDateString()}
                     </span>
                   </div>
                 )}
@@ -218,6 +231,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
           contacts={contacts}
           lists={lists}
           stats={stats}
+          unsubscribedContacts={unsubscribedContacts}
         />
 
         {/* Delete Campaign Section - Moved to bottom like template page */}
