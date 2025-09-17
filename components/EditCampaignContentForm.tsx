@@ -22,9 +22,10 @@ import {
   Minimize,
   Save,
   Edit,
+  X,
 } from "lucide-react";
 import ContentEditor from "./shared/ContentEditor";
-import { useToast } from "@/hooks/useToast";
+import { useToastContext } from "@/components/ToastProvider";
 import { useTemplateSettings } from "@/hooks/useTemplateSettings";
 
 interface ContextItem {
@@ -53,7 +54,7 @@ export default function EditCampaignContentForm({
   const [aiStatus, setAiStatus] = useState("");
   const [aiProgress, setAiProgress] = useState(0);
   const [editingSessionActive, setEditingSessionActive] = useState(false);
-  const { addToast } = useToast();
+  const { addToast } = useToastContext();
 
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -192,8 +193,8 @@ export default function EditCampaignContentForm({
 
         setSuccess("Campaign content updated successfully!");
         
-        // ENHANCED: Show highly visible success toast
-        addToast("🎉 Campaign content saved successfully!", "success", 5000);
+        // ENHANCED: Show highly visible success toast with longer duration
+        addToast("🎉 Campaign content saved successfully!", "success", 6000);
 
         // CRITICAL: End the editing session which will update display data
         endEditingSession(savedData);
@@ -261,6 +262,13 @@ export default function EditCampaignContentForm({
       content: currentDisplayData.content,
       template_type: currentDisplayData.template_type,
     });
+  };
+
+  // FIXED: Close full screen button - now properly ends editing session
+  const handleCloseFullScreen = () => {
+    // CRITICAL: End the entire editing session, don't just toggle full screen
+    // This ensures the fields return to read-only mode
+    endEditingSession();
   };
 
   // Handle AI editing
@@ -404,22 +412,18 @@ export default function EditCampaignContentForm({
     setContextItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // Toggle full screen mode
-  const toggleFullScreen = () => {
-    setIsFullScreen(!isFullScreen);
-  };
-
-  // Handle escape key to exit full screen
+  // Handle escape key to exit editing session completely
   useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isFullScreen) {
-        setIsFullScreen(false);
+      if (e.key === "Escape" && editingSessionActive) {
+        // FIXED: End the entire editing session on escape, not just full screen
+        endEditingSession();
       }
     };
 
     document.addEventListener("keydown", handleEscape);
     return () => document.removeEventListener("keydown", handleEscape);
-  }, [isFullScreen]);
+  }, [editingSessionActive]);
 
   const canEdit = campaign.metadata.status?.value === "Draft";
 
@@ -447,18 +451,15 @@ export default function EditCampaignContentForm({
                   Edit Content
                 </Button>
               )}
-              {editingSessionActive && (
+              {editingSessionActive && isFullScreen && (
                 <Button
-                  onClick={toggleFullScreen}
+                  onClick={handleCloseFullScreen}
                   variant="outline"
                   size="sm"
                   className="text-gray-600"
+                  title="Close editor and return to read-only view"
                 >
-                  {isFullScreen ? (
-                    <Minimize className="h-4 w-4" />
-                  ) : (
-                    <Maximize className="h-4 w-4" />
-                  )}
+                  <X className="h-4 w-4" />
                 </Button>
               )}
             </div>
