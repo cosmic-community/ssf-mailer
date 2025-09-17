@@ -211,7 +211,8 @@ export async function sendCampaignEmails(
             // Add unsubscribe link and footer
             const unsubscribeUrl = createUnsubscribeUrl(
               contact.metadata.email,
-              baseUrl
+              baseUrl,
+              campaignId
             );
             const companyAddress = settings.metadata.company_address || "";
 

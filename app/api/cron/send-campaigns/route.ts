@@ -333,7 +333,11 @@ async function sendCampaignEmail(
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   // Add unsubscribe footer
-  const unsubscribeUrl = createUnsubscribeUrl(contact.metadata.email, baseUrl);
+  const unsubscribeUrl = createUnsubscribeUrl(
+    contact.metadata.email,
+    baseUrl,
+    campaign.id
+  );
 
   const finalContent =
     personalizedContent +
