@@ -49,6 +49,37 @@ export default function CampaignPageClient({
 
   const status = campaign.metadata.status?.value || "Draft";
 
+  const getSentDate = () => {
+    // For sent campaigns, we can use the modified_at date as an approximation
+    // or look for a specific sent date in stats or metadata
+    if (status === 'Sent') {
+      // If there's a specific sent date in stats or metadata, use that
+      if (campaign.metadata.stats && campaign.metadata.sending_progress?.last_updated) {
+        return campaign.metadata.sending_progress.last_updated;
+      }
+      // Otherwise use the modified date as an approximation
+      return campaign.modified_at;
+    }
+    return null;
+  };
+
+  const formatDateTime = (dateString: string) => {
+    if (!dateString) return 'Not sent';
+    try {
+      return new Date(dateString).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch {
+      return 'Invalid date';
+    }
+  };
+
+  const sentDate = getSentDate();
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       {/* Left Column - Campaign Form */}
@@ -100,6 +131,12 @@ export default function CampaignPageClient({
                 <TrendingUp className="h-5 w-5" />
                 <span>Campaign Statistics</span>
               </CardTitle>
+              {status === "Sent" && sentDate && (
+                <div className="flex items-center space-x-1 text-sm text-gray-600">
+                  <Clock className="h-4 w-4" />
+                  <span>Sent {formatDateTime(sentDate)}</span>
+                </div>
+              )}
             </CardHeader>
             <CardContent>
               {status === "Sending" && campaign.metadata.sending_progress ? (
