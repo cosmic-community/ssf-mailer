@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from "@/hooks/use-toast";
 
 interface EditCampaignFormProps {
   campaign: MarketingCampaign;
@@ -39,7 +39,7 @@ export default function EditCampaignForm({
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
-  const { addToast } = useToast();
+  const { toast } = useToast();
 
   // Get target list IDs from campaign metadata
   const getTargetListIds = (): string[] => {
@@ -161,15 +161,24 @@ export default function EditCampaignForm({
         throw new Error("Failed to update campaign");
       }
 
-      // Show success message and trigger data refresh
-      addToast("Campaign updated successfully!", "success");
+      // Show success message using shadcn/ui toast system
+      toast({
+        title: "Success!",
+        description: "🎉 Campaign updated successfully!",
+        variant: "success",
+      });
 
       // Trigger router refresh to update all components with fresh data
       // This will cause the SendCampaignButton to re-render with updated campaign data
       router.refresh();
     } catch (err) {
-      setError("Failed to update campaign. Please try again.");
-      addToast("Failed to update campaign. Please try again.", "error");
+      const errorMessage = "Failed to update campaign. Please try again.";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
       console.error("Campaign update error:", err);
     } finally {
       setIsLoading(false);
@@ -226,7 +235,11 @@ export default function EditCampaignForm({
         );
       }
 
-      addToast("Campaign reverted to draft successfully!", "success");
+      toast({
+        title: "Success!",
+        description: "Campaign reverted to draft successfully!",
+        variant: "success",
+      });
       router.refresh();
     } catch (err) {
       const errorMessage =
@@ -234,7 +247,11 @@ export default function EditCampaignForm({
           ? err.message
           : "Failed to revert campaign to draft";
       setError(errorMessage);
-      addToast(errorMessage, "error");
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
