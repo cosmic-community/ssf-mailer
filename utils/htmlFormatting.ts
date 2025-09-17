@@ -74,11 +74,13 @@ export function applyFormat(
         break;
     }
     
-    // CRITICAL: Trigger mutation event to notify parent components
+    // CRITICAL: IMMEDIATE mutation event to notify parent components
     const mutationEvent = new CustomEvent('contentChanged', {
       detail: { content: contentElement.innerHTML }
     });
     contentElement.dispatchEvent(mutationEvent);
+    
+    console.log("🔧 Format applied and contentChanged event dispatched");
     
   } catch (error) {
     console.warn("Format application failed:", error);
@@ -306,7 +308,7 @@ function applyHeadingStyles(element: HTMLElement, tagName: string) {
 
 /**
  * Apply link formatting to selected text or insert new link
- * CRITICAL: This function now properly saves link data and triggers content updates
+ * CRITICAL: This function now properly saves link data and triggers content updates IMMEDIATELY
  */
 function applyLinkFormat(
   range: Range,
@@ -351,19 +353,23 @@ function applyLinkFormat(
     range.insertNode(link);
   }
 
-  // CRITICAL: Force content update after link insertion
+  // CRITICAL: IMMEDIATE content update after link insertion with console logging
   const parentElement = link.closest('[contenteditable="true"]') as HTMLElement;
   if (parentElement) {
+    console.log("🔗 Link inserted, dispatching immediate contentChanged event");
     const contentChangeEvent = new CustomEvent('contentChanged', {
       detail: { content: parentElement.innerHTML }
     });
     parentElement.dispatchEvent(contentChangeEvent);
+    
+    // ADDITIONAL: Force immediate DOM mutation to trigger observers
+    parentElement.normalize(); // This will trigger mutation observers
   }
 }
 
 /**
  * Insert image at cursor position
- * CRITICAL: This function now properly saves image data and triggers content updates
+ * CRITICAL: This function now properly saves image data and triggers content updates IMMEDIATELY
  */
 function insertImage(range: Range, url: string, alt: string, link?: string) {
   const img = document.createElement("img");
@@ -403,6 +409,8 @@ function insertImage(range: Range, url: string, alt: string, link?: string) {
     range.deleteContents();
   }
 
+  let insertedElement: HTMLElement;
+
   // Wrap in link if provided
   if (link && link.trim()) {
     const linkElement = document.createElement("a");
@@ -420,32 +428,36 @@ function insertImage(range: Range, url: string, alt: string, link?: string) {
 
     linkElement.appendChild(img);
     range.insertNode(linkElement);
-    
-    // CRITICAL: Force content update after image with link insertion
-    const parentElement = linkElement.closest('[contenteditable="true"]') as HTMLElement;
-    if (parentElement) {
-      const contentChangeEvent = new CustomEvent('contentChanged', {
-        detail: { content: parentElement.innerHTML }
-      });
-      parentElement.dispatchEvent(contentChangeEvent);
-    }
+    insertedElement = linkElement;
   } else {
     range.insertNode(img);
-    
-    // CRITICAL: Force content update after image insertion
-    const parentElement = img.closest('[contenteditable="true"]') as HTMLElement;
-    if (parentElement) {
-      const contentChangeEvent = new CustomEvent('contentChanged', {
-        detail: { content: parentElement.innerHTML }
-      });
-      parentElement.dispatchEvent(contentChangeEvent);
-    }
+    insertedElement = img;
   }
 
   // Add some space after the image
   const br = document.createElement("br");
   range.collapse(false);
   range.insertNode(br);
+
+  // CRITICAL: IMMEDIATE content update after image insertion with console logging
+  const parentElement = insertedElement.closest('[contenteditable="true"]') as HTMLElement;
+  if (parentElement) {
+    console.log("🖼️ Image inserted, dispatching IMMEDIATE contentChanged event");
+    const contentChangeEvent = new CustomEvent('contentChanged', {
+      detail: { content: parentElement.innerHTML }
+    });
+    parentElement.dispatchEvent(contentChangeEvent);
+    
+    // ADDITIONAL: Force immediate DOM mutation to trigger observers
+    parentElement.normalize(); // This will trigger mutation observers
+    
+    // EXTRA: Force a small DOM change to ensure mutation observers fire
+    const tempAttribute = 'data-image-inserted';
+    parentElement.setAttribute(tempAttribute, Date.now().toString());
+    setTimeout(() => {
+      parentElement.removeAttribute(tempAttribute);
+    }, 1);
+  }
 }
 
 /**

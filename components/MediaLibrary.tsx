@@ -45,8 +45,7 @@ import {
   Crop,
 } from "lucide-react";
 import { MediaItem } from "@/types";
-import { useToast } from "@/hooks/useToast";
-import ToastContainer from "@/components/ToastContainer";
+import { useToast } from "@/hooks/use-toast";
 import ImageCropperModal from "@/components/ImageCropperModal";
 
 interface MediaLibraryProps {
@@ -69,7 +68,7 @@ export default function MediaLibrary({
   onSelect,
   selectedMedia,
 }: MediaLibraryProps) {
-  const { toasts, addToast, removeToast } = useToast();
+  const { toast } = useToast();
 
   // Media state
   const [media, setMedia] = useState<MediaItem[]>([]);
@@ -157,7 +156,11 @@ export default function MediaLibrary({
           return errorMessages;
         });
 
-        errors.forEach((error) => addToast(error, "error"));
+        errors.forEach((error) => toast({
+          title: "Upload Error",
+          description: error,
+          variant: "destructive",
+        }));
       }
 
       if (acceptedFiles.length > 0) {
@@ -175,7 +178,7 @@ export default function MediaLibrary({
         setShowUploadDialog(true);
       }
     },
-    [addToast]
+    [toast]
   );
 
   const {
@@ -235,7 +238,11 @@ export default function MediaLibrary({
       setCurrentPage(page);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch media");
-      addToast("Failed to fetch media", "error");
+      toast({
+        title: "Fetch Error",
+        description: "Failed to fetch media",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -329,16 +336,21 @@ export default function MediaLibrary({
 
       // Show results
       if (completedFiles > 0) {
-        addToast(
-          `Successfully uploaded ${completedFiles} file${
+        toast({
+          title: "Upload Success",
+          description: `Successfully uploaded ${completedFiles} file${
             completedFiles === 1 ? "" : "s"
           }!`,
-          "success"
-        );
+          variant: "success",
+        });
       }
 
       if (errors.length > 0) {
-        errors.forEach((error) => addToast(error, "error"));
+        errors.forEach((error) => toast({
+          title: "Upload Error",
+          description: error,
+          variant: "destructive",
+        }));
       }
 
       // Clean up and refresh
@@ -351,7 +363,11 @@ export default function MediaLibrary({
       // Refresh media list and folders from server
       await Promise.all([fetchMedia(currentPage), fetchFolders()]);
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Upload failed", "error");
+      toast({
+        title: "Upload Error",
+        description: err instanceof Error ? err.message : "Upload failed",
+        variant: "destructive",
+      });
     } finally {
       setUploading(false);
     }
@@ -389,23 +405,32 @@ export default function MediaLibrary({
         throw new Error(data.error || "Failed to upload cropped image");
       }
 
-      addToast("Cropped image saved successfully!", "success");
+      toast({
+        title: "Crop Success",
+        description: "Cropped image saved successfully!",
+        variant: "success",
+      });
 
       // Refresh media list
       await fetchMedia(currentPage);
     } catch (error) {
       console.error("Error saving cropped image:", error);
-      addToast(
-        error instanceof Error ? error.message : "Failed to save cropped image",
-        "error"
-      );
+      toast({
+        title: "Crop Error",
+        description: error instanceof Error ? error.message : "Failed to save cropped image",
+        variant: "destructive",
+      });
     }
   };
 
   // Handle media crop
   const handleCropMedia = (mediaItem: MediaItem) => {
     if (!mediaItem.type.startsWith("image/")) {
-      addToast("Only images can be cropped", "error");
+      toast({
+        title: "Crop Error",
+        description: "Only images can be cropped",
+        variant: "destructive",
+      });
       return;
     }
     setCropperMedia(mediaItem);
@@ -441,13 +466,21 @@ export default function MediaLibrary({
         throw new Error(data.error || "Update failed");
       }
 
-      addToast("Media updated successfully!", "success");
+      toast({
+        title: "Update Success",
+        description: "Media updated successfully!",
+        variant: "success",
+      });
       setShowEditDialog(false);
 
       // Refresh data from server
       await Promise.all([fetchMedia(currentPage), fetchFolders()]);
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Update failed", "error");
+      toast({
+        title: "Update Error",
+        description: err instanceof Error ? err.message : "Update failed",
+        variant: "destructive",
+      });
     }
   };
 
@@ -472,12 +505,20 @@ export default function MediaLibrary({
         throw new Error(data.error || "Delete failed");
       }
 
-      addToast("Media deleted successfully!", "success");
+      toast({
+        title: "Delete Success",
+        description: "Media deleted successfully!",
+        variant: "success",
+      });
 
       // Refresh media list from server
       await fetchMedia(currentPage);
     } catch (err) {
-      addToast(err instanceof Error ? err.message : "Delete failed", "error");
+      toast({
+        title: "Delete Error",
+        description: err instanceof Error ? err.message : "Delete failed",
+        variant: "destructive",
+      });
     }
   };
 
@@ -505,9 +546,17 @@ export default function MediaLibrary({
   const handleCopyUrl = async (url: string) => {
     try {
       await navigator.clipboard.writeText(url);
-      addToast("URL copied to clipboard!", "success");
+      toast({
+        title: "Success",
+        description: "URL copied to clipboard!",
+        variant: "success",
+      });
     } catch (err) {
-      addToast("Failed to copy URL", "error");
+      toast({
+        title: "Copy Error",
+        description: "Failed to copy URL",
+        variant: "destructive",
+      });
     }
   };
 
@@ -580,463 +629,459 @@ export default function MediaLibrary({
   const endIndex = Math.min(currentPage * itemsPerPage, totalItems);
 
   return (
-    <>
-      <ToastContainer toasts={toasts} onRemove={removeToast} />
+    <div className="space-y-6">
+      {/* Dropzone Area */}
+      <div
+        {...getRootProps()}
+        className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+          isDragActive
+            ? "border-blue-500 bg-blue-50"
+            : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+        }`}
+      >
+        <input {...getInputProps()} />
 
-      <div className="space-y-6">
-        {/* Dropzone Area */}
-        <div
-          {...getRootProps()}
-          className={`relative border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-            isDragActive
-              ? "border-blue-500 bg-blue-50"
-              : "border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100"
+        <Cloud
+          className={`mx-auto h-12 w-12 mb-4 ${
+            isDragActive ? "text-blue-500" : "text-gray-400"
           }`}
-        >
-          <input {...getInputProps()} />
+        />
 
-          <Cloud
-            className={`mx-auto h-12 w-12 mb-4 ${
-              isDragActive ? "text-blue-500" : "text-gray-400"
-            }`}
-          />
+        {isDragActive ? (
+          <div>
+            <p className="text-lg font-medium text-blue-600 mb-2">
+              Drop files here to upload
+            </p>
+            <p className="text-sm text-blue-500">
+              Release to start uploading
+            </p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-lg font-medium text-gray-700 mb-2">
+              Drag & drop files here, or click to browse
+            </p>
+            <p className="text-sm text-gray-500 mb-4">
+              Supports images, PDFs, documents, videos, and audio files up to
+              900MB
+            </p>
+            <Button
+              onClick={openFileDialog}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              Choose Files
+            </Button>
+          </div>
+        )}
 
-          {isDragActive ? (
-            <div>
-              <p className="text-lg font-medium text-blue-600 mb-2">
-                Drop files here to upload
-              </p>
-              <p className="text-sm text-blue-500">
-                Release to start uploading
-              </p>
-            </div>
-          ) : (
-            <div>
-              <p className="text-lg font-medium text-gray-700 mb-2">
-                Drag & drop files here, or click to browse
-              </p>
-              <p className="text-sm text-gray-500 mb-4">
-                Supports images, PDFs, documents, videos, and audio files up to
-                900MB
-              </p>
+        <div className="mt-4 text-xs text-gray-400">
+          Maximum file size: 900MB • Supported formats: JPG, PNG, GIF, PDF,
+          DOC, MP4, MP3, and more
+        </div>
+      </div>
+
+      {/* Controls Bar */}
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+        <div className="flex flex-wrap gap-3 items-center">
+          {/* Search */}
+          <div className="relative">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            <Input
+              placeholder="Search media..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 w-64"
+            />
+          </div>
+
+          {/* Folder Filter */}
+          <Select value={selectedFolder} onValueChange={setSelectedFolder}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All folders" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all-folders">All folders</SelectItem>
+              {folders.map((folder) => (
+                <SelectItem key={folder} value={folder}>
+                  <div className="flex items-center">
+                    <FolderOpen className="h-4 w-4 mr-2" />
+                    {folder}
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {/* Sort */}
+          <Select
+            value={sortBy}
+            onValueChange={(value) => setSortBy(value as SortMode)}
+          >
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="-created_at">Newest first</SelectItem>
+              <SelectItem value="created_at">Oldest first</SelectItem>
+              <SelectItem value="name">Name A-Z</SelectItem>
+              <SelectItem value="-name">Name Z-A</SelectItem>
+              <SelectItem value="-size">Size (largest)</SelectItem>
+              <SelectItem value="size">Size (smallest)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="flex gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex border rounded-md">
+            <Button
+              variant={viewMode === "grid" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("grid")}
+              className="rounded-r-none"
+            >
+              <Grid className="h-4 w-4" />
+            </Button>
+            <Button
+              variant={viewMode === "list" ? "default" : "ghost"}
+              size="sm"
+              onClick={() => setViewMode("list")}
+              className="rounded-l-none"
+            >
+              <List className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Refresh */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => fetchMedia(currentPage)}
+            disabled={loading}
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
+            />
+          </Button>
+        </div>
+      </div>
+
+      {/* Error Message */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-red-600">{error}</p>
+        </div>
+      )}
+
+      {/* Media Grid/List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
+          <span className="ml-2 text-gray-600">Loading media...</span>
+        </div>
+      ) : media.length === 0 ? (
+        <div className="text-center py-12">
+          <ImageIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">
+            No media files
+          </h3>
+          <p className="text-gray-600 mb-4">
+            {searchTerm ||
+            (selectedFolder && selectedFolder !== "all-folders")
+              ? "No files match your current filters."
+              : "Drag & drop files above or click to browse and upload your first file."}
+          </p>
+          {!searchTerm &&
+            (!selectedFolder || selectedFolder === "all-folders") && (
               <Button
                 onClick={openFileDialog}
                 className="bg-blue-600 hover:bg-blue-700"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Choose Files
+                Upload Files
               </Button>
+            )}
+        </div>
+      ) : (
+        <>
+          {/* Grid View */}
+          {viewMode === "grid" && (
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {media.map((item) => (
+                <Card
+                  key={item.id}
+                  className={`cursor-pointer hover:shadow-md transition-shadow group ${
+                    selectedMedia?.id === item.id
+                      ? "ring-2 ring-blue-500"
+                      : ""
+                  }`}
+                  onClick={() => handleSelectMedia(item)}
+                >
+                  <CardContent className="p-3 relative">
+                    <div className="aspect-[4/3] mb-3 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
+                      {item.type.startsWith("image/") ? (
+                        <img
+                          src={`${item.imgix_url}?w=400&h=300&fit=crop&auto=format,compress`}
+                          alt={item.alt_text || item.original_name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="text-gray-400">
+                          {getFileTypeIcon(item.type)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-1">
+                      <p
+                        className="text-sm font-medium truncate"
+                        title={item.original_name}
+                      >
+                        {item.original_name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {formatFileSize(item.size)}
+                      </p>
+                      {item.folder && (
+                        <p className="text-xs text-blue-600">
+                          📁 {item.folder}
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Action Menu */}
+                    <div
+                      className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 p-0 bg-white/80 hover:bg-white"
+                        onClick={() => handlePreviewMedia(item)}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
 
-          <div className="mt-4 text-xs text-gray-400">
-            Maximum file size: 900MB • Supported formats: JPG, PNG, GIF, PDF,
-            DOC, MP4, MP3, and more
-          </div>
-        </div>
-
-        {/* Controls Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-          <div className="flex flex-wrap gap-3 items-center">
-            {/* Search */}
-            <div className="relative">
-              <Search className="h-4 w-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-              <Input
-                placeholder="Search media..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-64"
-              />
-            </div>
-
-            {/* Folder Filter */}
-            <Select value={selectedFolder} onValueChange={setSelectedFolder}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="All folders" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all-folders">All folders</SelectItem>
-                {folders.map((folder) => (
-                  <SelectItem key={folder} value={folder}>
-                    <div className="flex items-center">
-                      <FolderOpen className="h-4 w-4 mr-2" />
-                      {folder}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {/* Sort */}
-            <Select
-              value={sortBy}
-              onValueChange={(value) => setSortBy(value as SortMode)}
-            >
-              <SelectTrigger className="w-40">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="-created_at">Newest first</SelectItem>
-                <SelectItem value="created_at">Oldest first</SelectItem>
-                <SelectItem value="name">Name A-Z</SelectItem>
-                <SelectItem value="-name">Name Z-A</SelectItem>
-                <SelectItem value="-size">Size (largest)</SelectItem>
-                <SelectItem value="size">Size (smallest)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="flex gap-2">
-            {/* View Mode Toggle */}
-            <div className="flex border rounded-md">
-              <Button
-                variant={viewMode === "grid" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("grid")}
-                className="rounded-r-none"
-              >
-                <Grid className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === "list" ? "default" : "ghost"}
-                size="sm"
-                onClick={() => setViewMode("list")}
-                className="rounded-l-none"
-              >
-                <List className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {/* Refresh */}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => fetchMedia(currentPage)}
-              disabled={loading}
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${loading ? "animate-spin" : ""}`}
-              />
-            </Button>
-          </div>
-        </div>
-
-        {/* Error Message */}
-        {error && (
-          <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-            <p className="text-red-600">{error}</p>
-          </div>
-        )}
-
-        {/* Media Grid/List */}
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <RefreshCw className="h-8 w-8 animate-spin text-gray-400" />
-            <span className="ml-2 text-gray-600">Loading media...</span>
-          </div>
-        ) : media.length === 0 ? (
-          <div className="text-center py-12">
-            <ImageIcon className="h-16 w-16 mx-auto text-gray-300 mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              No media files
-            </h3>
-            <p className="text-gray-600 mb-4">
-              {searchTerm ||
-              (selectedFolder && selectedFolder !== "all-folders")
-                ? "No files match your current filters."
-                : "Drag & drop files above or click to browse and upload your first file."}
-            </p>
-            {!searchTerm &&
-              (!selectedFolder || selectedFolder === "all-folders") && (
-                <Button
-                  onClick={openFileDialog}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Files
-                </Button>
-              )}
-          </div>
-        ) : (
-          <>
-            {/* Grid View */}
-            {viewMode === "grid" && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {media.map((item) => (
-                  <Card
-                    key={item.id}
-                    className={`cursor-pointer hover:shadow-md transition-shadow group ${
-                      selectedMedia?.id === item.id
-                        ? "ring-2 ring-blue-500"
-                        : ""
-                    }`}
-                    onClick={() => handleSelectMedia(item)}
-                  >
-                    <CardContent className="p-3 relative">
-                      <div className="aspect-[4/3] mb-3 flex items-center justify-center bg-gray-50 rounded-lg overflow-hidden">
-                        {item.type.startsWith("image/") ? (
-                          <img
-                            src={`${item.imgix_url}?w=400&h=300&fit=crop&auto=format,compress`}
-                            alt={item.alt_text || item.original_name}
-                            className="w-full h-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="text-gray-400">
-                            {getFileTypeIcon(item.type)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        <p
-                          className="text-sm font-medium truncate"
-                          title={item.original_name}
-                        >
-                          {item.original_name}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {formatFileSize(item.size)}
-                        </p>
-                        {item.folder && (
-                          <p className="text-xs text-blue-600">
-                            📁 {item.folder}
-                          </p>
-                        )}
-                      </div>
-
-                      {/* Action Menu */}
-                      <div
-                        className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => e.stopPropagation()}
+          {/* List View */}
+          {viewMode === "list" && (
+            <div className="bg-white rounded-lg border">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        File
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Type
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Size
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Folder
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Uploaded
+                      </th>
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {media.map((item) => (
+                      <tr
+                        key={item.id}
+                        className={`hover:bg-gray-50 cursor-pointer ${
+                          selectedMedia?.id === item.id ? "bg-blue-50" : ""
+                        }`}
+                        onClick={() => handleSelectMedia(item)}
                       >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 bg-white/80 hover:bg-white"
-                          onClick={() => handlePreviewMedia(item)}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {/* List View */}
-            {viewMode === "list" && (
-              <div className="bg-white rounded-lg border">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          File
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Type
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Size
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Folder
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Uploaded
-                        </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                          Actions
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
-                      {media.map((item) => (
-                        <tr
-                          key={item.id}
-                          className={`hover:bg-gray-50 cursor-pointer ${
-                            selectedMedia?.id === item.id ? "bg-blue-50" : ""
-                          }`}
-                          onClick={() => handleSelectMedia(item)}
-                        >
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className="flex-shrink-0 h-10 w-10">
-                                {item.type.startsWith("image/") ? (
-                                  <img
-                                    src={`${item.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
-                                    alt={item.alt_text || item.original_name}
-                                    className="h-10 w-10 rounded-lg object-cover"
-                                    loading="lazy"
-                                  />
-                                ) : (
-                                  <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                                    {getFileTypeIcon(item.type)}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
-                                  {item.original_name}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center">
+                            <div className="flex-shrink-0 h-10 w-10">
+                              {item.type.startsWith("image/") ? (
+                                <img
+                                  src={`${item.imgix_url}?w=160&h=160&fit=crop&auto=format,compress`}
+                                  alt={item.alt_text || item.original_name}
+                                  className="h-10 w-10 rounded-lg object-cover"
+                                  loading="lazy"
+                                />
+                              ) : (
+                                <div className="h-10 w-10 bg-gray-100 rounded-lg flex items-center justify-center">
+                                  {getFileTypeIcon(item.type)}
                                 </div>
-                                {item.alt_text && (
-                                  <div className="text-sm text-gray-500">
-                                    {item.alt_text}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.type}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {formatFileSize(item.size)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {item.folder || "-"}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {new Date(item.created_at).toLocaleDateString()}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <div
-                              className="flex items-center justify-end gap-2"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handlePreviewMedia(item)}
-                                title="Preview"
-                              >
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                              {item.type.startsWith("image/") && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleCropMedia(item)}
-                                  title="Crop Image"
-                                >
-                                  <Crop className="h-4 w-4" />
-                                </Button>
                               )}
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDownloadMedia(item)}
-                                title="Download"
-                              >
-                                <Download className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEditMedia(item)}
-                                title="Edit"
-                              >
-                                <Edit3 className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleDeleteMedia(item)}
-                                title="Delete"
-                                className="text-red-600 hover:text-red-700"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
                             </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between">
-                <div className="flex-1 flex justify-between sm:hidden">
-                  <Button
-                    variant="outline"
-                    onClick={() => fetchMedia(currentPage - 1)}
-                    disabled={currentPage === 1 || loading}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => fetchMedia(currentPage + 1)}
-                    disabled={currentPage === totalPages || loading}
-                  >
-                    Next
-                  </Button>
-                </div>
-                <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
-                  <div>
-                    <p className="text-sm text-gray-700">
-                      Showing <span className="font-medium">{startIndex}</span>{" "}
-                      to <span className="font-medium">{endIndex}</span> of{" "}
-                      <span className="font-medium">{totalItems}</span> results
-                    </p>
-                  </div>
-                  <div>
-                    <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
-                      <Button
-                        variant="outline"
-                        onClick={() => fetchMedia(currentPage - 1)}
-                        disabled={currentPage === 1 || loading}
-                        className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                      >
-                        <ChevronLeft className="h-5 w-5" />
-                      </Button>
-
-                      {/* Page numbers */}
-                      {Array.from(
-                        { length: Math.min(5, totalPages) },
-                        (_, i) => {
-                          const pageNumber = i + 1;
-                          const isCurrentPage = pageNumber === currentPage;
-
-                          return (
+                            <div className="ml-4">
+                              <div className="text-sm font-medium text-gray-900">
+                                {item.original_name}
+                              </div>
+                              {item.alt_text && (
+                                <div className="text-sm text-gray-500">
+                                  {item.alt_text}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {item.type}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatFileSize(item.size)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {item.folder || "-"}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div
+                            className="flex items-center justify-end gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             <Button
-                              key={pageNumber}
-                              variant={isCurrentPage ? "default" : "outline"}
-                              onClick={() => fetchMedia(pageNumber)}
-                              disabled={loading}
-                              className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
-                                isCurrentPage
-                                  ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
-                                  : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
-                              }`}
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handlePreviewMedia(item)}
+                              title="Preview"
                             >
-                              {pageNumber}
+                              <Eye className="h-4 w-4" />
                             </Button>
-                          );
-                        }
-                      )}
+                            {item.type.startsWith("image/") && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleCropMedia(item)}
+                                title="Crop Image"
+                              >
+                                <Crop className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDownloadMedia(item)}
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditMedia(item)}
+                              title="Edit"
+                            >
+                              <Edit3 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteMedia(item)}
+                              title="Delete"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-                      <Button
-                        variant="outline"
-                        onClick={() => fetchMedia(currentPage + 1)}
-                        disabled={currentPage === totalPages || loading}
-                        className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
-                      >
-                        <ChevronRight className="h-5 w-5" />
-                      </Button>
-                    </nav>
-                  </div>
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <div className="flex-1 flex justify-between sm:hidden">
+                <Button
+                  variant="outline"
+                  onClick={() => fetchMedia(currentPage - 1)}
+                  disabled={currentPage === 1 || loading}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => fetchMedia(currentPage + 1)}
+                  disabled={currentPage === totalPages || loading}
+                >
+                  Next
+                </Button>
+              </div>
+              <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm text-gray-700">
+                    Showing <span className="font-medium">{startIndex}</span>{" "}
+                    to <span className="font-medium">{endIndex}</span> of{" "}
+                    <span className="font-medium">{totalItems}</span> results
+                  </p>
+                </div>
+                <div>
+                  <nav className="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                    <Button
+                      variant="outline"
+                      onClick={() => fetchMedia(currentPage - 1)}
+                      disabled={currentPage === 1 || loading}
+                      className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </Button>
+
+                    {/* Page numbers */}
+                    {Array.from(
+                      { length: Math.min(5, totalPages) },
+                      (_, i) => {
+                        const pageNumber = i + 1;
+                        const isCurrentPage = pageNumber === currentPage;
+
+                        return (
+                          <Button
+                            key={pageNumber}
+                            variant={isCurrentPage ? "default" : "outline"}
+                            onClick={() => fetchMedia(pageNumber)}
+                            disabled={loading}
+                            className={`relative inline-flex items-center px-4 py-2 border text-sm font-medium ${
+                              isCurrentPage
+                                ? "z-10 bg-blue-50 border-blue-500 text-blue-600"
+                                : "bg-white border-gray-300 text-gray-500 hover:bg-gray-50"
+                            }`}
+                          >
+                            {pageNumber}
+                          </Button>
+                        );
+                      }
+                    )}
+
+                    <Button
+                      variant="outline"
+                      onClick={() => fetchMedia(currentPage + 1)}
+                      disabled={currentPage === totalPages || loading}
+                      className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </Button>
+                  </nav>
                 </div>
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </div>
+          )}
+        </>
+      )}
 
       {/* Upload Dialog */}
       <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
@@ -1433,8 +1478,12 @@ export default function MediaLibrary({
         onOpenChange={setShowCropperModal}
         mediaItem={cropperMedia}
         onCropComplete={handleCropComplete}
-        onError={(error) => addToast(error, "error")}
+        onError={(error) => toast({
+          title: "Crop Error",
+          description: error,
+          variant: "destructive",
+        })}
       />
-    </>
+    </div>
   );
 }

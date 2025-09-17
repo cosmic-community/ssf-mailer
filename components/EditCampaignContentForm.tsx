@@ -134,8 +134,9 @@ export default function EditCampaignContentForm({
     setHasUnsavedChanges(hasFormChanges() && !isSubmitting);
   }, [formData, isSubmitting]);
 
-  // Handle content change from shared editor
+  // CRITICAL: Handle content change from shared editor with proper state sync
   const handleContentChange = (content: string) => {
+    // Immediately update form data to ensure content is saved
     setFormData((prev) => ({ ...prev, content }));
   };
 
@@ -352,11 +353,13 @@ export default function EditCampaignContentForm({
                 } else if (data.type === "content") {
                   accumulatedContent += data.text;
                   setStreamingContent(accumulatedContent);
+                  // CRITICAL: Update form data immediately with streaming content
                   setFormData((prev) => ({
                     ...prev,
                     content: accumulatedContent,
                   }));
                 } else if (data.type === "complete") {
+                  // CRITICAL: Final update with complete content
                   setFormData((prev) => ({
                     ...prev,
                     content: data.data.content,
