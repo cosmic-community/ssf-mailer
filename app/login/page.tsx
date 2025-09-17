@@ -237,7 +237,7 @@ export default function LoginPage() {
               href="/subscribe" 
               className="text-slate-600 hover:text-slate-800 text-sm underline transition-colors duration-200"
             >
-              Subscribe to updates
+              Subscribe page
             </Link>
           </div>
         </div>

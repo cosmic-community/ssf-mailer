@@ -156,7 +156,7 @@ export default function SubscriptionForm() {
             Subscribing...
           </>
         ) : (
-          'Subscribe to Updates'
+          'Get subscribers page'
         )}
       </Button>
 

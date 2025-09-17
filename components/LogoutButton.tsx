@@ -32,7 +32,7 @@ export default function LogoutButton() {
       variant="outline"
       size="sm"
       disabled={isLoading}
-      className="text-gray-600 hover:text-gray-900"
+      className="w-full text-gray-600 hover:text-gray-900"
     >
       {isLoading ? (
         <svg
