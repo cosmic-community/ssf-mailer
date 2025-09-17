@@ -69,7 +69,23 @@ export default function EditCampaignContentForm({
   // Refs for autofocus and auto-resize
   const aiPromptRef = useRef<HTMLTextAreaElement>(null);
 
-  // Form state - SINGLE SOURCE OF TRUTH
+  // CRITICAL: Separate display state from editing state
+  // Display state - what's shown in read-only view (NEVER changes during editing)
+  const [displayData, setDisplayData] = useState({
+    subject:
+      campaign.metadata.campaign_content?.subject ||
+      campaign.metadata.subject ||
+      "",
+    content:
+      campaign.metadata.campaign_content?.content ||
+      campaign.metadata.content ||
+      "",
+    template_type:
+      (campaign.metadata.campaign_content?.template_type
+        ?.value as TemplateType) || "Newsletter",
+  });
+
+  // Form state - ONLY used during editing sessions
   const [formData, setFormData] = useState({
     subject:
       campaign.metadata.campaign_content?.subject ||
@@ -164,15 +180,22 @@ export default function EditCampaignContentForm({
 
         const result = await response.json();
 
-        // Update original form data to reflect saved state
-        setOriginalFormData({
+        // CRITICAL: Update both display data and original form data after successful save
+        const savedData = {
           subject: formData.subject,
           content: formData.content,
           template_type: formData.template_type,
-        });
+        };
+
+        setDisplayData(savedData); // Update what's shown in read-only view
+        setOriginalFormData(savedData); // Update what's considered "saved"
 
         setSuccess("Campaign content updated successfully!");
-        addToast("Campaign content saved successfully!", "success");
+        // FIXED: Show toast with enhanced visibility
+        addToast("✅ Campaign content updated successfully!", "success", 4000);
+
+        // End the editing session to return to read-only view
+        endEditingSession();
 
         // Refresh the page to get updated data
         router.refresh();
@@ -190,15 +213,23 @@ export default function EditCampaignContentForm({
     });
   };
 
-  // Start editing session
+  // Start editing session - CRITICAL: Don't change display data
   const startEditingSession = () => {
     setEditingSessionActive(true);
     setIsFullScreen(true); // Open directly in full screen
     setError("");
     setSuccess("");
+    
+    // CRITICAL: Initialize form data with current display data (not campaign metadata)
+    // This ensures we start editing with what's currently displayed
+    setFormData({
+      subject: displayData.subject,
+      content: displayData.content,
+      template_type: displayData.template_type,
+    });
   };
 
-  // End editing session
+  // End editing session - CRITICAL: Reset form to original state if no changes saved
   const endEditingSession = () => {
     setEditingSessionActive(false);
     setIsFullScreen(false); // Exit full screen when ending session
@@ -210,6 +241,14 @@ export default function EditCampaignContentForm({
     setContextItems([]);
     setShowContextInput(false);
     setContextUrl("");
+    
+    // CRITICAL: Reset form data to what's currently saved/displayed
+    // This prevents any unsaved changes from affecting the display
+    setFormData({
+      subject: displayData.subject,
+      content: displayData.content,
+      template_type: displayData.template_type,
+    });
   };
 
   // Handle AI editing
@@ -717,19 +756,19 @@ export default function EditCampaignContentForm({
               </div>
             </form>
           ) : (
-            /* Read-only view - NEVER editable inline */
+            /* CRITICAL: Read-only view uses displayData - NEVER changes during editing */
             <div className="space-y-6">
-              {/* Subject Preview - NEVER editable */}
+              {/* Subject Preview - Shows displayData, not formData */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">
                   Subject Line
                 </Label>
                 <div className="p-3 bg-gray-50 rounded-md border text-sm">
-                  {formData.subject || "No subject line"}
+                  {displayData.subject || "No subject line"}
                 </div>
               </div>
 
-              {/* Content Preview - NEVER editable */}
+              {/* Content Preview - Shows displayData, not formData */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium text-gray-700">
                   Email Content
@@ -743,7 +782,7 @@ export default function EditCampaignContentForm({
                   <div
                     className="p-4 max-h-96 overflow-y-auto bg-white"
                     dangerouslySetInnerHTML={{
-                      __html: formData.content || "No content",
+                      __html: displayData.content || "No content",
                     }}
                     style={{
                       fontFamily: "system-ui, -apple-system, sans-serif",
