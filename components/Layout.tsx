@@ -24,6 +24,7 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const [companyName, setCompanyName] = useState<string>("Email Marketing");
+  const [isLoadingCompanyName, setIsLoadingCompanyName] = useState<boolean>(true);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -41,6 +42,7 @@ export default function Layout({ children }: LayoutProps) {
   };
 
   const fetchCompanyName = async () => {
+    setIsLoadingCompanyName(true);
     try {
       const response = await fetch("/api/settings");
       if (response.ok) {
@@ -53,6 +55,8 @@ export default function Layout({ children }: LayoutProps) {
     } catch (error) {
       console.error("Failed to fetch company name:", error);
       // Keep default "Email Marketing" on error
+    } finally {
+      setIsLoadingCompanyName(false);
     }
   };
 
@@ -109,9 +113,15 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-600" />
-              <span className="ml-2 text-xl font-semibold text-gray-900">
-                {companyName}
-              </span>
+              <div className="ml-2 text-xl font-semibold text-gray-900">
+                {isLoadingCompanyName ? (
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-300 rounded w-32"></div>
+                  </div>
+                ) : (
+                  companyName
+                )}
+              </div>
             </div>
             <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
               <X className="h-6 w-6 text-gray-400" />
@@ -168,7 +178,15 @@ export default function Layout({ children }: LayoutProps) {
           </button>
           <div className="flex items-center">
             <Mail className="h-6 w-6 text-blue-600" />
-            <span className="ml-2 font-semibold text-gray-900">{companyName}</span>
+            <div className="ml-2 font-semibold text-gray-900">
+              {isLoadingCompanyName ? (
+                <div className="animate-pulse">
+                  <div className="h-5 bg-gray-300 rounded w-24"></div>
+                </div>
+              ) : (
+                companyName
+              )}
+            </div>
           </div>
           <div className="w-6" /> {/* Spacer */}
         </div>
