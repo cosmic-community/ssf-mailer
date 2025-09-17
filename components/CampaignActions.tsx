@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import TestEmailModal from "@/components/TestEmailModal";
-import { Save } from "lucide-react";
+import { Save, TestTube } from "lucide-react";
 
 interface CampaignActionsProps {
   campaign: MarketingCampaign;
@@ -67,16 +67,18 @@ export default function CampaignActions({
         </Button>
       )}
 
+      {/* Send Test Email - Right below Update Campaign button, full width */}
+      {status === "Draft" && (
+        <div className="w-full">
+          <TestEmailModal
+            campaignId={campaign.id}
+            campaignName={campaign.metadata.name}
+          />
+        </div>
+      )}
+
       {/* Send Campaign Button */}
       <SendCampaignButton campaign={campaign} />
-
-      {/* Send Test Email - Only show for draft campaigns */}
-      {status === "Draft" && (
-        <TestEmailModal
-          campaignId={campaign.id}
-          campaignName={campaign.metadata.name}
-        />
-      )}
     </div>
   );
 }
