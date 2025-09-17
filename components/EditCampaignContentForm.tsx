@@ -180,22 +180,23 @@ export default function EditCampaignContentForm({
 
         const result = await response.json();
 
-        // CRITICAL: Update both display data and original form data after successful save
+        // CRITICAL: Store saved data but DON'T update display data yet
         const savedData = {
           subject: formData.subject,
           content: formData.content,
           template_type: formData.template_type,
         };
 
-        setDisplayData(savedData); // Update what's shown in read-only view
-        setOriginalFormData(savedData); // Update what's considered "saved"
+        // Update what's considered "saved" for change tracking
+        setOriginalFormData(savedData);
 
         setSuccess("Campaign content updated successfully!");
-        // FIXED: Show toast with enhanced visibility
-        addToast("✅ Campaign content updated successfully!", "success", 4000);
+        
+        // ENHANCED: Show highly visible success toast
+        addToast("🎉 Campaign content saved successfully!", "success", 5000);
 
-        // End the editing session to return to read-only view
-        endEditingSession();
+        // CRITICAL: End the editing session which will update display data
+        endEditingSession(savedData);
 
         // Refresh the page to get updated data
         router.refresh();
@@ -229,8 +230,12 @@ export default function EditCampaignContentForm({
     });
   };
 
-  // End editing session - CRITICAL: Reset form to original state if no changes saved
-  const endEditingSession = () => {
+  // CRITICAL: Enhanced end editing session - only update display data when ending
+  const endEditingSession = (savedData?: {
+    subject: string;
+    content: string;
+    template_type: TemplateType;
+  }) => {
     setEditingSessionActive(false);
     setIsFullScreen(false); // Exit full screen when ending session
     setIsAIEditing(false);
@@ -242,12 +247,19 @@ export default function EditCampaignContentForm({
     setShowContextInput(false);
     setContextUrl("");
     
-    // CRITICAL: Reset form data to what's currently saved/displayed
-    // This prevents any unsaved changes from affecting the display
+    // CRITICAL: Update display data ONLY when ending the session
+    // If savedData is provided (from successful save), use that
+    // Otherwise, keep the existing display data unchanged
+    if (savedData) {
+      setDisplayData(savedData);
+    }
+    
+    // Reset form data to current display data
+    const currentDisplayData = savedData || displayData;
     setFormData({
-      subject: displayData.subject,
-      content: displayData.content,
-      template_type: displayData.template_type,
+      subject: currentDisplayData.subject,
+      content: currentDisplayData.content,
+      template_type: currentDisplayData.template_type,
     });
   };
 
@@ -720,7 +732,7 @@ export default function EditCampaignContentForm({
               <div className="flex items-center justify-between pt-6 border-t">
                 <Button
                   type="button"
-                  onClick={endEditingSession}
+                  onClick={() => endEditingSession()}
                   variant="outline"
                   disabled={isSubmitting}
                 >
