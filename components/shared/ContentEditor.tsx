@@ -71,27 +71,24 @@ export default function ContentEditor({
     }
   };
 
-  // CRITICAL: Enhanced immediate content sync function
+  // CRITICAL: ENHANCED immediate content sync function - much more aggressive
   const syncContentToState = (content: string) => {
     // Clear any existing timeout for batched updates
     if (contentSyncTimeoutRef.current) {
       clearTimeout(contentSyncTimeoutRef.current);
+      contentSyncTimeoutRef.current = null;
     }
 
-    // CRITICAL: Immediate update for image and link operations
+    // CRITICAL: IMMEDIATE update for all operations - no delays
     if (!isUpdatingFromStateRef.current) {
+      console.log("🔄 IMMEDIATE content sync triggered:", content.substring(0, 100) + "...");
       onContentChange(content);
     }
 
-    // Also set a short timeout for any additional rapid changes
-    contentSyncTimeoutRef.current = setTimeout(() => {
-      if (!isUpdatingFromStateRef.current) {
-        onContentChange(content);
-      }
-    }, 50); // Reduced from 100ms to 50ms for faster response
+    // REMOVED: No timeout-based batching - all updates are immediate now
   };
 
-  // ENHANCED: Handle format application with immediate content sync
+  // ENHANCED: Handle format application with IMMEDIATE content sync
   const handleFormatApply = (format: string, value?: string) => {
     const previewDiv = mainPreviewRef.current;
     if (!previewDiv) return;
@@ -103,13 +100,16 @@ export default function ContentEditor({
       // Save cursor position before applying format
       saveCursorPosition();
 
+      console.log("🎨 Applying format:", format, "with value:", value);
+
       // Apply formatting directly to the contentEditable div
       applyFormat(previewDiv, format, value, primaryColor);
 
-      // CRITICAL: Get updated content and sync immediately
+      // CRITICAL: Get updated content and sync IMMEDIATELY
       const updatedContent = previewDiv.innerHTML;
+      console.log("🚀 Format applied, syncing content immediately");
       
-      // Immediate state update for toolbar operations
+      // IMMEDIATE state update - no delays for toolbar operations
       syncContentToState(updatedContent);
 
       // Restore cursor position after formatting
@@ -146,6 +146,7 @@ export default function ContentEditor({
           saveCursorPosition();
         }
 
+        console.log("📝 Initializing content in editor");
         isUpdatingFromStateRef.current = true;
         mainPreviewRef.current.innerHTML = expectedContent;
         applyStylesToContent(mainPreviewRef.current, primaryColor);
@@ -163,7 +164,7 @@ export default function ContentEditor({
     }
   }, [content, streamingContent, isAIEditing, primaryColor, activeEditor]);
 
-  // CRITICAL: Enhanced contentEditable input handler with immediate sync
+  // CRITICAL: ENHANCED contentEditable input handler with IMMEDIATE sync
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
     // Prevent recursive updates
     if (isUpdatingFromStateRef.current) {
@@ -177,14 +178,15 @@ export default function ContentEditor({
     saveCursorPosition();
 
     const updatedContent = e.currentTarget.innerHTML;
+    console.log("⌨️ Content input detected, syncing immediately");
 
-    // CRITICAL: Immediate sync for all content changes
+    // CRITICAL: IMMEDIATE sync for all content changes
     syncContentToState(updatedContent);
 
     // Clear active editor after state update
     setTimeout(() => {
       setActiveEditor(null);
-    }, 100);
+    }, 50); // Reduced from 100ms
   };
 
   // CRITICAL: Enhanced content change event handler for toolbar operations
@@ -192,7 +194,8 @@ export default function ContentEditor({
     const handleContentChanged = (event: CustomEvent) => {
       const { content: newContent } = event.detail;
       if (newContent && newContent !== content) {
-        // Immediate sync for toolbar operations
+        console.log("🔧 Toolbar content change detected, syncing immediately");
+        // IMMEDIATE sync for toolbar operations
         syncContentToState(newContent);
       }
     };
@@ -218,11 +221,12 @@ export default function ContentEditor({
   const handleContentEditableBlur = () => {
     if (mainPreviewRef.current) {
       const finalContent = mainPreviewRef.current.innerHTML;
+      console.log("👁️ Editor blur detected, final content sync");
       syncContentToState(finalContent);
     }
   };
 
-  // CRITICAL: Enhanced DOM mutation observer for immediate sync
+  // CRITICAL: ENHANCED DOM mutation observer for IMMEDIATE sync
   useEffect(() => {
     if (!mainPreviewRef.current) return;
 
@@ -231,34 +235,108 @@ export default function ContentEditor({
       if (!isUpdatingFromStateRef.current && mainPreviewRef.current) {
         const currentContent = mainPreviewRef.current.innerHTML;
         
-        // Check if the mutation was due to image or link operations
-        const hasImageOrLinkChanges = mutations.some(mutation => {
-          return Array.from(mutation.addedNodes).some(node => 
-            node.nodeType === Node.ELEMENT_NODE &&
-            (node as Element).tagName &&
-            ['IMG', 'A'].includes((node as Element).tagName)
-          ) || Array.from(mutation.removedNodes).some(node => 
-            node.nodeType === Node.ELEMENT_NODE &&
-            (node as Element).tagName &&
-            ['IMG', 'A'].includes((node as Element).tagName)
+        // Check for ANY content-affecting mutations
+        const hasContentChanges = mutations.some(mutation => {
+          // Check for added nodes (including images, links, text)
+          const hasAddedNodes = Array.from(mutation.addedNodes).some(node => 
+            node.nodeType === Node.ELEMENT_NODE ||
+            node.nodeType === Node.TEXT_NODE
           );
+          
+          // Check for removed nodes
+          const hasRemovedNodes = Array.from(mutation.removedNodes).some(node => 
+            node.nodeType === Node.ELEMENT_NODE ||
+            node.nodeType === Node.TEXT_NODE
+          );
+          
+          // Check for attribute changes (src, href, style, etc.)
+          const hasAttributeChanges = mutation.type === 'attributes';
+          
+          // Check for text changes
+          const hasTextChanges = mutation.type === 'characterData';
+
+          return hasAddedNodes || hasRemovedNodes || hasAttributeChanges || hasTextChanges;
         });
 
-        // If image or link changes detected, sync immediately
-        if (hasImageOrLinkChanges) {
+        // CRITICAL: Sync immediately for ANY content change
+        if (hasContentChanges) {
+          console.log("🔍 Mutation observer detected content changes, syncing immediately");
+          console.log("Mutations:", mutations.map(m => ({
+            type: m.type,
+            target: m.target.nodeName,
+            addedNodes: m.addedNodes.length,
+            removedNodes: m.removedNodes.length,
+            attributeName: m.attributeName
+          })));
+          
           syncContentToState(currentContent);
         }
       }
     });
 
+    // Enhanced observer configuration - watch EVERYTHING
     observer.observe(mainPreviewRef.current, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['src', 'alt', 'href', 'style'],
+      childList: true,        // Watch for added/removed child nodes
+      subtree: true,         // Watch the entire subtree
+      attributes: true,      // Watch for attribute changes
+      attributeOldValue: true, // Track old attribute values
+      characterData: true,   // Watch for text changes
+      characterDataOldValue: true, // Track old text values
+      // Watch ALL attributes, not just specific ones
+      attributeFilter: undefined, // This means watch ALL attributes
     });
 
     return () => observer.disconnect();
+  }, []);
+
+  // ENHANCED: Add additional event listeners for comprehensive change detection
+  useEffect(() => {
+    if (!mainPreviewRef.current) return;
+
+    const element = mainPreviewRef.current;
+
+    // Listen for paste events
+    const handlePaste = () => {
+      // Short timeout to allow paste to complete
+      setTimeout(() => {
+        if (element) {
+          console.log("📋 Paste detected, syncing content");
+          syncContentToState(element.innerHTML);
+        }
+      }, 10);
+    };
+
+    // Listen for cut events
+    const handleCut = () => {
+      // Short timeout to allow cut to complete
+      setTimeout(() => {
+        if (element) {
+          console.log("✂️ Cut detected, syncing content");
+          syncContentToState(element.innerHTML);
+        }
+      }, 10);
+    };
+
+    // Listen for drag and drop events
+    const handleDrop = () => {
+      // Short timeout to allow drop to complete
+      setTimeout(() => {
+        if (element) {
+          console.log("🎯 Drop detected, syncing content");
+          syncContentToState(element.innerHTML);
+        }
+      }, 10);
+    };
+
+    element.addEventListener('paste', handlePaste);
+    element.addEventListener('cut', handleCut);
+    element.addEventListener('drop', handleDrop);
+
+    return () => {
+      element.removeEventListener('paste', handlePaste);
+      element.removeEventListener('cut', handleCut);
+      element.removeEventListener('drop', handleDrop);
+    };
   }, []);
 
   // Cleanup timeout on unmount
@@ -364,7 +442,7 @@ export default function ContentEditor({
                   <>
                     Ready to edit! Type directly in the content area and select
                     text to use the formatting toolbar. Use AI editor on the
-                    left for intelligent content changes. All changes are saved automatically.
+                    left for intelligent content changes. All changes are saved automatically and immediately.
                   </>
                 )}
               </p>
