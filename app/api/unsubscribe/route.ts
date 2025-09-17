@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { unsubscribeContact } from "@/lib/cosmic";
+import { unsubscribeContact, cosmic } from "@/lib/cosmic";
 
 export async function GET(request: NextRequest) {
   try {
@@ -40,6 +40,68 @@ export async function GET(request: NextRequest) {
       decodeURIComponent(email),
       campaignId
     );
+
+    // Update campaign stats if unsubscribe was successful and campaignId is provided
+    if (success && campaignId) {
+      try {
+        // Get the current campaign to update unsubscribe stats
+        const { object: campaign } = await cosmic.objects
+          .findOne({
+            type: "marketing-campaigns",
+            id: campaignId,
+          })
+          .props(["id", "metadata"]);
+
+        if (campaign?.metadata?.stats) {
+          const currentStats = campaign.metadata.stats;
+          const newUnsubscribedCount = (currentStats.unsubscribed || 0) + 1;
+          const totalSent = currentStats.sent || 1;
+          const newUnsubscribeRate = `${Math.round(
+            (newUnsubscribedCount / totalSent) * 100
+          )}%`;
+
+          // Update campaign stats with new unsubscribe data
+          await cosmic.objects.updateOne(campaignId, {
+            metadata: {
+              stats: {
+                ...currentStats,
+                unsubscribed: newUnsubscribedCount,
+                unsubscribe_rate: newUnsubscribeRate,
+              },
+            },
+          });
+        }
+      } catch (statsError) {
+        // Log stats update error but don't fail the unsubscribe
+        console.error("Error updating unsubscribe stats:", statsError);
+      }
+
+      // Create tracking event (optional - for detailed analytics)
+      try {
+        await cosmic.objects.insertOne({
+          type: "email-tracking-events",
+          title: `Unsubscribe Event - ${new Date().toISOString()}`,
+          status: "published",
+          metadata: {
+            event_type: "unsubscribe",
+            campaign_id: campaignId,
+            email: decodeURIComponent(email),
+            timestamp: new Date().toISOString(),
+            user_agent: request.headers.get("user-agent") || "",
+            ip_address:
+              request.headers.get("x-forwarded-for") ||
+              request.headers.get("x-real-ip") ||
+              "unknown",
+          },
+        });
+      } catch (trackingError) {
+        // Log tracking error but don't fail the unsubscribe
+        console.error(
+          "Error creating unsubscribe tracking event:",
+          trackingError
+        );
+      }
+    }
 
     if (success) {
       return new NextResponse(
