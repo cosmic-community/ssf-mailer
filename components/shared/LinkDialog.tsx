@@ -10,12 +10,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Unlink } from "lucide-react";
 
 interface LinkDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onSave: (url: string, text: string) => void;
+  onUnlink?: () => void;
   onVisit?: (url: string) => void;
   initialUrl?: string;
   initialText?: string;
@@ -29,6 +30,7 @@ export default function LinkDialog({
   isOpen,
   onClose,
   onSave,
+  onUnlink,
   onVisit,
   initialUrl = "",
   initialText = "",
@@ -47,6 +49,13 @@ export default function LinkDialog({
     onClose();
   };
 
+  const handleUnlink = () => {
+    if (onUnlink) {
+      onUnlink();
+      onClose();
+    }
+  };
+
   const handleVisit = () => {
     if (url.trim() && onVisit) {
       onVisit(url.trim());
@@ -60,11 +69,14 @@ export default function LinkDialog({
     }
   };
 
+  // Check if we're editing an existing link (has initial URL)
+  const isEditing = Boolean(initialUrl);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>{initialUrl ? "Edit Link" : "Add Link"}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Link" : "Add Link"}</DialogTitle>
         </DialogHeader>
         <div className="space-y-4 pt-4">
           <div className="space-y-2">
@@ -89,7 +101,7 @@ export default function LinkDialog({
             />
           </div>
           <div className="flex justify-between pt-4">
-            <div>
+            <div className="flex space-x-2">
               {url.trim() && onVisit && (
                 <Button
                   type="button"
@@ -99,6 +111,19 @@ export default function LinkDialog({
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   Visit
+                </Button>
+              )}
+              {isEditing && onUnlink && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleUnlink}
+                  size="sm"
+                  className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
+                  title="Remove link but keep text"
+                >
+                  <Unlink className="h-4 w-4 mr-2" />
+                  Unlink
                 </Button>
               )}
             </div>
@@ -111,7 +136,7 @@ export default function LinkDialog({
                 disabled={!url.trim() || !text.trim()}
                 className="bg-blue-600 hover:bg-blue-700"
               >
-                {initialUrl ? "Update Link" : "Add Link"}
+                {isEditing ? "Update Link" : "Add Link"}
               </Button>
             </div>
           </div>
