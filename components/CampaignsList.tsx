@@ -148,17 +148,6 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
     }
   }
 
-  const getTemplateName = (campaign: MarketingCampaign) => {
-    // Handle the new template field structure
-    if (typeof campaign.metadata.template === 'object' && campaign.metadata.template?.metadata?.name) {
-      return campaign.metadata.template.metadata.name
-    }
-    if (typeof campaign.metadata.template === 'string') {
-      return 'Template (ID only)'
-    }
-    return 'No template'
-  }
-
   const canDuplicate = (campaign: MarketingCampaign) => {
     // Allow duplication for all campaigns except those currently sending
     return campaign.metadata.status.value !== 'Sending'
@@ -203,10 +192,6 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                       </div>
                       
                       <div className="flex items-center space-x-6 text-sm text-gray-600">
-                        <div className="flex items-center space-x-1">
-                          <Mail className="h-4 w-4" />
-                          <span>{getTemplateName(campaign)}</span>
-                        </div>
                         
                         <div className="flex items-center space-x-1">
                           <Users className="h-4 w-4" />
