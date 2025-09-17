@@ -946,7 +946,10 @@ export async function getContactsByListId(
 }
 
 // Unsubscribe function
-export async function unsubscribeContact(email: string): Promise<boolean> {
+export async function unsubscribeContact(
+  email: string,
+  campaignId?: string | null
+): Promise<boolean> {
   try {
     // Find contact by email
     const { objects } = await cosmic.objects
@@ -963,13 +966,27 @@ export async function unsubscribeContact(email: string): Promise<boolean> {
 
     const contact = objects[0];
 
-    // Update status to unsubscribed
+    // Prepare metadata update
+    const updateMetadata: any = {
+      status: "Unsubscribed",
+      unsubscribed_date: new Date().toISOString(),
+    };
+
+    // Add campaign ID if provided
+    if (campaignId) {
+      updateMetadata.unsubscribe_campaign = campaignId;
+    }
+
+    // Update contact with unsubscribe information
     await cosmic.objects.updateOne(contact.id, {
-      metadata: {
-        status: "Unsubscribed",
-      },
+      metadata: updateMetadata,
     });
 
+    console.log(
+      `Contact ${email} unsubscribed${
+        campaignId ? ` from campaign ${campaignId}` : ""
+      }`
+    );
     return true;
   } catch (error) {
     console.error(`Error unsubscribing contact with email ${email}:`, error);

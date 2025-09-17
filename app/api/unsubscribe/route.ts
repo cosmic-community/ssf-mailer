@@ -1,10 +1,11 @@
-import { NextRequest, NextResponse } from 'next/server'
-import { unsubscribeContact } from '@/lib/cosmic'
+import { NextRequest, NextResponse } from "next/server";
+import { unsubscribeContact } from "@/lib/cosmic";
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const email = searchParams.get('email')
+    const { searchParams } = new URL(request.url);
+    const email = searchParams.get("email");
+    const campaignId = searchParams.get("campaign");
 
     if (!email) {
       return new NextResponse(
@@ -29,13 +30,16 @@ export async function GET(request: NextRequest) {
         `,
         {
           status: 400,
-          headers: { 'Content-Type': 'text/html' }
+          headers: { "Content-Type": "text/html" },
         }
-      )
+      );
     }
 
     // Attempt to unsubscribe the contact
-    const success = await unsubscribeContact(decodeURIComponent(email))
+    const success = await unsubscribeContact(
+      decodeURIComponent(email),
+      campaignId
+    );
 
     if (success) {
       return new NextResponse(
@@ -71,9 +75,9 @@ export async function GET(request: NextRequest) {
         `,
         {
           status: 200,
-          headers: { 'Content-Type': 'text/html' }
+          headers: { "Content-Type": "text/html" },
         }
-      )
+      );
     } else {
       return new NextResponse(
         `
@@ -99,13 +103,13 @@ export async function GET(request: NextRequest) {
         `,
         {
           status: 404,
-          headers: { 'Content-Type': 'text/html' }
+          headers: { "Content-Type": "text/html" },
         }
-      )
+      );
     }
   } catch (error) {
-    console.error('Unsubscribe error:', error)
-    
+    console.error("Unsubscribe error:", error);
+
     return new NextResponse(
       `
       <!DOCTYPE html>
@@ -128,13 +132,13 @@ export async function GET(request: NextRequest) {
       `,
       {
         status: 500,
-        headers: { 'Content-Type': 'text/html' }
+        headers: { "Content-Type": "text/html" },
       }
-    )
+    );
   }
 }
 
 export async function POST(request: NextRequest) {
   // Handle POST requests for unsubscribe (same logic as GET)
-  return GET(request)
+  return GET(request);
 }

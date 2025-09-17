@@ -11,8 +11,8 @@ import { sendEmail } from "@/lib/resend";
 import { createUnsubscribeUrl } from "@/lib/email-tracking";
 import { MarketingCampaign, EmailContact } from "@/types";
 
-const BATCH_SIZE = 100; // Send 100 emails per batch
-const MAX_BATCHES_PER_RUN = 5; // Process max 5 batches per cron run (500 emails)
+const BATCH_SIZE = 1000; // Send 1000 emails per batch
+const MAX_BATCHES_PER_RUN = 10; // Process max 10 batches per cron run (10,000 emails)
 
 export async function GET(request: NextRequest) {
   try {
@@ -333,7 +333,11 @@ async function sendCampaignEmail(
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
   // Add unsubscribe footer
-  const unsubscribeUrl = createUnsubscribeUrl(contact.metadata.email, baseUrl);
+  const unsubscribeUrl = createUnsubscribeUrl(
+    contact.metadata.email,
+    baseUrl,
+    campaign.id
+  );
 
   const finalContent =
     personalizedContent +

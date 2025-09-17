@@ -39,8 +39,8 @@ export interface ResendErrorResponse {
 
 // Rate limiting configuration for Resend API
 const RATE_LIMIT = {
-  BATCH_SIZE: 100, // Send 100 emails per batch
-  BATCH_DELAY: 2000, // Wait 2 seconds between batches (30 batches per minute max)
+  BATCH_SIZE: 1000, // Send 1000 emails per batch
+  BATCH_DELAY: 1000, // Wait 1 second between batches (optimized for higher throughput)
   RETRY_ATTEMPTS: 3, // Retry failed emails up to 3 times
   RETRY_DELAY: 5000, // Wait 5 seconds before retry
 };
@@ -211,7 +211,8 @@ export async function sendCampaignEmails(
             // Add unsubscribe link and footer
             const unsubscribeUrl = createUnsubscribeUrl(
               contact.metadata.email,
-              baseUrl
+              baseUrl,
+              campaignId
             );
             const companyAddress = settings.metadata.company_address || "";
 
