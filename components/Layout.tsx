@@ -92,7 +92,7 @@ export default function Layout({ children }: LayoutProps) {
             <div className="flex items-center">
               <Mail className="h-8 w-8 text-blue-600" />
               <span className="ml-2 text-xl font-semibold text-gray-900">
-                EmailHub
+                Email Marketing
               </span>
             </div>
             <button className="lg:hidden" onClick={() => setSidebarOpen(false)}>
@@ -150,7 +150,7 @@ export default function Layout({ children }: LayoutProps) {
           </button>
           <div className="flex items-center">
             <Mail className="h-6 w-6 text-blue-600" />
-            <span className="ml-2 font-semibold text-gray-900">EmailHub</span>
+            <span className="ml-2 font-semibold text-gray-900">Email Marketing</span>
           </div>
           <div className="w-6" /> {/* Spacer */}
         </div>
