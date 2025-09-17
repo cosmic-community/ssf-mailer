@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import ContentEditor from "./shared/ContentEditor";
-import { useToastContext } from "@/components/ToastProvider";
+import { useToast } from "@/hooks/use-toast";
 import { useTemplateSettings } from "@/hooks/useTemplateSettings";
 
 interface ContextItem {
@@ -54,7 +54,7 @@ export default function EditCampaignContentForm({
   const [aiStatus, setAiStatus] = useState("");
   const [aiProgress, setAiProgress] = useState(0);
   const [editingSessionActive, setEditingSessionActive] = useState(false);
-  const { addToast } = useToastContext();
+  const { toast } = useToast();
 
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -145,13 +145,21 @@ export default function EditCampaignContentForm({
 
     if (!formData.subject.trim()) {
       setError("Subject line is required");
-      addToast("Please enter a subject line", "error");
+      toast({
+        title: "Validation Error",
+        description: "Please enter a subject line",
+        variant: "destructive",
+      });
       return;
     }
 
     if (!formData.content.trim()) {
       setError("Content is required");
-      addToast("Please enter email content", "error");
+      toast({
+        title: "Validation Error",
+        description: "Please enter email content",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -193,8 +201,12 @@ export default function EditCampaignContentForm({
 
         setSuccess("Campaign content updated successfully!");
         
-        // ENHANCED: Show highly visible success toast with longer duration
-        addToast("🎉 Campaign content saved successfully!", "success", 6000);
+        // ENHANCED: Show highly visible success toast
+        toast({
+          title: "Success!",
+          description: "🎉 Campaign content saved successfully!",
+          variant: "success",
+        });
 
         // CRITICAL: End the editing session which will update display data
         endEditingSession(savedData);
@@ -208,7 +220,11 @@ export default function EditCampaignContentForm({
             ? error.message
             : "Failed to update campaign content";
         setError(errorMessage);
-        addToast(errorMessage, "error");
+        toast({
+          title: "Error",
+          description: errorMessage,
+          variant: "destructive",
+        });
       } finally {
         setIsSubmitting(false);
       }
@@ -349,10 +365,11 @@ export default function EditCampaignContentForm({
                   setAiPrompt("");
                   setAiStatus("Editing complete!");
                   setAiProgress(100);
-                  addToast(
-                    "Content edited successfully! Continue editing or save campaign.",
-                    "success"
-                  );
+                  toast({
+                    title: "AI Editing Complete",
+                    description: "Content edited successfully! Continue editing or save campaign.",
+                    variant: "success",
+                  });
 
                   // Content will be updated via the shared ContentEditor
                 } else if (data.type === "error") {
@@ -369,10 +386,13 @@ export default function EditCampaignContentForm({
       }
     } catch (error) {
       console.error("AI editing error:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to edit with AI"
-      );
-      addToast("AI editing failed. Please try again.", "error");
+      const errorMessage = error instanceof Error ? error.message : "Failed to edit with AI";
+      setError(errorMessage);
+      toast({
+        title: "AI Editing Failed",
+        description: "AI editing failed. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsAIEditing(false);
       setAiStatus("");
