@@ -1247,7 +1247,7 @@ export default function HtmlEditingToolbar({
               {imageDialog.element ? "Update Image" : "Insert Image"}
             </Button>
           </div>
-        </div>
+        </DialogContent>
       </Dialog>
 
       {/* Image Cropper Modal */}
