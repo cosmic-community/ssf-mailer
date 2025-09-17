@@ -30,10 +30,12 @@ import {
   Wand2,
   Maximize,
   Minimize,
+  Mail,
+  Send,
 } from "lucide-react";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import ContentEditor from "./shared/ContentEditor";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from "@/hooks/use-toast";
 import { useTemplateSettings } from "@/hooks/useTemplateSettings";
 
 interface ContextItem {
@@ -62,7 +64,7 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [editingSessionActive, setEditingSessionActive] = useState(false);
-  const { addToast } = useToast();
+  const { toast } = useToast();
 
   // Simple editing states - start in view mode
   const [isMainEditing, setIsMainEditing] = useState(false);
@@ -441,7 +443,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
                   setAiStatus("Editing complete!");
                   setAiProgress(100);
                   setSuccess("Template updated with AI suggestions!");
-                  addToast("AI editing completed successfully!", "success");
+                  toast({
+                    title: "AI Editing Complete",
+                    description: "Template updated with AI suggestions!",
+                    variant: "success",
+                  });
 
                   setAiPrompt("");
 
@@ -480,6 +486,11 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       );
       setAiStatus("Editing failed");
       setEditingSessionActive(false);
+      toast({
+        title: "AI Editing Failed",
+        description: error instanceof Error ? error.message : "Failed to edit template with AI",
+        variant: "destructive",
+      });
     } finally {
       setIsAIEditing(false);
       setTimeout(() => {
@@ -557,17 +568,21 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
 
         setHasUnsavedChanges(false);
         setSuccess("Template updated successfully!");
-        addToast("Template updated successfully!", "success");
+        toast({
+          title: "Success!",
+          description: "Template updated successfully!",
+          variant: "success",
+        });
         setEditingSessionActive(false);
       } catch (error) {
         console.error("Update error:", error);
-        setError(
-          error instanceof Error ? error.message : "Failed to update template"
-        );
-        addToast(
-          error instanceof Error ? error.message : "Failed to update template",
-          "error"
-        );
+        const errorMessage = error instanceof Error ? error.message : "Failed to update template";
+        setError(errorMessage);
+        toast({
+          title: "Update Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
       } finally {
         setIsSubmitting(false);
       }
@@ -597,10 +612,14 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       router.refresh();
     } catch (error) {
       console.error("Delete error:", error);
-      setError(
-        error instanceof Error ? error.message : "Failed to delete template"
-      );
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete template";
+      setError(errorMessage);
       setIsDeleting(false);
+      toast({
+        title: "Delete Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
     }
   };
 
@@ -617,6 +636,23 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
       if (!confirmed) return;
     }
     router.back();
+  };
+
+  // Handle create campaign from template
+  const handleCreateCampaign = () => {
+    if (hasUnsavedChanges) {
+      const confirmed = window.confirm(
+        "You have unsaved changes. Save them first or they will be lost. Continue anyway?"
+      );
+      if (!confirmed) return;
+    }
+
+    // Navigate to new campaign page with template pre-selected
+    const params = new URLSearchParams();
+    params.set('template_id', template.id);
+    params.set('template_name', formData.name);
+    
+    router.push(`/campaigns/new?${params.toString()}`);
   };
 
   // Simple read-only full-screen preview modal
@@ -720,6 +756,16 @@ export default function EditTemplateForm({ template }: EditTemplateFormProps) {
           <div className="flex items-center justify-between">
             <CardTitle>Template Details</CardTitle>
             <div className="flex space-x-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCreateCampaign}
+                size="sm"
+                className="flex items-center space-x-2 text-blue-600 border-blue-300 hover:bg-blue-50"
+              >
+                <Send className="h-4 w-4" />
+                <span>Create Campaign From Template</span>
+              </Button>
               <Button
                 type="button"
                 variant="outline"

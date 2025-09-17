@@ -37,7 +37,7 @@ export default function ContentEditor({
   // Track which editor is currently being used to prevent conflicts
   const [activeEditor, setActiveEditor] = useState<"main" | null>(null);
 
-  // CRITICAL: Add content sync timeout to ensure all changes are captured
+  // CRITICAL: Enhanced content sync with immediate state updates
   const contentSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isUpdatingFromStateRef = useRef<boolean>(false);
   const cursorPositionRef = useRef<{
@@ -71,23 +71,27 @@ export default function ContentEditor({
     }
   };
 
-  // CRITICAL: Enhanced content sync function to ensure all changes are captured
+  // CRITICAL: Enhanced immediate content sync function
   const syncContentToState = (content: string) => {
-    // Clear any existing timeout
+    // Clear any existing timeout for batched updates
     if (contentSyncTimeoutRef.current) {
       clearTimeout(contentSyncTimeoutRef.current);
     }
 
-    // Set a short timeout to batch rapid changes
+    // CRITICAL: Immediate update for image and link operations
+    if (!isUpdatingFromStateRef.current) {
+      onContentChange(content);
+    }
+
+    // Also set a short timeout for any additional rapid changes
     contentSyncTimeoutRef.current = setTimeout(() => {
-      // Double check that we're not in a state update cycle
       if (!isUpdatingFromStateRef.current) {
         onContentChange(content);
       }
-    }, 100); // 100ms for better debouncing
+    }, 50); // Reduced from 100ms to 50ms for faster response
   };
 
-  // FIXED: Handle format application from toolbar with proper conflict prevention and content sync
+  // ENHANCED: Handle format application with immediate content sync
   const handleFormatApply = (format: string, value?: string) => {
     const previewDiv = mainPreviewRef.current;
     if (!previewDiv) return;
@@ -96,18 +100,26 @@ export default function ContentEditor({
     setActiveEditor("main");
 
     try {
+      // Save cursor position before applying format
+      saveCursorPosition();
+
       // Apply formatting directly to the contentEditable div
       applyFormat(previewDiv, format, value, primaryColor);
 
-      // Get the updated content and sync with React state immediately
+      // CRITICAL: Get updated content and sync immediately
       const updatedContent = previewDiv.innerHTML;
-
-      // CRITICAL: Use the enhanced sync function for immediate state update
+      
+      // Immediate state update for toolbar operations
       syncContentToState(updatedContent);
+
+      // Restore cursor position after formatting
+      setTimeout(() => {
+        restoreCursorPosition();
+      }, 10);
     } catch (error) {
       console.error("Format application error:", error);
     } finally {
-      // Clear active editor after a brief delay to allow for proper state sync
+      // Clear active editor after a brief delay
       setTimeout(() => {
         setActiveEditor(null);
       }, 100);
@@ -151,7 +163,7 @@ export default function ContentEditor({
     }
   }, [content, streamingContent, isAIEditing, primaryColor, activeEditor]);
 
-  // ENHANCED: ContentEditable input handler with better content sync
+  // CRITICAL: Enhanced contentEditable input handler with immediate sync
   const handleContentEditableInput = (e: React.FormEvent<HTMLDivElement>) => {
     // Prevent recursive updates
     if (isUpdatingFromStateRef.current) {
@@ -166,7 +178,7 @@ export default function ContentEditor({
 
     const updatedContent = e.currentTarget.innerHTML;
 
-    // CRITICAL: Use enhanced sync function for immediate state update
+    // CRITICAL: Immediate sync for all content changes
     syncContentToState(updatedContent);
 
     // Clear active editor after state update
@@ -175,11 +187,12 @@ export default function ContentEditor({
     }, 100);
   };
 
-  // ENHANCED: Handle content change events from toolbar operations
+  // CRITICAL: Enhanced content change event handler for toolbar operations
   useEffect(() => {
     const handleContentChanged = (event: CustomEvent) => {
       const { content: newContent } = event.detail;
       if (newContent && newContent !== content) {
+        // Immediate sync for toolbar operations
         syncContentToState(newContent);
       }
     };
@@ -200,6 +213,53 @@ export default function ContentEditor({
       }
     };
   }, [content]);
+
+  // CRITICAL: Add blur event to ensure final content sync
+  const handleContentEditableBlur = () => {
+    if (mainPreviewRef.current) {
+      const finalContent = mainPreviewRef.current.innerHTML;
+      syncContentToState(finalContent);
+    }
+  };
+
+  // CRITICAL: Enhanced DOM mutation observer for immediate sync
+  useEffect(() => {
+    if (!mainPreviewRef.current) return;
+
+    const observer = new MutationObserver((mutations) => {
+      // Only sync if we're not in the middle of a state update
+      if (!isUpdatingFromStateRef.current && mainPreviewRef.current) {
+        const currentContent = mainPreviewRef.current.innerHTML;
+        
+        // Check if the mutation was due to image or link operations
+        const hasImageOrLinkChanges = mutations.some(mutation => {
+          return Array.from(mutation.addedNodes).some(node => 
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node as Element).tagName &&
+            ['IMG', 'A'].includes((node as Element).tagName)
+          ) || Array.from(mutation.removedNodes).some(node => 
+            node.nodeType === Node.ELEMENT_NODE &&
+            (node as Element).tagName &&
+            ['IMG', 'A'].includes((node as Element).tagName)
+          );
+        });
+
+        // If image or link changes detected, sync immediately
+        if (hasImageOrLinkChanges) {
+          syncContentToState(currentContent);
+        }
+      }
+    });
+
+    observer.observe(mainPreviewRef.current, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['src', 'alt', 'href', 'style'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -266,6 +326,7 @@ export default function ContentEditor({
               minHeight: "200px",
             }}
             onInput={handleContentEditableInput}
+            onBlur={handleContentEditableBlur}
             suppressContentEditableWarning={true}
           />
           {/* Preview unsubscribe footer */}
@@ -303,7 +364,7 @@ export default function ContentEditor({
                   <>
                     Ready to edit! Type directly in the content area and select
                     text to use the formatting toolbar. Use AI editor on the
-                    left for intelligent content changes.
+                    left for intelligent content changes. All changes are saved automatically.
                   </>
                 )}
               </p>
