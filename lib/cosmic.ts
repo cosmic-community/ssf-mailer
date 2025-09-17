@@ -951,6 +951,7 @@ export async function unsubscribeContact(
   campaignId?: string | null
 ): Promise<boolean> {
   try {
+    console.log("Unsubscribing contact:", email, campaignId);
     // Find contact by email
     const { objects } = await cosmic.objects
       .find({
