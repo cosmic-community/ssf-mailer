@@ -10,6 +10,7 @@ import {
 import EditCampaignForm from "@/components/EditCampaignForm";
 import EditCampaignContentForm from "@/components/EditCampaignContentForm";
 import CampaignActions from "@/components/CampaignActions";
+import TimeAgo from "@/components/TimeAgo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TrendingUp, Clock } from "lucide-react";
 
@@ -61,21 +62,6 @@ export default function CampaignPageClient({
       return campaign.modified_at;
     }
     return null;
-  };
-
-  const formatDateTime = (dateString: string) => {
-    if (!dateString) return 'Not sent';
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch {
-      return 'Invalid date';
-    }
   };
 
   const sentDate = getSentDate();
@@ -134,7 +120,9 @@ export default function CampaignPageClient({
               {status === "Sent" && sentDate && (
                 <div className="flex items-center space-x-1 text-sm text-gray-600">
                   <Clock className="h-4 w-4" />
-                  <span>Sent {formatDateTime(sentDate)}</span>
+                  <span>
+                    Sent <TimeAgo date={sentDate} />
+                  </span>
                 </div>
               )}
             </CardHeader>

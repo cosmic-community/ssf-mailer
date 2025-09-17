@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import ConfirmationModal from '@/components/ConfirmationModal'
+import TimeAgo from '@/components/TimeAgo'
 import { Eye, Edit, Calendar, Users, Mail, TrendingUp, Copy, MoreVertical, Clock } from 'lucide-react'
 
 interface CampaignsListProps {
@@ -118,21 +119,6 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
     }
   }
 
-  const formatDateTime = (dateString: string) => {
-    if (!dateString) return 'Not sent'
-    try {
-      return new Date(dateString).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    } catch {
-      return 'Invalid date'
-    }
-  }
-
   const getSentDate = (campaign: MarketingCampaign) => {
     // For sent campaigns, we can use the modified_at date as an approximation
     // or look for a specific sent_at field if it exists in the campaign stats
@@ -230,7 +216,9 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                         {campaign.metadata.status.value === 'Sent' && sentDate ? (
                           <div className="flex items-center space-x-1">
                             <Clock className="h-4 w-4" />
-                            <span>Sent {formatDateTime(sentDate)}</span>
+                            <span>
+                              Sent <TimeAgo date={sentDate} />
+                            </span>
                           </div>
                         ) : (
                           <div className="flex items-center space-x-1">
