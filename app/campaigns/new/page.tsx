@@ -1,5 +1,6 @@
 import { getEmailTemplates, getEmailLists } from "@/lib/cosmic";
 import CreateCampaignForm from "@/components/CreateCampaignForm";
+import Link from "next/link";
 
 export const metadata = {
   title: "Create New Campaign | Email Marketing",
@@ -22,9 +23,9 @@ export default async function NewCampaignPage() {
             <div className="flex items-center justify-between">
               <div>
                 <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                  <a href="/campaigns" className="hover:text-gray-700">
+                  <Link href="/campaigns" className="hover:text-gray-700">
                     Campaigns
-                  </a>
+                  </Link>
                   <span>/</span>
                   <span className="text-gray-900">New Campaign</span>
                 </nav>
@@ -60,9 +61,9 @@ export default async function NewCampaignPage() {
             <div className="flex items-center justify-between">
               <div>
                 <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                  <a href="/campaigns" className="hover:text-gray-700">
+                  <Link href="/campaigns" className="hover:text-gray-700">
                     Campaigns
-                  </a>
+                  </Link>
                   <span>/</span>
                   <span className="text-gray-900">New Campaign</span>
                 </nav>
@@ -82,12 +83,12 @@ export default async function NewCampaignPage() {
             <p className="text-gray-600 mb-6">
               Unable to load the campaign creation page. Please try again.
             </p>
-            <a
+            <Link
               href="/campaigns"
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Back to Campaigns
-            </a>
+            </Link>
           </div>
         </main>
       </div>

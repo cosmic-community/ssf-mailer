@@ -1,5 +1,6 @@
 // app/campaigns/[id]/page.tsx
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import {
   getMarketingCampaign,
   getEmailTemplates,
@@ -55,9 +56,9 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                  <a href="/campaigns" className="hover:text-gray-700">
+                  <Link href="/campaigns" className="hover:text-gray-700">
                     Campaigns
-                  </a>
+                  </Link>
                   <span>/</span>
                   <span className="text-gray-900">{campaign.metadata.name}</span>
                 </nav>
@@ -111,9 +112,9 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             <div className="flex items-center justify-between">
               <div>
                 <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
-                  <a href="/campaigns" className="hover:text-gray-700">
+                  <Link href="/campaigns" className="hover:text-gray-700">
                     Campaigns
-                  </a>
+                  </Link>
                   <span>/</span>
                   <span className="text-gray-900">Campaign Details</span>
                 </nav>
@@ -133,12 +134,12 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             <p className="text-gray-600 mb-6">
               Unable to load the campaign details. The campaign may not exist or there was a server error.
             </p>
-            <a
+            <Link
               href="/campaigns"
               className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
             >
               Back to Campaigns
-            </a>
+            </Link>
           </div>
         </main>
       </div>

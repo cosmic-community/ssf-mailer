@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   MarketingCampaign,
   EmailTemplate,
@@ -496,12 +497,12 @@ export default function EditCampaignForm({
                   {lists.length === 0 ? (
                     <>
                       No lists available.{" "}
-                      <a
+                      <Link
                         href="/lists/new"
                         className="text-primary-600 hover:text-primary-700"
                       >
                         Create lists first
-                      </a>
+                      </Link>
                       .
                     </>
                   ) : (
@@ -674,7 +675,6 @@ export default function EditCampaignForm({
                       )}
                       {contact.metadata?.status?.value === "Bounced" && (
                         <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                          Bounced
                         </span>
                       )}
                     </span>
