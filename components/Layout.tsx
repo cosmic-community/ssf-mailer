@@ -46,7 +46,7 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center space-y-4">
           <LoadingSpinner size="lg" variant="primary" />
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-sm text-gray-600">Loading...</p>
         </div>
       </div>
     );
