@@ -47,7 +47,7 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
         <div className="flex flex-col items-center space-y-6 p-8">
           <div className="relative">
             <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-full"></div>
-            <LoadingSpinner size="lg" variant="contrast" className="relative z-10" />
+            <LoadingSpinner size="lg" variant="primary" className="relative z-10" />
           </div>
           <div className="text-center">
             <p className="text-lg font-medium text-gray-900 mb-1">Loading...</p>
