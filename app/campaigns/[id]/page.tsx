@@ -104,22 +104,6 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
     }
   };
 
-  const getTemplateName = () => {
-    if (
-      typeof campaign.metadata?.template === "object" &&
-      campaign.metadata.template?.metadata?.name
-    ) {
-      return campaign.metadata.template.metadata.name;
-    }
-    if (typeof campaign.metadata?.template === "string") {
-      const template = templates.find(
-        (t) => t.id === campaign.metadata.template
-      );
-      return template?.metadata?.name || "Template not found";
-    }
-    return "No template selected";
-  };
-
   const getRecipientCount = () => {
     const listCount = campaign.metadata.target_lists?.length || 0;
     const contactCount = campaign.metadata.target_contacts?.length || 0;
@@ -192,11 +176,6 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
               </div>
 
               <div className="flex items-center space-x-6 text-sm text-gray-600 mt-2">
-                <div className="flex items-center space-x-1">
-                  <Mail className="h-4 w-4" />
-                  <span>{getTemplateName()}</span>
-                </div>
-
                 <div className="flex items-center space-x-1">
                   <Users className="h-4 w-4" />
                   <span>{getRecipientCount()}</span>
