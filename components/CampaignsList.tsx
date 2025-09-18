@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import TimeAgo from '@/components/TimeAgo'
-import { Eye, Edit, Calendar, Users, Mail, TrendingUp, Copy, MoreVertical, Clock } from 'lucide-react'
+import { Eye, Edit, Calendar, Mail, TrendingUp, Copy, MoreVertical, Clock } from 'lucide-react'
 
 interface CampaignsListProps {
   campaigns: MarketingCampaign[]
@@ -133,21 +133,6 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
     return null
   }
 
-  const getRecipientCount = (campaign: MarketingCampaign) => {
-    const contactCount = campaign.metadata.target_contacts?.length || 0
-    const tagCount = campaign.metadata.target_tags?.length || 0
-    
-    if (contactCount > 0 && tagCount > 0) {
-      return `${contactCount} contacts + ${tagCount} tag${tagCount === 1 ? '' : 's'}`
-    } else if (contactCount > 0) {
-      return `${contactCount} contact${contactCount === 1 ? '' : 's'}`
-    } else if (tagCount > 0) {
-      return `${tagCount} tag${tagCount === 1 ? '' : 's'}`
-    } else {
-      return '0 contacts'
-    }
-  }
-
   const canDuplicate = (campaign: MarketingCampaign) => {
     // Allow duplication for all campaigns except those currently sending
     return campaign.metadata.status.value !== 'Sending'
@@ -192,12 +177,6 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                       </div>
                       
                       <div className="flex items-center space-x-6 text-sm text-gray-600">
-                        
-                        <div className="flex items-center space-x-1">
-                          <Users className="h-4 w-4" />
-                          <span>{getRecipientCount(campaign)}</span>
-                        </div>
-                        
                         {campaign.metadata.status.value === 'Sent' && sentDate ? (
                           <div className="flex items-center space-x-1">
                             <Clock className="h-4 w-4" />
