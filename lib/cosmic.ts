@@ -1564,7 +1564,7 @@ export async function getCampaignTargetContacts(
       }
     }
 
-    // Add contacts with matching tags
+    // Add contacts with matching tags - with proper undefined check
     if (
       campaign.metadata.target_tags &&
       campaign.metadata.target_tags.length > 0
@@ -1659,7 +1659,7 @@ export async function getCampaignTargetCount(
       }
     }
 
-    // Count contacts with matching tags
+    // Count contacts with matching tags - with proper undefined check
     if (
       campaign.metadata.target_tags &&
       campaign.metadata.target_tags.length > 0
@@ -1676,6 +1676,7 @@ export async function getCampaignTargetCount(
         if (
           !countedContactIds.has(contact.id) &&
           contact.metadata.tags &&
+          campaign.metadata.target_tags &&
           campaign.metadata.target_tags.some((tag: string) =>
             contact.metadata.tags?.includes(tag)
           )
