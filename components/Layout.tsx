@@ -51,7 +51,6 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
           </div>
           <div className="text-center">
             <p className="text-lg font-medium text-gray-900 mb-1">Loading...</p>
-            <p className="text-sm text-gray-600">Checking authentication</p>
           </div>
         </div>
       </div>
