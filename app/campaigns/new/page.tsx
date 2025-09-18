@@ -15,7 +15,7 @@ export default async function NewCampaignPage() {
     ]);
 
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-6">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Create New Campaign
@@ -25,17 +25,19 @@ export default async function NewCampaignPage() {
           </p>
         </div>
 
-        <CreateCampaignForm
-          templates={templates}
-          contacts={[]} // Pass empty array - contacts are loaded via search
-          lists={lists}
-        />
+        <div className="card max-w-4xl">
+          <CreateCampaignForm
+            templates={templates}
+            contacts={[]} // Pass empty array - contacts are loaded via search
+            lists={lists}
+          />
+        </div>
       </div>
     );
   } catch (error) {
     console.error("Error loading new campaign page:", error);
     return (
-      <div className="max-w-6xl mx-auto p-6">
+      <div className="max-w-7xl mx-auto p-6">
         <div className="text-center py-12">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">
             Error Loading Page
