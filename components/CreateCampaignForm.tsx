@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Mail, Calendar } from "lucide-react";
+import { Loader2, Users, Mail, Calendar, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EmailTemplate, EmailContact, EmailList } from "@/types";
 
@@ -60,6 +60,12 @@ export default function CreateCampaignForm({
     "lists" | "contacts" | "tags"
   >("lists");
 
+  // Search states for contacts
+  const [contactSearchTerm, setContactSearchTerm] = useState("");
+  const [isContactSearching, setIsContactSearching] = useState(false);
+  const [searchedContacts, setSearchedContacts] = useState<EmailContact[]>([]);
+  const [showingSearchResults, setShowingSearchResults] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -71,6 +77,52 @@ export default function CreateCampaignForm({
       send_date: "",
     },
   });
+
+  // Contact search functionality
+  const searchContacts = useCallback(async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setSearchedContacts([]);
+      setShowingSearchResults(false);
+      return;
+    }
+
+    setIsContactSearching(true);
+    try {
+      const response = await fetch(
+        `/api/contacts?search=${encodeURIComponent(searchTerm.trim())}&limit=50`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        const filteredContacts = result.data.contacts.filter(
+          (contact: EmailContact) => contact.metadata?.status?.value === "Active"
+        );
+        setSearchedContacts(filteredContacts);
+        setShowingSearchResults(true);
+      } else {
+        console.error("Failed to search contacts");
+        setSearchedContacts([]);
+        setShowingSearchResults(false);
+      }
+    } catch (error) {
+      console.error("Error searching contacts:", error);
+      setSearchedContacts([]);
+      setShowingSearchResults(false);
+    } finally {
+      setIsContactSearching(false);
+    }
+  }, []);
+
+  // Debounce contact search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (targetingMode === "contacts") {
+        searchContacts(contactSearchTerm);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [contactSearchTerm, searchContacts, targetingMode]);
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -114,6 +166,8 @@ export default function CreateCampaignForm({
           name: data.name,
           template_id: selectedTemplate,
           list_ids: selectedLists,
+          contact_ids: selectedContacts,
+          target_tags: selectedTags,
           subject: selectedTemplateObj?.metadata?.subject || "",
           content: selectedTemplateObj?.metadata?.content || "",
         }),
@@ -207,6 +261,24 @@ export default function CreateCampaignForm({
     }
 
     return totalContacts;
+  };
+
+  // Get contacts to display for selection
+  const getContactsToDisplay = () => {
+    if (showingSearchResults && contactSearchTerm.trim()) {
+      return searchedContacts;
+    }
+    
+    // If no search term, show selected contacts only
+    if (selectedContacts.length === 0) {
+      return [];
+    }
+
+    return contacts
+      .filter(contact => 
+        contact.metadata.status.value === "Active" && 
+        selectedContacts.includes(contact.id)
+      );
   };
 
   return (
@@ -438,57 +510,100 @@ export default function CreateCampaignForm({
           </div>
         )}
 
-        {/* Contacts Targeting */}
+        {/* Contacts Targeting with Search */}
         {targetingMode === "contacts" && (
           <div className="space-y-3">
             <Label>Select Individual Contacts</Label>
-            {contacts.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <p>No contacts available. Add contacts first.</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="mt-4"
-                  onClick={() => router.push("/contacts/new")}
-                >
-                  Add Contact
-                </Button>
+            
+            {/* Contact Search */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search contacts by email or name..."
+                  value={contactSearchTerm}
+                  onChange={(e) => setContactSearchTerm(e.target.value)}
+                  className="pl-10 pr-10"
+                />
+                {isContactSearching && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+                {contactSearchTerm && !isContactSearching && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContactSearchTerm("");
+                      setSearchedContacts([]);
+                      setShowingSearchResults(false);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-            ) : (
-              <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
-                {contacts
-                  .filter(
-                    (contact) => contact.metadata.status.value === "Active"
-                  )
-                  .map((contact) => (
-                    <div
-                      key={contact.id}
-                      className="flex items-center space-x-3"
-                    >
-                      <Checkbox
-                        id={contact.id}
-                        checked={selectedContacts.includes(contact.id)}
-                        onCheckedChange={() =>
-                          handleContactToggle(contact.id)
+              
+              {contactSearchTerm && (
+                <p className="text-sm text-gray-600 mt-2">
+                  {showingSearchResults ? (
+                    <>Found {searchedContacts.length} contacts matching "{contactSearchTerm}"</>
+                  ) : (
+                    <>Searching for "{contactSearchTerm}"...</>
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto border rounded-lg p-3">
+              {getContactsToDisplay().length === 0 ? (
+                <div className="text-center py-8">
+                  {contactSearchTerm ? (
+                    <div className="space-y-2">
+                      <Mail className="mx-auto h-8 w-8 text-gray-400" />
+                      <p className="text-sm text-gray-500">
+                        {isContactSearching 
+                          ? "Searching contacts..." 
+                          : "No active contacts found matching your search"
                         }
-                      />
-                      <div className="flex-1">
-                        <Label
-                          htmlFor={contact.id}
-                          className="text-sm font-medium cursor-pointer"
-                        >
-                          {contact.metadata.first_name}{" "}
-                          {contact.metadata.last_name}
-                        </Label>
-                        <p className="text-xs text-gray-500">
-                          {contact.metadata.email}
-                        </p>
-                      </div>
+                      </p>
                     </div>
-                  ))}
-              </div>
-            )}
+                  ) : selectedContacts.length === 0 ? (
+                    <div className="space-y-2">
+                      <Users className="mx-auto h-8 w-8 text-gray-400" />
+                      <p className="text-sm text-gray-500">
+                        Search for contacts to select them for this campaign
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No selected contacts to display</p>
+                  )}
+                </div>
+              ) : (
+                getContactsToDisplay().map((contact) => (
+                  <div key={contact.id} className="flex items-center space-x-3">
+                    <Checkbox
+                      id={contact.id}
+                      checked={selectedContacts.includes(contact.id)}
+                      onCheckedChange={() => handleContactToggle(contact.id)}
+                    />
+                    <div className="flex-1">
+                      <Label
+                        htmlFor={contact.id}
+                        className="text-sm font-medium cursor-pointer"
+                      >
+                        {contact.metadata.first_name}{" "}
+                        {contact.metadata.last_name}
+                      </Label>
+                      <p className="text-xs text-gray-500">
+                        {contact.metadata.email}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         )}
 

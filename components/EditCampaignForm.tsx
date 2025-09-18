@@ -15,6 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Search, Loader2, X, Users, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface EditCampaignFormProps {
@@ -40,6 +44,12 @@ export default function EditCampaignForm({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const { toast } = useToast();
+
+  // Search states
+  const [contactSearchTerm, setContactSearchTerm] = useState("");
+  const [isContactSearching, setIsContactSearching] = useState(false);
+  const [searchedContacts, setSearchedContacts] = useState<EmailContact[]>([]);
+  const [showingSearchResults, setShowingSearchResults] = useState(false);
 
   // Get target list IDs from campaign metadata
   const getTargetListIds = (): string[] => {
@@ -112,7 +122,7 @@ export default function EditCampaignForm({
       : ("now" as const),
   });
 
-  // Filter out unsubscribed contacts
+  // Filter out unsubscribed contacts - but we'll only show them if searched
   const activeContacts = contacts.filter(
     (contact) => contact.metadata?.status?.value !== "Unsubscribed"
   );
@@ -128,6 +138,50 @@ export default function EditCampaignForm({
         .filter(Boolean)
     )
   );
+
+  // Contact search functionality
+  const searchContacts = useCallback(async (searchTerm: string) => {
+    if (!searchTerm.trim()) {
+      setSearchedContacts([]);
+      setShowingSearchResults(false);
+      return;
+    }
+
+    setIsContactSearching(true);
+    try {
+      const response = await fetch(
+        `/api/contacts?search=${encodeURIComponent(searchTerm.trim())}&limit=50`
+      );
+
+      if (response.ok) {
+        const result = await response.json();
+        const filteredContacts = result.data.contacts.filter(
+          (contact: EmailContact) => contact.metadata?.status?.value !== "Unsubscribed"
+        );
+        setSearchedContacts(filteredContacts);
+        setShowingSearchResults(true);
+      } else {
+        console.error("Failed to search contacts");
+        setSearchedContacts([]);
+        setShowingSearchResults(false);
+      }
+    } catch (error) {
+      console.error("Error searching contacts:", error);
+      setSearchedContacts([]);
+      setShowingSearchResults(false);
+    } finally {
+      setIsContactSearching(false);
+    }
+  }, []);
+
+  // Debounce contact search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchContacts(contactSearchTerm);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [contactSearchTerm, searchContacts]);
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -275,6 +329,22 @@ export default function EditCampaignForm({
       onFormDataChange(formData, isLoading, handleExternalSubmit);
     }
   }, [formData, isLoading, handleExternalSubmit, onFormDataChange]);
+
+  // Get contacts to display - either searched results or selected contacts
+  const getContactsToDisplay = () => {
+    if (showingSearchResults && contactSearchTerm.trim()) {
+      return searchedContacts;
+    }
+    
+    if (formData.contact_ids.length === 0) {
+      return [];
+    }
+
+    // Show selected contacts
+    return activeContacts.filter(contact => 
+      formData.contact_ids.includes(contact.id)
+    );
+  };
 
   return (
     <div className="card max-w-4xl">
@@ -495,12 +565,55 @@ export default function EditCampaignForm({
           </div>
         )}
 
-        {/* Contact Selection */}
+        {/* Contact Selection with Search */}
         {formData.target_type === "contacts" && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
               Select Contacts ({formData.contact_ids.length} selected)
             </label>
+            
+            {/* Contact Search */}
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search contacts by email or name..."
+                  value={contactSearchTerm}
+                  onChange={(e) => setContactSearchTerm(e.target.value)}
+                  className="pl-10 pr-10"
+                  disabled={!canEdit}
+                />
+                {isContactSearching && (
+                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                  </div>
+                )}
+                {contactSearchTerm && !isContactSearching && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setContactSearchTerm("");
+                      setSearchedContacts([]);
+                      setShowingSearchResults(false);
+                    }}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+              
+              {contactSearchTerm && (
+                <p className="text-sm text-gray-600 mt-2">
+                  {showingSearchResults ? (
+                    <>Found {searchedContacts.length} contacts matching "{contactSearchTerm}"</>
+                  ) : (
+                    <>Searching for "{contactSearchTerm}"...</>
+                  )}
+                </p>
+              )}
+            </div>
+
             {contacts.length > activeContacts.length && (
               <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
                 <p className="text-sm text-blue-700">
@@ -513,29 +626,33 @@ export default function EditCampaignForm({
                 </p>
               </div>
             )}
+
             <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
-              {activeContacts.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  {contacts.length === 0 ? (
-                    <>
-                      No contacts available.{" "}
-                      <a
-                        href="/contacts/new"
-                        className="text-primary-600 hover:text-primary-700"
-                      >
-                        Add contacts first
-                      </a>
-                      .
-                    </>
+              {getContactsToDisplay().length === 0 ? (
+                <div className="text-center py-8">
+                  {contactSearchTerm ? (
+                    <div className="space-y-2">
+                      <Mail className="mx-auto h-8 w-8 text-gray-400" />
+                      <p className="text-sm text-gray-500">
+                        {isContactSearching 
+                          ? "Searching contacts..." 
+                          : "No contacts found matching your search"
+                        }
+                      </p>
+                    </div>
+                  ) : formData.contact_ids.length === 0 ? (
+                    <div className="space-y-2">
+                      <Users className="mx-auto h-8 w-8 text-gray-400" />
+                      <p className="text-sm text-gray-500">
+                        Search for contacts to select them for this campaign
+                      </p>
+                    </div>
                   ) : (
-                    <>
-                      No active contacts available. All contacts are
-                      unsubscribed.
-                    </>
+                    <p className="text-sm text-gray-500">No selected contacts to display</p>
                   )}
-                </p>
+                </div>
               ) : (
-                activeContacts.map((contact) => (
+                getContactsToDisplay().map((contact) => (
                   <label key={contact.id} className="flex items-center">
                     <input
                       type="checkbox"
@@ -556,7 +673,9 @@ export default function EditCampaignForm({
                         </span>
                       )}
                       {contact.metadata?.status?.value === "Bounced" && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full"></span>
+                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
+                          Bounced
+                        </span>
                       )}
                     </span>
                   </label>
