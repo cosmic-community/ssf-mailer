@@ -15,6 +15,7 @@ import {
   Image as ImageIcon,
 } from "lucide-react";
 import LogoutButton from "@/components/LogoutButton";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -43,9 +44,9 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
   if (isAuthenticated === null) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+        <div className="flex flex-col items-center space-y-4">
+          <LoadingSpinner size="lg" variant="primary" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
     );
