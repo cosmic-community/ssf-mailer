@@ -1,5 +1,5 @@
 import { getEmailTemplates, getEmailLists } from "@/lib/cosmic";
-import { CreateCampaignForm } from "@/components/CreateCampaignForm";
+import CreateCampaignForm from "@/components/CreateCampaignForm";
 
 export const metadata = {
   title: "Create New Campaign | Email Marketing",

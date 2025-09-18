@@ -6,7 +6,8 @@ import {
   getEmailLists,
   getUnsubscribedContactsByCampaign,
 } from "@/lib/cosmic";
-import { CampaignPageClient } from "@/components/CampaignPageClient";
+import CampaignPageClient from "@/components/CampaignPageClient";
+import { EmailContact } from "@/types";
 
 export const metadata = {
   title: "Campaign Details | Email Marketing",
@@ -33,7 +34,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
     }
 
     // Only fetch unsubscribed contacts if the campaign has been sent
-    let unsubscribedContacts = [];
+    let unsubscribedContacts: EmailContact[] = [];
     if (campaign.metadata.status?.value === "Sent") {
       try {
         const result = await getUnsubscribedContactsByCampaign(id, {
