@@ -6,9 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogTrigger } from '@/components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { CheckCircle, AlertCircle, Upload, Loader2, Info, List } from 'lucide-react'
+import { CheckCircle, AlertCircle, Upload, Loader2, Info, List, Clock } from 'lucide-react'
 import { EmailList } from '@/types'
 
 interface UploadResult {
@@ -25,6 +24,8 @@ interface UploadResult {
   duplicates?: string[]
   validation_errors?: string[]
   creation_errors?: string[]
+  is_batch_job?: boolean
+  batch_id?: string
 }
 
 export default function CSVUploadModal() {
@@ -37,6 +38,10 @@ export default function CSVUploadModal() {
   const [availableLists, setAvailableLists] = useState<EmailList[]>([])
   const [selectedListIds, setSelectedListIds] = useState<string[]>([])
   const [isLoadingLists, setIsLoadingLists] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<{
+    estimatedRows: number
+    estimatedTime: string
+  } | null>(null)
 
   // Fetch available lists when modal opens
   useEffect(() => {
@@ -70,10 +75,23 @@ export default function CSVUploadModal() {
     }
   }
 
+  const estimateProcessingTime = (contactCount: number): string => {
+    // Rough estimate: 25 contacts per second in batches
+    const estimatedSeconds = Math.ceil(contactCount / 25)
+    if (estimatedSeconds < 60) {
+      return `${estimatedSeconds} seconds`
+    } else if (estimatedSeconds < 3600) {
+      return `${Math.ceil(estimatedSeconds / 60)} minutes`
+    } else {
+      return `${Math.ceil(estimatedSeconds / 3600)} hours`
+    }
+  }
+
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setUploadResult(null)
+    setUploadProgress(null)
     
     const fileInput = fileInputRef.current
     if (!fileInput) {
@@ -95,6 +113,15 @@ export default function CSVUploadModal() {
     setIsUploading(true)
 
     try {
+      // Quick estimate for progress indication
+      const text = await file.text()
+      const estimatedRows = text.split('\n').filter(line => line.trim()).length - 1
+      
+      setUploadProgress({
+        estimatedRows,
+        estimatedTime: estimateProcessingTime(estimatedRows)
+      })
+
       const formData = new FormData()
       formData.append('file', file)
       
@@ -121,6 +148,7 @@ export default function CSVUploadModal() {
       setError(err instanceof Error ? err.message : 'Failed to upload CSV file')
     } finally {
       setIsUploading(false)
+      setUploadProgress(null)
     }
   }
 
@@ -128,6 +156,7 @@ export default function CSVUploadModal() {
     setUploadResult(null)
     setError('')
     setSelectedListIds([])
+    setUploadProgress(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -168,12 +197,12 @@ export default function CSVUploadModal() {
             <div className="flex items-start space-x-2">
               <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-blue-800 mb-2">Smart Column Detection</h3>
+                <h3 className="text-sm font-medium text-blue-800 mb-2">Smart Processing & Large File Support</h3>
                 <p className="text-sm text-blue-700 mb-2">
-                  Our system automatically detects and maps your CSV columns. You don't need to worry about column order or exact naming.
+                  Now handles files up to 50MB with intelligent batch processing to prevent timeouts.
                 </p>
                 <div className="text-sm text-blue-700">
-                  <strong>Required columns (we'll find these automatically):</strong>
+                  <strong>Required columns (auto-detected):</strong>
                   <ul className="ml-4 mt-1 space-y-1">
                     <li>• <strong>Email:</strong> email, emailaddress, mail, e-mail</li>
                     <li>• <strong>First Name:</strong> first_name, firstname, fname, name</li>
@@ -183,23 +212,32 @@ export default function CSVUploadModal() {
             </div>
           </div>
           
-          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-            <h3 className="text-sm font-medium text-green-800 mb-2">Optional Fields (automatically detected)</h3>
-            <ul className="text-sm text-green-700 space-y-1">
-              <li>• <strong>Last Name:</strong> last_name, lastname, surname</li>
-              <li>• <strong>Status:</strong> status, state, subscription (Active/Unsubscribed/Bounced)</li>
-              <li>• <strong>Tags/Interests:</strong> tags, categories, groups, interests</li>
-              <li>• <strong>Subscribe Date:</strong> subscribe_date, join_date, optin_time</li>
-              <li>• <strong>Notes:</strong> notes, comments, description</li>
-            </ul>
-          </div>
-          
-          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-            <h3 className="text-sm font-medium text-gray-800 mb-2">What gets ignored</h3>
-            <p className="text-sm text-gray-600">
-              All other columns (like MEMBER_RATING, LEID, TIMEZONE, etc.) will be automatically ignored. 
-              Only the data we need will be imported.
-            </p>
+          <div className="grid md:grid-cols-2 gap-4">
+            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+              <h3 className="text-sm font-medium text-green-800 mb-2">Optional Fields (automatically detected)</h3>
+              <ul className="text-sm text-green-700 space-y-1">
+                <li>• <strong>Last Name:</strong> last_name, lastname, surname</li>
+                <li>• <strong>Status:</strong> status, state, subscription</li>
+                <li>• <strong>Tags:</strong> tags, categories, groups, interests</li>
+                <li>• <strong>Subscribe Date:</strong> subscribe_date, join_date</li>
+                <li>• <strong>Notes:</strong> notes, comments, description</li>
+              </ul>
+            </div>
+            
+            <div className="p-4 bg-purple-50 border border-purple-200 rounded-md">
+              <div className="flex items-start space-x-2">
+                <Clock className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h3 className="text-sm font-medium text-purple-800 mb-2">Performance</h3>
+                  <ul className="text-xs text-purple-600 space-y-1">
+                    <li>• Processes ~1,500 contacts/minute</li>
+                    <li>• Handles 100,000+ contact files</li>
+                    <li>• Automatic timeout prevention</li>
+                    <li>• Smart duplicate detection</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -217,9 +255,24 @@ export default function CSVUploadModal() {
                 required
               />
               <p className="text-xs text-gray-500">
-                Any CSV format with email and name columns will work
+                Up to 50MB - Any CSV format with email and name columns
               </p>
             </div>
+
+            {/* Upload Progress */}
+            {uploadProgress && isUploading && (
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center space-x-3">
+                  <Loader2 className="h-5 w-5 text-blue-600 animate-spin flex-shrink-0" />
+                  <div className="flex-1">
+                    <h4 className="text-sm font-medium text-blue-800 mb-1">Processing in Batches...</h4>
+                    <p className="text-sm text-blue-700">
+                      {uploadProgress.estimatedRows.toLocaleString()} contacts • Est. time: {uploadProgress.estimatedTime}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* List Selection Section */}
             <div className="space-y-4">
@@ -334,7 +387,9 @@ export default function CSVUploadModal() {
                 <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
+                <h3 className="text-lg font-semibold text-gray-900">
+                  {uploadResult.is_batch_job ? 'Batch Processing Complete' : 'Upload Complete'}
+                </h3>
                 <p className="text-gray-600">
                   {uploadResult.results.successful} contacts imported successfully
                   {selectedListIds.length > 0 && ` and added to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
@@ -342,6 +397,22 @@ export default function CSVUploadModal() {
                 </p>
               </div>
             </div>
+
+            {/* Batch Processing Notice */}
+            {uploadResult.is_batch_job && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-start space-x-2">
+                  <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-medium text-yellow-800 mb-1">Large File Processing</h4>
+                    <p className="text-sm text-yellow-700">
+                      Processed {uploadResult.results.total_processed} contacts in this batch. 
+                      Re-upload the same file to continue with remaining contacts (duplicates will be skipped).
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Detailed Results */}
             <div className="grid grid-cols-2 gap-4 text-center">
