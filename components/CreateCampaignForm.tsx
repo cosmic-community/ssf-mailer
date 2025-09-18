@@ -15,7 +15,8 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, Users, Mail, Calendar, Search, X } from "lucide-react";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
+import { Users, Mail, Calendar, Search, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EmailTemplate, EmailContact, EmailList } from "@/types";
 
@@ -527,7 +528,7 @@ export default function CreateCampaignForm({
                 />
                 {isContactSearching && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                    <LoadingSpinner size="sm" />
                   </div>
                 )}
                 {contactSearchTerm && !isContactSearching && (
@@ -705,7 +706,7 @@ export default function CreateCampaignForm({
         <Button type="submit" disabled={isSubmitting || !selectedTemplate}>
           {isSubmitting ? (
             <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <LoadingSpinner size="sm" variant="white" className="mr-2" />
               Creating Campaign...
             </>
           ) : (

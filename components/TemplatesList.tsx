@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { EmailTemplate } from '@/types'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import { Copy, Eye } from 'lucide-react'
 
@@ -199,7 +200,7 @@ export default function TemplatesList({ templates }: TemplatesListProps) {
               >
                 {duplicatingId === template.id ? (
                   <>
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-r-transparent" />
+                    <LoadingSpinner size="sm" />
                     <span>Duplicating...</span>
                   </>
                 ) : (
