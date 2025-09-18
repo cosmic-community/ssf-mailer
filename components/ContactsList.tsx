@@ -13,12 +13,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import {
   Pencil,
   Trash2,
   Search,
   Filter,
-  Loader2,
   RefreshCw,
   Edit,
   Users,
@@ -417,7 +417,7 @@ export default function ContactsList({
             />
             {isSearching && (
               <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+                <LoadingSpinner size="sm" />
               </div>
             )}
             {searchTerm && !isSearching && (
@@ -459,7 +459,7 @@ export default function ContactsList({
               className="ml-2"
             >
               {isRefreshing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoadingSpinner size="sm" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
@@ -578,7 +578,7 @@ export default function ContactsList({
                     className="bg-white text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
                     {bulkActionLoading ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      <LoadingSpinner size="sm" className="mr-2" />
                     ) : (
                       <Trash2 className="h-4 w-4 mr-2" />
                     )}
@@ -738,7 +738,7 @@ export default function ContactsList({
                             className="text-red-600 hover:text-red-700"
                           >
                             {deletingId === contact.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <LoadingSpinner size="sm" />
                             ) : (
                               <Trash2 className="h-4 w-4" />
                             )}

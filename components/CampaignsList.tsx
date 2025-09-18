@@ -7,6 +7,7 @@ import { MarketingCampaign } from '@/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import ConfirmationModal from '@/components/ConfirmationModal'
 import TimeAgo from '@/components/TimeAgo'
 import { Eye, Edit, Calendar, Mail, TrendingUp, Copy, MoreVertical, Clock } from 'lucide-react'
@@ -250,7 +251,7 @@ export default function CampaignsList({ campaigns }: CampaignsListProps) {
                                   >
                                     {duplicatingId === campaign.id ? (
                                       <>
-                                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-gray-600 border-r-transparent mr-3" />
+                                        <LoadingSpinner size="sm" className="mr-3" />
                                         <span>Duplicating...</span>
                                       </>
                                     ) : (

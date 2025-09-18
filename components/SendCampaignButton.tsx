@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { MarketingCampaign } from "@/types";
 import { useToast } from "@/hooks/useToast";
 import { Button } from "@/components/ui/button";
+import { LoadingSpinner } from "@/components/ui/loading-spinner";
 import ConfirmationModal from "@/components/ConfirmationModal";
 import { Send, Clock, Check, AlertCircle } from "lucide-react";
 
@@ -267,7 +268,7 @@ export default function SendCampaignButton({
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-yellow-600 mr-2"></div>
+          <LoadingSpinner size="md" variant="primary" className="mr-2" />
           <span className="text-yellow-800 font-medium">
             Campaign is Sending
           </span>
@@ -370,7 +371,7 @@ export default function SendCampaignButton({
       >
         {isLoading ? (
           <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            <LoadingSpinner size="sm" variant="white" className="mr-2" />
             Sending...
           </>
         ) : (
@@ -391,7 +392,7 @@ export default function SendCampaignButton({
         >
           {isLoading ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-600 mr-2"></div>
+              <LoadingSpinner size="sm" className="mr-2" />
               Scheduling...
             </>
           ) : (

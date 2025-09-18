@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { CheckCircle, AlertCircle, Upload, Info, List, Loader2, Clock, Zap } from 'lucide-react'
+import { LoadingSpinner } from '@/components/ui/loading-spinner'
+import { CheckCircle, AlertCircle, Upload, Info, List, Clock, Zap } from 'lucide-react'
 import { EmailList } from '@/types'
 
 interface UploadResult {
@@ -299,7 +300,7 @@ export default function CSVUploadForm() {
           {uploadProgress && isUploading && (
             <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center space-x-3">
-                <Loader2 className="h-5 w-5 text-blue-600 animate-spin flex-shrink-0" />
+                <LoadingSpinner size="md" className="flex-shrink-0" />
                 <div className="flex-1">
                   <h4 className="text-sm font-medium text-blue-800 mb-1">Processing CSV File with Optimized Batching...</h4>
                   <p className="text-sm text-blue-700">
@@ -327,7 +328,7 @@ export default function CSVUploadForm() {
             
             {isLoadingLists ? (
               <div className="flex items-center space-x-2 text-sm text-gray-600 py-4">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <LoadingSpinner size="sm" />
                 <span>Loading available lists...</span>
               </div>
             ) : availableLists.length > 0 ? (
@@ -421,7 +422,7 @@ export default function CSVUploadForm() {
             >
               {isUploading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <LoadingSpinner size="sm" variant="white" className="mr-2" />
                   Processing...
                 </>
               ) : (
