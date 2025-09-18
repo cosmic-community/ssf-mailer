@@ -1617,7 +1617,7 @@ export async function getCampaignTargetCount(
           .find({
             type: "email-contacts",
             "metadata.lists": listId,
-            "metadata.status.value": "Active"
+            "metadata.status": "Active"
           })
           .props(["id"]);
 
@@ -1643,7 +1643,7 @@ export async function getCampaignTargetCount(
               .find({
                 id: contactId,
                 type: "email-contacts",
-                "metadata.status.value": "Active"
+                "metadata.status": "Active"
               })
               .props(["id"])
               .limit(1);
@@ -1668,7 +1668,7 @@ export async function getCampaignTargetCount(
       const { objects: taggedContacts } = await cosmic.objects
         .find({
           type: "email-contacts",
-          "metadata.status.value": "Active"
+          "metadata.status": "Active"
         })
         .props(["id", "metadata.tags"]);
 
