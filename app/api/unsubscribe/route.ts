@@ -98,7 +98,7 @@ export async function GET(request: NextRequest) {
           title: `Unsubscribe Event - ${new Date().toISOString()}`,
           status: "published",
           metadata: {
-            event_type: "unsubscribe",
+            event_type: "Unsubscribe",
             campaign_id: campaignId,
             email: decodeURIComponent(email),
             timestamp: new Date().toISOString(),

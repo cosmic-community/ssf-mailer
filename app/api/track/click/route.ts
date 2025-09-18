@@ -48,7 +48,7 @@ export async function GET(request: NextRequest) {
         title: `Click Event - ${new Date().toISOString()}`,
         status: 'published',
         metadata: {
-          event_type: 'click',
+          event_type: 'Click',
           campaign_id: campaignId,
           contact_id: contactId,
           url: url,
