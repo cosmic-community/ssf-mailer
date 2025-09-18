@@ -49,8 +49,8 @@ export async function GET(request: NextRequest) {
         status: 'published',
         metadata: {
           event_type: 'Click',
-          campaign_id: campaignId,
-          contact_id: contactId,
+          campaign: campaignId,
+          contact: contactId,
           url: url,
           timestamp: new Date().toISOString(),
           user_agent: request.headers.get('user-agent') || '',

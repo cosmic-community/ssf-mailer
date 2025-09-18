@@ -99,7 +99,7 @@ export async function GET(request: NextRequest) {
           status: "published",
           metadata: {
             event_type: "Unsubscribe",
-            campaign_id: campaignId,
+            campaign: campaignId,
             email: decodeURIComponent(email),
             timestamp: new Date().toISOString(),
             user_agent: request.headers.get("user-agent") || "",
