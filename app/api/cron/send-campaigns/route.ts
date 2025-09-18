@@ -114,10 +114,10 @@ async function processCampaignBatch(
     last_batch_completed: new Date().toISOString(),
   };
 
-  // Get all target recipients for this campaign
+  // Get all target recipients for this campaign with proper pagination
   let targetRecipients: EmailContact[] = [];
 
-  // Get recipients from target lists
+  // Get recipients from target lists with pagination
   if (
     campaign.metadata.target_lists &&
     campaign.metadata.target_lists.length > 0
@@ -125,7 +125,7 @@ async function processCampaignBatch(
     for (const listRef of campaign.metadata.target_lists) {
       const listId = typeof listRef === "string" ? listRef : listRef.id;
       try {
-        const listContacts = await getContactsByListId(listId);
+        const listContacts = await getContactsByListIdPaginated(listId);
         const activeListContacts = listContacts.filter(
           (contact) => contact.metadata.status?.value === "Active"
         );
@@ -144,47 +144,44 @@ async function processCampaignBatch(
     }
   }
 
-  // Get recipients by contact IDs
+  // Get recipients by contact IDs with pagination
   if (
     campaign.metadata.target_contacts &&
     campaign.metadata.target_contacts.length > 0
   ) {
-    const { contacts } = await getEmailContacts({ limit: 10000 });
-    const targetContactIds = campaign.metadata.target_contacts.map(
-      (contact: any) => (typeof contact === "string" ? contact : contact.id)
+    const contactRecipients = await getContactsByIdsPaginated(
+      campaign.metadata.target_contacts.map((contact: any) => 
+        typeof contact === "string" ? contact : contact.id
+      )
     );
 
-    const contactRecipients = contacts.filter(
-      (contact) =>
-        targetContactIds.includes(contact.id) &&
-        contact.metadata.status?.value === "Active" // Only send to active contacts
+    const activeContactRecipients = contactRecipients.filter(
+      (contact) => contact.metadata.status?.value === "Active"
     );
 
     // Merge with existing recipients (avoid duplicates)
-    for (const contact of contactRecipients) {
+    for (const contact of activeContactRecipients) {
       if (!targetRecipients.find((existing) => existing.id === contact.id)) {
         targetRecipients.push(contact);
       }
     }
   }
 
-  // Get recipients by tags
+  // Get recipients by tags with pagination
   if (
     campaign.metadata.target_tags &&
     campaign.metadata.target_tags.length > 0
   ) {
-    const { contacts } = await getEmailContacts({ limit: 10000 });
-    const tagRecipients = contacts.filter(
-      (contact) =>
-        contact.metadata.status?.value === "Active" && // Only send to active contacts
-        contact.metadata.tags &&
-        campaign.metadata.target_tags!.some((tag) =>
-          contact.metadata.tags!.includes(tag)
-        )
+    const tagRecipients = await getContactsByTagsPaginated(
+      campaign.metadata.target_tags
+    );
+
+    const activeTagRecipients = tagRecipients.filter(
+      (contact) => contact.metadata.status?.value === "Active"
     );
 
     // Merge with existing recipients (avoid duplicates)
-    for (const contact of tagRecipients) {
+    for (const contact of activeTagRecipients) {
       if (!targetRecipients.find((existing) => existing.id === contact.id)) {
         targetRecipients.push(contact);
       }
@@ -295,6 +292,94 @@ async function processCampaignBatch(
     completed: isComplete,
     finalStats,
   };
+}
+
+// New paginated helper functions
+async function getContactsByListIdPaginated(listId: string): Promise<EmailContact[]> {
+  const allContacts: EmailContact[] = [];
+  let skip = 0;
+  const limit = 1000; // Cosmic API limit per request
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const { contacts, total } = await getEmailContacts({
+        limit,
+        skip,
+        list_id: listId,
+      });
+
+      allContacts.push(...contacts);
+      skip += limit;
+      hasMore = allContacts.length < total;
+
+      console.log(`Fetched ${allContacts.length}/${total} contacts from list ${listId}`);
+    } catch (error) {
+      console.error(`Error fetching contacts for list ${listId} at skip ${skip}:`, error);
+      break;
+    }
+  }
+
+  return allContacts;
+}
+
+async function getContactsByIdsPaginated(contactIds: string[]): Promise<EmailContact[]> {
+  const allContacts: EmailContact[] = [];
+  let skip = 0;
+  const limit = 1000; // Cosmic API limit per request
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const { contacts, total } = await getEmailContacts({ limit, skip });
+
+      // Filter to only include contacts with matching IDs
+      const matchingContacts = contacts.filter(contact => 
+        contactIds.includes(contact.id)
+      );
+      
+      allContacts.push(...matchingContacts);
+      skip += limit;
+      hasMore = skip < total;
+
+      console.log(`Fetched ${allContacts.length} matching contacts from ${contactIds.length} target IDs`);
+    } catch (error) {
+      console.error(`Error fetching contacts by IDs at skip ${skip}:`, error);
+      break;
+    }
+  }
+
+  return allContacts;
+}
+
+async function getContactsByTagsPaginated(targetTags: string[]): Promise<EmailContact[]> {
+  const allContacts: EmailContact[] = [];
+  let skip = 0;
+  const limit = 1000; // Cosmic API limit per request
+  let hasMore = true;
+
+  while (hasMore) {
+    try {
+      const { contacts, total } = await getEmailContacts({ limit, skip });
+
+      // Filter contacts that have matching tags
+      const taggedContacts = contacts.filter(contact =>
+        contact.metadata.tags &&
+        targetTags.some(tag => contact.metadata.tags?.includes(tag))
+      );
+
+      allContacts.push(...taggedContacts);
+      skip += limit;
+      hasMore = skip < total;
+
+      console.log(`Fetched ${allContacts.length} contacts with matching tags from ${targetTags.length} target tags`);
+    } catch (error) {
+      console.error(`Error fetching contacts by tags at skip ${skip}:`, error);
+      break;
+    }
+  }
+
+  return allContacts;
 }
 
 async function sendCampaignEmail(
