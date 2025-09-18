@@ -414,10 +414,10 @@ export async function getEmailLists(): Promise<EmailList[]> {
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
       .depth(1);
 
-    // Update contact counts for all lists
+    // Update contact counts for all lists using efficient method
     const listsWithUpdatedCounts = await Promise.all(
       objects.map(async (list: EmailList) => {
-        const contactCount = await getListContactCount(list.id);
+        const contactCount = await getListContactCountEfficient(list.id);
         return {
           ...list,
           metadata: {
@@ -447,8 +447,8 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
 
     if (!object) return null;
 
-    // Update the contact count for this list
-    const contactCount = await getListContactCount(id);
+    // Update the contact count for this list using efficient method
+    const contactCount = await getListContactCountEfficient(id);
 
     return {
       ...object,
@@ -540,31 +540,39 @@ export async function deleteEmailList(id: string): Promise<void> {
   }
 }
 
-// Get actual contact count for a list
-export async function getListContactCount(listId: string): Promise<number> {
+// OPTIMIZED: Get actual contact count for a list using efficient minimal query
+export async function getListContactCountEfficient(listId: string): Promise<number> {
   try {
-    // Count contacts that have this list ID in their lists array
-    const { objects } = await cosmic.objects
+    // Use minimal query with limit 1 and minimal props to get just the total count
+    const result = await cosmic.objects
       .find({
         type: "email-contacts",
         "metadata.lists": listId,
       })
-      .props(["id"]);
+      .props(["title"]) // Minimal props - just need one field
+      .limit(1); // Minimal limit since we only care about the total
 
-    return objects.length;
+    // The total property contains the actual count
+    return result.total || 0;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return 0;
     }
-    console.error(`Error getting contact count for list ${listId}:`, error);
+    console.error(`Error getting efficient contact count for list ${listId}:`, error);
     return 0;
   }
 }
 
-// Update list contact count
+// Get actual contact count for a list (keep legacy method for backward compatibility)
+export async function getListContactCount(listId: string): Promise<number> {
+  // Use the optimized version
+  return getListContactCountEfficient(listId);
+}
+
+// Update list contact count using efficient method
 export async function updateListContactCount(listId: string): Promise<void> {
   try {
-    const contactCount = await getListContactCount(listId);
+    const contactCount = await getListContactCountEfficient(listId);
 
     await cosmic.objects.updateOne(listId, {
       metadata: {
@@ -801,7 +809,7 @@ export async function createEmailContact(
       },
     });
 
-    // Update contact counts for associated lists
+    // Update contact counts for associated lists using efficient method
     if (data.list_ids && data.list_ids.length > 0) {
       for (const listId of data.list_ids) {
         await updateListContactCount(listId);
@@ -1255,7 +1263,7 @@ export async function createMarketingCampaign(
       templateType = template.metadata.template_type;
     }
 
-    // Validate list IDs if provided
+    // Validate list IDs if provided using efficient method
     let validListIds: string[] = [];
     if (data.list_ids && data.list_ids.length > 0) {
       console.log("Validating lists for IDs:", data.list_ids);
@@ -1507,7 +1515,7 @@ export async function deleteEmailCampaign(id: string): Promise<void> {
   return deleteMarketingCampaign(id);
 }
 
-// Get all contacts that would be targeted by a campaign with real-time count
+// OPTIMIZED: Get all contacts that would be targeted by a campaign with efficient counting
 export async function getCampaignTargetContacts(
   campaign: MarketingCampaign
 ): Promise<EmailContact[]> {
@@ -1515,7 +1523,7 @@ export async function getCampaignTargetContacts(
     const allContacts: EmailContact[] = [];
     const addedContactIds = new Set<string>();
 
-    // Add contacts from target lists
+    // Add contacts from target lists using efficient method
     if (
       campaign.metadata.target_lists &&
       campaign.metadata.target_lists.length > 0
@@ -1585,6 +1593,103 @@ export async function getCampaignTargetContacts(
   } catch (error) {
     console.error("Error getting campaign target contacts:", error);
     throw new Error("Failed to get campaign target contacts");
+  }
+}
+
+// OPTIMIZED: Get campaign target count without fetching all contact data
+export async function getCampaignTargetCount(
+  campaign: MarketingCampaign
+): Promise<number> {
+  try {
+    const countedContactIds = new Set<string>();
+    let totalCount = 0;
+
+    // Count contacts from target lists using efficient method
+    if (
+      campaign.metadata.target_lists &&
+      campaign.metadata.target_lists.length > 0
+    ) {
+      for (const listRef of campaign.metadata.target_lists) {
+        const listId = typeof listRef === "string" ? listRef : listRef.id;
+        
+        // Get contacts for this list but only fetch IDs to avoid duplicates
+        const { objects: listContacts } = await cosmic.objects
+          .find({
+            type: "email-contacts",
+            "metadata.lists": listId,
+            "metadata.status.value": "Active"
+          })
+          .props(["id"]);
+
+        listContacts.forEach((contact: any) => {
+          if (!countedContactIds.has(contact.id)) {
+            countedContactIds.add(contact.id);
+            totalCount++;
+          }
+        });
+      }
+    }
+
+    // Count individual target contacts
+    if (
+      campaign.metadata.target_contacts &&
+      campaign.metadata.target_contacts.length > 0
+    ) {
+      for (const contactId of campaign.metadata.target_contacts) {
+        if (!countedContactIds.has(contactId)) {
+          try {
+            // Verify contact exists and is active (minimal query)
+            const { objects } = await cosmic.objects
+              .find({
+                id: contactId,
+                type: "email-contacts",
+                "metadata.status.value": "Active"
+              })
+              .props(["id"])
+              .limit(1);
+
+            if (objects.length > 0) {
+              countedContactIds.add(contactId);
+              totalCount++;
+            }
+          } catch (error) {
+            console.error(`Error validating contact ${contactId}:`, error);
+          }
+        }
+      }
+    }
+
+    // Count contacts with matching tags
+    if (
+      campaign.metadata.target_tags &&
+      campaign.metadata.target_tags.length > 0
+    ) {
+      // This is simplified - in production, you might want tag-based indexing
+      const { objects: taggedContacts } = await cosmic.objects
+        .find({
+          type: "email-contacts",
+          "metadata.status.value": "Active"
+        })
+        .props(["id", "metadata.tags"]);
+
+      taggedContacts.forEach((contact: any) => {
+        if (
+          !countedContactIds.has(contact.id) &&
+          contact.metadata.tags &&
+          campaign.metadata.target_tags.some((tag: string) =>
+            contact.metadata.tags?.includes(tag)
+          )
+        ) {
+          countedContactIds.add(contact.id);
+          totalCount++;
+        }
+      });
+    }
+
+    return totalCount;
+  } catch (error) {
+    console.error("Error getting campaign target count:", error);
+    return 0; // Return 0 on error rather than throwing
   }
 }
 
