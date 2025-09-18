@@ -585,7 +585,7 @@ export async function updateListContactCount(listId: string): Promise<void> {
   }
 }
 
-// Email Contacts
+// Email Contacts with enhanced pagination support
 export async function getEmailContacts(options?: {
   limit?: number;
   skip?: number;
@@ -599,7 +599,8 @@ export async function getEmailContacts(options?: {
   skip: number;
 }> {
   try {
-    const limit = options?.limit || 50;
+    // Increase the default limit to handle larger datasets more efficiently
+    const limit = Math.min(options?.limit || 1000, 1000); // Cap at 1000 (Cosmic limit)
     const skip = options?.skip || 0;
     const search = options?.search?.trim();
     const status = options?.status;
@@ -702,7 +703,7 @@ export async function getEmailContacts(options?: {
       return {
         contacts: [],
         total: 0,
-        limit: options?.limit || 50,
+        limit: options?.limit || 1000,
         skip: options?.skip || 0,
       };
     }
@@ -986,27 +987,38 @@ export async function bulkUpdateContactLists(
   return results;
 }
 
-// Get contacts by list ID - enhanced with better error handling
+// Enhanced pagination function for getting contacts by list ID
 export async function getContactsByListId(
   listId: string
 ): Promise<EmailContact[]> {
-  try {
-    const { objects } = await cosmic.objects
-      .find({
-        type: "email-contacts",
-        "metadata.lists": listId,
-      })
-      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+  const allContacts: EmailContact[] = [];
+  let skip = 0;
+  const limit = 1000; // Use the Cosmic API limit per request
+  let hasMore = true;
 
-    return objects as EmailContact[];
-  } catch (error) {
-    if (hasStatus(error) && error.status === 404) {
-      return [];
+  while (hasMore) {
+    try {
+      const { contacts, total } = await getEmailContacts({
+        limit,
+        skip,
+        list_id: listId,
+      });
+
+      allContacts.push(...contacts);
+      skip += limit;
+      hasMore = allContacts.length < total;
+
+      console.log(`Fetched ${allContacts.length}/${total} contacts for list ${listId}`);
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        break; // No more contacts
+      }
+      console.error(`Error fetching contacts for list ${listId} at skip ${skip}:`, error);
+      throw new Error("Failed to fetch contacts for list");
     }
-    console.error(`Error fetching contacts for list ${listId}:`, error);
-    throw new Error("Failed to fetch contacts for list");
   }
+
+  return allContacts;
 }
 
 // Unsubscribe function
