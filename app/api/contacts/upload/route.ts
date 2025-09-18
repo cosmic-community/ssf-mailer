@@ -8,6 +8,7 @@ interface ContactData {
   last_name?: string;
   email: string;
   status: "Active" | "Unsubscribed" | "Bounced";
+  list_ids?: string[];
   tags?: string[];
   subscribe_date?: string;
   notes?: string;
@@ -121,9 +122,25 @@ export async function POST(
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const listIdsJson = formData.get("list_ids") as string | null;
 
     if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
+    }
+
+    // Parse selected list IDs
+    let selectedListIds: string[] = [];
+    if (listIdsJson) {
+      try {
+        selectedListIds = JSON.parse(listIdsJson);
+        if (!Array.isArray(selectedListIds)) {
+          selectedListIds = [];
+        }
+      } catch (error) {
+        console.error('Error parsing list IDs:', error);
+        // Continue without list IDs rather than failing
+        selectedListIds = [];
+      }
     }
 
     // Validate file type
@@ -320,6 +337,9 @@ export async function POST(
         } else {
           contact.subscribe_date = new Date().toISOString().split("T")[0];
         }
+
+        // Add selected list IDs to the contact
+        contact.list_ids = selectedListIds;
       } catch (extractError) {
         errors.push(`Row ${i + 1}: Error extracting data from CSV row`);
         continue;
@@ -359,6 +379,7 @@ export async function POST(
         last_name: contact.last_name || "",
         email: contact.email,
         status: contact.status || "Active",
+        list_ids: contact.list_ids || [],
         tags: contact.tags || [],
         subscribe_date:
           contact.subscribe_date || new Date().toISOString().split("T")[0],
@@ -418,7 +439,11 @@ export async function POST(
     // Return results
     const result: UploadResult = {
       success: true,
-      message: `Successfully imported ${created.length} contacts`,
+      message: `Successfully imported ${created.length} contacts${
+        selectedListIds.length > 0 
+          ? ` and added them to ${selectedListIds.length} selected list${selectedListIds.length !== 1 ? 's' : ''}` 
+          : ''
+      }`,
       results: {
         total_processed: lines.length - 1,
         successful: created.length,

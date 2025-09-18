@@ -1,11 +1,13 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle, AlertCircle, Upload, Info } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { CheckCircle, AlertCircle, Upload, Info, List, Loader2 } from 'lucide-react'
+import { EmailList } from '@/types'
 
 interface UploadResult {
   success: boolean
@@ -29,6 +31,39 @@ export default function CSVUploadForm() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState('')
+  const [availableLists, setAvailableLists] = useState<EmailList[]>([])
+  const [selectedListIds, setSelectedListIds] = useState<string[]>([])
+  const [isLoadingLists, setIsLoadingLists] = useState(true)
+
+  // Fetch available lists on component mount
+  useEffect(() => {
+    fetchAvailableLists()
+  }, [])
+
+  const fetchAvailableLists = async () => {
+    setIsLoadingLists(true)
+    try {
+      const response = await fetch('/api/lists')
+      if (response.ok) {
+        const result = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          setAvailableLists(result.data)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching lists:', error)
+    } finally {
+      setIsLoadingLists(false)
+    }
+  }
+
+  const handleListToggle = (listId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedListIds(prev => [...prev, listId])
+    } else {
+      setSelectedListIds(prev => prev.filter(id => id !== listId))
+    }
+  }
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -57,6 +92,11 @@ export default function CSVUploadForm() {
     try {
       const formData = new FormData()
       formData.append('file', file)
+      
+      // Add selected list IDs to the form data
+      if (selectedListIds.length > 0) {
+        formData.append('list_ids', JSON.stringify(selectedListIds))
+      }
 
       const response = await fetch('/api/contacts/upload', {
         method: 'POST',
@@ -82,6 +122,7 @@ export default function CSVUploadForm() {
   const resetForm = () => {
     setUploadResult(null)
     setError('')
+    setSelectedListIds([])
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -190,6 +231,86 @@ export default function CSVUploadForm() {
             </p>
           </div>
 
+          {/* List Selection Section */}
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <List className="h-4 w-4 text-gray-600" />
+              <Label className="text-base font-medium">Add contacts to lists (optional)</Label>
+            </div>
+            
+            {isLoadingLists ? (
+              <div className="flex items-center space-x-2 text-sm text-gray-600 py-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Loading available lists...</span>
+              </div>
+            ) : availableLists.length > 0 ? (
+              <div className="border rounded-lg p-4 max-h-64 overflow-y-auto bg-white">
+                <div className="space-y-4">
+                  {availableLists.map((list) => (
+                    <div key={list.id} className="flex items-start space-x-3">
+                      <Checkbox
+                        id={`list-${list.id}`}
+                        checked={selectedListIds.includes(list.id)}
+                        onCheckedChange={(checked) => 
+                          handleListToggle(list.id, checked as boolean)
+                        }
+                        className="mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <label 
+                          htmlFor={`list-${list.id}`}
+                          className="text-sm font-medium text-gray-900 cursor-pointer"
+                        >
+                          {list.metadata.name}
+                        </label>
+                        {list.metadata.description && (
+                          <p className="text-sm text-gray-600 mt-1">
+                            {list.metadata.description}
+                          </p>
+                        )}
+                        <div className="flex items-center space-x-3 mt-2">
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            {list.metadata.list_type?.value || 'General'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {list.metadata.total_contacts || 0} contacts
+                          </span>
+                          {list.metadata.active === false && (
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                              Inactive
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-sm text-yellow-800">
+                  No lists available yet. Create some lists first to organize your contacts better, 
+                  or proceed without selecting lists to import contacts to your general database.
+                </p>
+              </div>
+            )}
+            
+            {selectedListIds.length > 0 && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <p className="text-sm text-green-800 font-medium">
+                  ✓ New contacts will be added to {selectedListIds.length} selected list{selectedListIds.length !== 1 ? 's' : ''}
+                </p>
+                <div className="mt-2 text-xs text-green-700">
+                  Selected: {availableLists
+                    .filter(list => selectedListIds.includes(list.id))
+                    .map(list => list.metadata.name)
+                    .join(', ')
+                  }
+                </div>
+              </div>
+            )}
+          </div>
+
           {error && (
             <div className="flex items-center space-x-2 p-4 bg-red-50 border border-red-200 rounded-md">
               <AlertCircle className="h-5 w-5 text-red-600" />
@@ -238,6 +359,7 @@ export default function CSVUploadForm() {
               <h3 className="text-lg font-semibold text-gray-900">Upload Complete</h3>
               <p className="text-gray-600">
                 {uploadResult.results.successful} contacts imported successfully
+                {selectedListIds.length > 0 && ` and added to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
                 {uploadResult.results.validation_errors > 0 && `, ${uploadResult.results.validation_errors} errors`}
               </p>
             </div>
@@ -268,7 +390,8 @@ export default function CSVUploadForm() {
             <div className="p-4 bg-green-50 border border-green-200 rounded-md">
               <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful})</h4>
               <p className="text-sm text-green-700">
-                {uploadResult.results.successful} contacts have been added to your list and are ready to receive campaigns.
+                {uploadResult.results.successful} contacts have been added to your database
+                {selectedListIds.length > 0 && ` and assigned to the selected lists`} and are ready to receive campaigns.
               </p>
             </div>
           )}
