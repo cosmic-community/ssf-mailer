@@ -114,11 +114,11 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// Process contacts in small batches to avoid timeout
+// Optimized batch processing for large files
 async function processContactsBatch(
   contacts: ContactData[],
-  batchSize: number = 25,
-  maxProcessingTime: number = 250000 // 250 seconds, leaving buffer before timeout
+  batchSize: number = 100, // Increased from 25 to 100
+  maxProcessingTime: number = 480000 // Increased to 8 minutes (480 seconds)
 ): Promise<{
   created: EmailContact[];
   creationErrors: string[];
@@ -131,43 +131,67 @@ async function processContactsBatch(
   const startTime = Date.now();
   let totalProcessed = 0;
 
-  // Process contacts in batches
+  console.log(`Starting optimized batch processing for ${contacts.length} contacts with batch size ${batchSize}`);
+
+  // Process contacts in larger, more efficient batches
   for (let i = 0; i < contacts.length; i += batchSize) {
     const batch = contacts.slice(i, i + batchSize);
     
-    // Check if we have enough time for another batch (estimate 5 seconds per batch)
+    // More generous time estimation - 2 seconds per batch instead of 5
     const elapsedTime = Date.now() - startTime;
-    const estimatedTimeForBatch = 5000; // 5 seconds per batch
+    const estimatedTimeForBatch = 2000; // 2 seconds per batch
     
-    if (elapsedTime + estimatedTimeForBatch > maxProcessingTime) {
-      console.log(`Stopping due to time limit. Processed ${totalProcessed} contacts.`);
+    // Only stop if we're very close to timeout (leave 30 second buffer)
+    if (elapsedTime + estimatedTimeForBatch > maxProcessingTime - 30000) {
+      console.log(`Approaching timeout. Processed ${totalProcessed} contacts. Time elapsed: ${elapsedTime}ms`);
       break;
     }
 
-    // Process current batch
-    for (const contactData of batch) {
+    // Process current batch with parallel processing for better performance
+    const batchPromises = batch.map(async (contactData) => {
       try {
         const newContact = await createEmailContact(contactData);
-        if (newContact) {
-          created.push(newContact);
-        }
+        return { success: true, contact: newContact, error: null };
       } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : "Unknown error occurred";
-        creationErrors.push(
-          `Failed to create contact ${contactData.email}: ${errorMessage}`
-        );
+        return {
+          success: false,
+          contact: null,
+          error: `Failed to create contact ${contactData.email}: ${errorMessage}`,
+        };
+      }
+    });
+
+    // Execute batch in parallel for better performance
+    const batchResults = await Promise.all(batchPromises);
+
+    // Process results
+    batchResults.forEach((result) => {
+      if (result.success && result.contact) {
+        created.push(result.contact);
+      } else if (result.error) {
+        creationErrors.push(result.error);
       }
       totalProcessed++;
+    });
+
+    // Reduced delay between batches for faster processing
+    if (i + batchSize < contacts.length) {
+      await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms to 50ms
     }
 
-    // Small delay between batches to prevent overwhelming the API
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Progress logging for large batches
+    if (totalProcessed % 500 === 0) {
+      console.log(`Progress: ${totalProcessed}/${contacts.length} contacts processed`);
+    }
   }
 
   const timeElapsed = Date.now() - startTime;
   const timeRemaining = maxProcessingTime - timeElapsed;
-  const shouldContinue = totalProcessed < contacts.length && timeRemaining > 10000; // At least 10 seconds remaining
+  const shouldContinue = totalProcessed < contacts.length && timeRemaining > 30000; // 30 seconds buffer
+
+  console.log(`Batch processing completed: ${totalProcessed}/${contacts.length} processed in ${timeElapsed}ms`);
 
   return {
     created,
@@ -225,11 +249,11 @@ export async function POST(
       );
     }
 
-    // Validate file size (increase limit to 50MB for batch processing)
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    // Increased file size limit to 100MB for very large datasets
+    const maxSize = 100 * 1024 * 1024; // 100MB
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: "File size must be less than 50MB" },
+        { error: "File size must be less than 100MB" },
         { status: 400 }
       );
     }
@@ -281,13 +305,32 @@ export async function POST(
       );
     }
 
-    // Get existing contacts for duplicate checking - optimize by getting only emails
+    // Optimized duplicate checking - fetch only emails in batches
     let existingEmails = new Set<string>();
     try {
       console.log("Fetching existing contacts for duplicate checking...");
-      const result = await getEmailContacts({ limit: 10000 });
+      
+      // For large contact databases, we might want to paginate this
+      let allContacts: EmailContact[] = [];
+      let skip = 0;
+      const limit = 1000;
+      
+      while (true) {
+        const result = await getEmailContacts({ limit, skip });
+        if (!result.contacts || result.contacts.length === 0) {
+          break;
+        }
+        allContacts = allContacts.concat(result.contacts);
+        skip += limit;
+        
+        // Prevent infinite loop
+        if (result.contacts.length < limit) {
+          break;
+        }
+      }
+      
       existingEmails = new Set(
-        result.contacts
+        allContacts
           .map((c) => c.metadata?.email)
           .filter(
             (email): email is string =>
@@ -295,7 +338,8 @@ export async function POST(
           )
           .map((email) => email.toLowerCase())
       );
-      console.log(`Found ${existingEmails.size} existing email addresses`);
+      
+      console.log(`Found ${existingEmails.size} existing email addresses for duplicate checking`);
     } catch (error) {
       console.error("Error fetching existing contacts:", error);
       // Continue without duplicate checking if we can't fetch existing contacts
@@ -314,8 +358,8 @@ export async function POST(
         continue; // Skip empty lines
       }
 
-      // Early termination if too many errors
-      if (errors.length > 100) {
+      // Increased error threshold for large files
+      if (errors.length > 500) {
         console.log("Stopping validation due to too many errors");
         break;
       }
@@ -477,24 +521,24 @@ export async function POST(
     }
 
     // If there are too many errors, abort
-    if (errors.length > 100) {
+    if (errors.length > 500) {
       return NextResponse.json(
         {
           error:
             "Too many validation errors in the CSV file. Please check your data format.",
-          errors: errors.slice(0, 10),
+          errors: errors.slice(0, 20), // Show more errors for debugging
           total_errors: errors.length,
         },
         { status: 400 }
       );
     }
 
-    console.log(`Validated ${contacts.length} contacts, starting batch processing...`);
+    console.log(`Validated ${contacts.length} contacts, starting optimized batch processing...`);
 
-    // Process contacts in batches to avoid timeout
-    const batchResult = await processContactsBatch(contacts);
+    // Process contacts with optimized batch processing
+    const batchResult = await processContactsBatch(contacts, 100, 480000); // 100 per batch, 8 minute timeout
     
-    console.log(`Batch processing completed: ${batchResult.totalProcessed}/${contacts.length} processed`);
+    console.log(`Optimized batch processing completed: ${batchResult.totalProcessed}/${contacts.length} processed`);
 
     // Enhanced cache invalidation after successful upload
     if (batchResult.created.length > 0) {
