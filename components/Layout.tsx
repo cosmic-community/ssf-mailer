@@ -43,10 +43,16 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
   // Show loading state while checking authentication
   if (isAuthenticated === null) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="flex flex-col items-center space-y-4">
-          <LoadingSpinner size="lg" variant="primary" />
-          <p className="text-sm text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 flex items-center justify-center">
+        <div className="flex flex-col items-center space-y-6 p-8">
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/80 backdrop-blur-sm rounded-full"></div>
+            <LoadingSpinner size="lg" variant="contrast" className="relative z-10" />
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-medium text-gray-900 mb-1">Loading...</p>
+            <p className="text-sm text-gray-600">Checking authentication</p>
+          </div>
         </div>
       </div>
     );
