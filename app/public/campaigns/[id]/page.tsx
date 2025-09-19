@@ -43,9 +43,6 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div>
-                  <h1 className="text-2xl font-bold text-gray-900">
-                    {campaign.metadata.name}
-                  </h1>
                   <p className="text-sm text-gray-500 mt-1">
                     Public Campaign View
                   </p>
