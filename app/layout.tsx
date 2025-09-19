@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
 import './globals.css'
-import Layout from '@/components/Layout'
+import ClientLayoutRouter from '@/components/ClientLayoutRouter'
 import { Toaster } from '@/components/ui/toaster'
 import { getSettings } from '@/lib/cosmic'
 
@@ -37,9 +37,9 @@ export default async function RootLayout({
         <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📧</text></svg>" />
       </head>
       <body className={inter.className}>
-        <Layout companyName={companyName}>
+        <ClientLayoutRouter companyName={companyName}>
           {children}
-        </Layout>
+        </ClientLayoutRouter>
         <Toaster />
       </body>
     </html>
