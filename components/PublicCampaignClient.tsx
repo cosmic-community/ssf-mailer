@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from "@/hooks/use-toast";
 import { Share, Copy, ExternalLink } from "lucide-react";
 
 interface PublicCampaignClientProps {
@@ -21,7 +21,7 @@ export default function PublicCampaignClient({ campaignId }: PublicCampaignClien
       toast({
         title: "Link copied!",
         description: "The campaign link has been copied to your clipboard.",
-        variant: "success",
+        variant: "default",
       });
     } catch (error) {
       console.error("Failed to copy link:", error);

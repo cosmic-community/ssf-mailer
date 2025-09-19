@@ -9,7 +9,7 @@ import {
   EmailList,
 } from "@/types";
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/useToast";
+import { useToast } from "@/hooks/use-toast";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import TestEmailModal from "@/components/TestEmailModal";
 import { Save, TestTube, Share, Copy, ExternalLink } from "lucide-react";
@@ -53,7 +53,7 @@ export default function CampaignActions({
       toast({
         title: "Link copied!",
         description: "The public campaign link has been copied to your clipboard.",
-        variant: "success",
+        variant: "default",
       });
     } catch (error) {
       console.error("Failed to copy link:", error);
