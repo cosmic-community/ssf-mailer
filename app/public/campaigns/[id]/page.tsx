@@ -131,13 +131,11 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
                 </div>
                 
                 {/* Content Preview */}
-                <div className="border rounded-lg bg-white">
-                  <div className="p-6">
-                    <div 
-                      className="prose max-w-none prose-sm prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900"
-                      dangerouslySetInnerHTML={{ __html: content }}
-                    />
-                  </div>
+                <div className="p-6">
+                  <div 
+                    className="prose max-w-none prose-sm prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900"
+                    dangerouslySetInnerHTML={{ __html: content }}
+                  />
                 </div>
               </CardContent>
             </Card>
