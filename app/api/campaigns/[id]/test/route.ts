@@ -133,12 +133,26 @@ export async function POST(
             "Demo"
           );
 
-          // Add test email banner and unsubscribe footer
+          // Add test email banner
           const testBanner = `
             <div style="background-color: #fbbf24; color: #92400e; text-align: center; padding: 10px; margin-bottom: 20px; border-radius: 4px;">
               <strong>🧪 TEST EMAIL</strong> - This is a test version of your campaign
             </div>
           `;
+
+          // Add View in Browser link if public sharing is enabled
+          let viewInBrowserLink = "";
+          if (campaign.metadata?.public_sharing_enabled) {
+            const viewInBrowserUrl = `${baseUrl}/public/campaigns/${id}`;
+            viewInBrowserLink = `
+              <div style="text-align: center; padding: 10px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+                <a href="${viewInBrowserUrl}" 
+                   style="color: #6b7280; font-size: 12px; text-decoration: underline;">
+                  View this email in your browser
+                </a>
+              </div>
+            `;
+          }
 
           const unsubscribeUrl = `${baseUrl}/api/unsubscribe?email=${encodeURIComponent(
             email
@@ -165,7 +179,7 @@ export async function POST(
           `;
 
           const finalContent =
-            testBanner + personalizedContent + unsubscribeFooter;
+            testBanner + viewInBrowserLink + personalizedContent + unsubscribeFooter;
 
           // Add [TEST] prefix to subject
           const testSubject = `[TEST] ${personalizedSubject}`;
