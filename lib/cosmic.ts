@@ -1255,7 +1255,7 @@ export async function getEmailCampaign(
 }
 
 export async function createMarketingCampaign(
-  data: CreateCampaignData
+  data: CreateCampaignData & { public_sharing_enabled?: boolean }
 ): Promise<MarketingCampaign> {
   try {
     console.log("Creating marketing campaign with data:", data);
@@ -1370,6 +1370,7 @@ export async function createMarketingCampaign(
           open_rate: "0%",
           click_rate: "0%",
         },
+        public_sharing_enabled: data.public_sharing_enabled ?? true, // Default to true
       },
     });
 
@@ -1441,7 +1442,7 @@ export async function updateCampaignProgress(
 
 export async function updateMarketingCampaign(
   id: string,
-  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats }>
+  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats; public_sharing_enabled?: boolean }>
 ): Promise<MarketingCampaign> {
   try {
     const updateData: any = {};
@@ -1463,6 +1464,7 @@ export async function updateMarketingCampaign(
     if (data.send_date !== undefined)
       metadataUpdates.send_date = data.send_date;
     if (data.stats !== undefined) metadataUpdates.stats = data.stats;
+    if (data.public_sharing_enabled !== undefined) metadataUpdates.public_sharing_enabled = data.public_sharing_enabled;
 
     if (data.status !== undefined) {
       metadataUpdates.status = {
@@ -1508,7 +1510,7 @@ export async function updateMarketingCampaign(
 // Add alias function for updateEmailCampaign
 export async function updateEmailCampaign(
   id: string,
-  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats }>
+  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats; public_sharing_enabled?: boolean }>
 ): Promise<MarketingCampaign> {
   return updateMarketingCampaign(id, data);
 }

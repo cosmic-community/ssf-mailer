@@ -125,7 +125,7 @@ export interface CampaignContent {
   original_template_id?: string; // Track which template was used originally
 }
 
-// Marketing Campaign interface - Updated to include lists and campaign_content
+// Marketing Campaign interface - Updated to include lists, campaign_content, and public_sharing_enabled
 export interface MarketingCampaign extends CosmicObject {
   type: "marketing-campaigns";
   metadata: {
@@ -142,6 +142,7 @@ export interface MarketingCampaign extends CosmicObject {
     send_date?: string;
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
+    public_sharing_enabled?: boolean; // NEW: controls public link sharing
     // Backward compatibility fields
     subject?: string; // DEPRECATED: use campaign_content.subject
     content?: string; // DEPRECATED: use campaign_content.content
@@ -165,6 +166,7 @@ export interface EmailCampaign extends CosmicObject {
     send_date?: string;
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
+    public_sharing_enabled?: boolean; // NEW: controls public link sharing
     // Backward compatibility fields
     subject?: string; // DEPRECATED: use campaign_content.subject
     content?: string; // DEPRECATED: use campaign_content.content
@@ -251,6 +253,7 @@ export interface CreateCampaignData {
   send_date?: string;
   subject?: string; // NEW: subject for campaign content
   content?: string; // NEW: content for campaign content
+  public_sharing_enabled?: boolean; // NEW: controls public sharing
 }
 
 export interface UpdateSettingsData {
