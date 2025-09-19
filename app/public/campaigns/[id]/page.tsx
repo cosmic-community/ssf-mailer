@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getMarketingCampaign } from "@/lib/cosmic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Share, Copy, ExternalLink, ArrowLeft } from "lucide-react";
+import { Share, Copy, ExternalLink, ArrowLeft, Mail, FileText } from "lucide-react";
 import PublicCampaignClient from "@/components/PublicCampaignClient";
 
 export const metadata = {
@@ -65,7 +65,7 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
                 <div className="flex items-start space-x-3">
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                      <span className="text-blue-600 text-sm font-medium">📧</span>
+                      <Mail className="w-4 h-4 text-blue-600" />
                     </div>
                   </div>
                   <div className="flex-1">
@@ -86,7 +86,7 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
                 <div className="flex items-start space-x-3 mb-4">
                   <div className="flex-shrink-0">
                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                      <span className="text-green-600 text-sm font-medium">📄</span>
+                      <FileText className="w-4 h-4 text-green-600" />
                     </div>
                   </div>
                   <div className="flex-1">
@@ -110,10 +110,21 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
 
             {/* Footer */}
             <div className="text-center py-8">
-              <p className="text-sm text-gray-500">
+              <p className="text-sm text-gray-500 mb-2">
                 This is a shared view of an email marketing campaign. 
                 <br />
                 No personal information or recipient data is displayed.
+              </p>
+              <p className="text-xs text-gray-400">
+                Powered by{' '}
+                <a 
+                  href={`https://www.cosmicjs.com?utm_source=bucket_${process.env.COSMIC_BUCKET_SLUG || 'unknown'}&utm_medium=referral&utm_campaign=app_badge&utm_content=powered_by_cosmic`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 hover:text-blue-800 underline"
+                >
+                  Cosmic
+                </a>
               </p>
             </div>
           </div>
@@ -139,6 +150,17 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
             </h2>
             <p className="text-gray-600 mb-6">
               The requested campaign could not be found or is not available for public viewing.
+            </p>
+            <p className="text-xs text-gray-400">
+              Powered by{' '}
+              <a 
+                href={`https://www.cosmicjs.com?utm_source=bucket_${process.env.COSMIC_BUCKET_SLUG || 'unknown'}&utm_medium=referral&utm_campaign=app_badge&utm_content=powered_by_cosmic`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                Cosmic
+              </a>
             </p>
           </div>
         </main>
