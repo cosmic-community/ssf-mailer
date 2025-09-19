@@ -409,13 +409,28 @@ async function sendCampaignEmail(
     /\{\{first_name\}\}/g,
     contact.metadata.first_name || "there"
   );
-  const personalizedContent = content.replace(
+  let personalizedContent = content.replace(
     /\{\{first_name\}\}/g,
     contact.metadata.first_name || "there"
   );
 
-  // Get base URL for unsubscribe
+  // Get base URL for unsubscribe and view in browser
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
+  // Add View in Browser link if public sharing is enabled
+  if (campaign.metadata.public_sharing_enabled) {
+    const viewInBrowserUrl = `${baseUrl}/public/campaigns/${campaign.id}`;
+    const viewInBrowserLink = `
+      <div style="text-align: center; padding: 10px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+        <a href="${viewInBrowserUrl}" 
+           style="color: #6b7280; font-size: 12px; text-decoration: underline;">
+          View this email in your browser
+        </a>
+      </div>
+    `;
+    
+    personalizedContent = viewInBrowserLink + personalizedContent;
+  }
 
   // Add unsubscribe footer
   const unsubscribeUrl = createUnsubscribeUrl(

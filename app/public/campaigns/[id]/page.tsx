@@ -93,19 +93,6 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
         {/* Main Content */}
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
-            {/* Subscribe Button - Prominent placement at top */}
-            <div className="text-center mb-8">
-              <Link href="/subscribe">
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold">
-                  <Mail className="w-5 h-5 mr-2" />
-                  Subscribe to updates from {companyName}
-                </Button>
-              </Link>
-              <p className="text-sm text-gray-600 mt-2">
-                Get notified about our latest updates and campaigns
-              </p>
-            </div>
-
             {/* Subject Line */}
             <Card>
               <CardContent className="pt-6">

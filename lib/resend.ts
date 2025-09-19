@@ -105,6 +105,25 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// Helper function to add View in Browser link to email content
+function addViewInBrowserLink(
+  content: string,
+  campaignId: string,
+  baseUrl: string
+): string {
+  const viewInBrowserUrl = `${baseUrl}/public/campaigns/${campaignId}`;
+  const viewInBrowserLink = `
+    <div style="text-align: center; padding: 10px 0; border-bottom: 1px solid #e5e7eb; margin-bottom: 20px;">
+      <a href="${viewInBrowserUrl}" 
+         style="color: #6b7280; font-size: 12px; text-decoration: underline;">
+        View this email in your browser
+      </a>
+    </div>
+  `;
+  
+  return viewInBrowserLink + content;
+}
+
 // Batch processing function with rate limiting and retry logic
 export async function sendCampaignEmails(
   campaignId: string,
@@ -207,6 +226,15 @@ export async function sendCampaignEmails(
               /\{\{last_name\}\}/g,
               contact.metadata.last_name || ""
             );
+
+            // Add View in Browser link if public sharing is enabled
+            if (campaign.metadata.public_sharing_enabled) {
+              personalizedContent = addViewInBrowserLink(
+                personalizedContent,
+                campaignId,
+                baseUrl
+              );
+            }
 
             // Add unsubscribe link and footer
             const unsubscribeUrl = createUnsubscribeUrl(

@@ -1,37 +1,26 @@
-"use client";
+'use client'
 
-import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  MarketingCampaign,
-  EmailTemplate,
-  EmailContact,
-  EmailList,
-} from "@/types";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, Loader2, X, Users, Mail } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import { MarketingCampaign, EmailTemplate, EmailContact, EmailList } from '@/types'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Switch } from '@/components/ui/switch'
+import { Badge } from '@/components/ui/badge'
+import { useToast } from '@/hooks/use-toast'
+import { Calendar, Users, Tag, Mail, Settings2, Share, ExternalLink } from 'lucide-react'
 
 interface EditCampaignFormProps {
-  campaign: MarketingCampaign;
-  templates: EmailTemplate[];
-  contacts: EmailContact[];
-  lists: EmailList[];
-  onFormDataChange?: (
-    formData: any,
-    isLoading: boolean,
-    handleSubmit: () => Promise<void>
-  ) => void;
+  campaign: MarketingCampaign
+  templates: EmailTemplate[]
+  contacts: EmailContact[]
+  lists: EmailList[]
+  onFormDataChange: (formData: any, isLoading: boolean, handleSubmit: () => Promise<void>) => void
 }
 
 export default function EditCampaignForm({
@@ -39,845 +28,448 @@ export default function EditCampaignForm({
   templates,
   contacts,
   lists,
-  onFormDataChange,
+  onFormDataChange
 }: EditCampaignFormProps) {
-  const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState("");
-  const { toast } = useToast();
-
-  // Search states
-  const [contactSearchTerm, setContactSearchTerm] = useState("");
-  const [isContactSearching, setIsContactSearching] = useState(false);
-  const [searchedContacts, setSearchedContacts] = useState<EmailContact[]>([]);
-  const [showingSearchResults, setShowingSearchResults] = useState(false);
-
-  // Get target list IDs from campaign metadata
-  const getTargetListIds = (): string[] => {
-    if (
-      campaign.metadata?.target_lists &&
-      Array.isArray(campaign.metadata.target_lists)
-    ) {
-      return campaign.metadata.target_lists
-        .map((list: any) => {
-          if (typeof list === "object" && list !== null && "id" in list) {
-            return list.id as string;
-          }
-          if (typeof list === "string") {
-            return list;
-          }
-          return "";
-        })
-        .filter((id: string) => id !== "");
-    }
-    return [];
-  };
-
-  // Get target contact IDs from campaign metadata - handle both full objects and IDs with proper typing
-  const getTargetContactIds = (): string[] => {
-    if (
-      campaign.metadata?.target_contacts &&
-      Array.isArray(campaign.metadata.target_contacts)
-    ) {
-      return campaign.metadata.target_contacts
-        .map((contact: any) => {
-          // Handle both full contact objects and string IDs
-          if (
-            typeof contact === "object" &&
-            contact !== null &&
-            "id" in contact
-          ) {
-            return contact.id as string;
-          }
-          if (typeof contact === "string") {
-            return contact;
-          }
-          return "";
-        })
-        .filter((id: string) => id !== "");
-    }
-    return [];
-  };
-
-  // Determine initial target type based on campaign data
-  const getInitialTargetType = () => {
-    const listIds = getTargetListIds();
-    const contactIds = getTargetContactIds();
-    const tags = campaign.metadata?.target_tags || [];
-
-    if (listIds.length > 0) return "lists";
-    if (contactIds.length > 0) return "contacts";
-    if (tags.length > 0) return "tags";
-    return "lists"; // default
-  };
-
+  const router = useRouter()
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
   const [formData, setFormData] = useState({
-    name: campaign.metadata?.name || "",
-    target_type: getInitialTargetType() as "lists" | "contacts" | "tags",
-    list_ids: getTargetListIds(),
-    contact_ids: getTargetContactIds(),
-    target_tags: campaign.metadata?.target_tags || [],
-    send_date: campaign.metadata?.send_date || "",
-    schedule_type: campaign.metadata?.send_date
-      ? ("scheduled" as const)
-      : ("now" as const),
-  });
+    name: campaign.metadata.name || '',
+    target_type: 'lists' as 'lists' | 'contacts' | 'tags',
+    list_ids: [] as string[],
+    contact_ids: [] as string[],
+    target_tags: [] as string[],
+    send_date: campaign.metadata.send_date || '',
+    schedule_type: 'now' as 'now' | 'scheduled',
+    public_sharing_enabled: campaign.metadata.public_sharing_enabled ?? false
+  })
 
-  // Filter out unsubscribed contacts - but we'll only show them if searched
-  const activeContacts = contacts.filter(
-    (contact) => contact.metadata?.status?.value !== "Unsubscribed"
-  );
+  const canEdit = campaign.metadata?.status?.value === 'Draft'
+  const status = campaign.metadata?.status?.value || 'Draft'
 
-  // Filter out inactive lists
-  const activeLists = lists.filter((list) => list.metadata?.active !== false);
-
-  // Get unique tags from active contacts only
-  const uniqueTags = Array.from(
-    new Set(
-      activeContacts
-        .flatMap((contact) => contact.metadata?.tags || [])
-        .filter(Boolean)
-    )
-  );
-
-  // Contact search functionality
-  const searchContacts = useCallback(async (searchTerm: string) => {
-    if (!searchTerm.trim()) {
-      setSearchedContacts([]);
-      setShowingSearchResults(false);
-      return;
-    }
-
-    setIsContactSearching(true);
-    try {
-      const response = await fetch(
-        `/api/contacts?search=${encodeURIComponent(searchTerm.trim())}&limit=50`
-      );
-
-      if (response.ok) {
-        const result = await response.json();
-        const filteredContacts = result.data.contacts.filter(
-          (contact: EmailContact) => contact.metadata?.status?.value !== "Unsubscribed"
-        );
-        setSearchedContacts(filteredContacts);
-        setShowingSearchResults(true);
-      } else {
-        console.error("Failed to search contacts");
-        setSearchedContacts([]);
-        setShowingSearchResults(false);
-      }
-    } catch (error) {
-      console.error("Error searching contacts:", error);
-      setSearchedContacts([]);
-      setShowingSearchResults(false);
-    } finally {
-      setIsContactSearching(false);
-    }
-  }, []);
-
-  // Debounce contact search
+  // Initialize form data from campaign
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      searchContacts(contactSearchTerm);
-    }, 300);
+    const initializeFormData = () => {
+      const targetLists = campaign.metadata.target_lists || []
+      const targetContacts = campaign.metadata.target_contacts || []
+      const targetTags = campaign.metadata.target_tags || []
 
-    return () => clearTimeout(timeoutId);
-  }, [contactSearchTerm, searchContacts]);
-
-  const handleSubmit = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      setError("");
-      setIsLoading(true);
-
-      try {
-        const response = await fetch(`/api/campaigns/${campaign.id}`, {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            name: formData.name,
-            list_ids: formData.target_type === "lists" ? formData.list_ids : [],
-            contact_ids:
-              formData.target_type === "contacts" ? formData.contact_ids : [],
-            target_tags:
-              formData.target_type === "tags" ? formData.target_tags : [],
-            send_date:
-              formData.schedule_type === "scheduled" ? formData.send_date : "",
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to update campaign");
-        }
-
-        await response.json();
-
-        // Show success message using shadcn/ui toast system
-        toast({
-          title: "Success!",
-          description: "🎉 Campaign updated successfully!",
-          variant: "success",
-        });
-
-        // Trigger router refresh to update all components with fresh data
-        // This will cause the SendCampaignButton to re-render with updated campaign data
-        router.refresh();
-      } catch (err) {
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Failed to update campaign. Please try again.";
-        setError(errorMessage);
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        });
-        console.error("Campaign update error:", err);
-      } finally {
-        setIsLoading(false);
+      let targetType: 'lists' | 'contacts' | 'tags' = 'lists'
+      
+      // Determine the primary target type based on what has data
+      if (targetContacts.length > 0) {
+        targetType = 'contacts'
+      } else if (targetTags.length > 0) {
+        targetType = 'tags'
+      } else {
+        targetType = 'lists'
       }
-    },
-    [formData, campaign.id, toast, router]
-  );
 
-  const handleListToggle = (listId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      list_ids: prev.list_ids.includes(listId)
-        ? prev.list_ids.filter((id) => id !== listId)
-        : [...prev.list_ids, listId],
-    }));
-  };
+      // Extract list IDs - handle both string IDs and objects with id property
+      const listIds = targetLists.map(list => 
+        typeof list === 'string' ? list : list.id
+      )
 
-  const handleContactToggle = (contactId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      contact_ids: prev.contact_ids.includes(contactId)
-        ? prev.contact_ids.filter((id) => id !== contactId)
-        : [...prev.contact_ids, contactId],
-    }));
-  };
+      setFormData({
+        name: campaign.metadata.name || '',
+        target_type: targetType,
+        list_ids: listIds,
+        contact_ids: targetContacts,
+        target_tags: targetTags,
+        send_date: campaign.metadata.send_date || '',
+        schedule_type: campaign.metadata.send_date ? 'scheduled' : 'now',
+        public_sharing_enabled: campaign.metadata.public_sharing_enabled ?? false
+      })
+    }
 
-  const handleTagToggle = (tag: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      target_tags: prev.target_tags.includes(tag)
-        ? prev.target_tags.filter((t) => t !== tag)
-        : [...prev.target_tags, tag],
-    }));
-  };
+    initializeFormData()
+  }, [campaign])
 
-  const handleRevertToDraft = async () => {
-    setIsLoading(true);
-    setError("");
+  // Update parent component whenever form data or loading state changes
+  useEffect(() => {
+    onFormDataChange(formData, isLoading, handleSubmit)
+  }, [formData, isLoading])
+
+  const handleSubmit = async () => {
+    if (!formData.name.trim()) {
+      toast({
+        title: 'Error',
+        description: 'Campaign name is required',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate targets
+    const hasLists = formData.target_type === 'lists' && formData.list_ids.length > 0
+    const hasContacts = formData.target_type === 'contacts' && formData.contact_ids.length > 0
+    const hasTags = formData.target_type === 'tags' && formData.target_tags.length > 0
+
+    if (!hasLists && !hasContacts && !hasTags) {
+      toast({
+        title: 'Error',
+        description: 'Please select at least one target audience',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    // Validate schedule
+    if (formData.schedule_type === 'scheduled' && !formData.send_date) {
+      toast({
+        title: 'Error', 
+        description: 'Please select a send date for scheduled campaigns',
+        variant: 'destructive'
+      })
+      return
+    }
+
+    setIsLoading(true)
 
     try {
+      const updateData: any = {
+        name: formData.name,
+        public_sharing_enabled: formData.public_sharing_enabled
+      }
+
+      // Set targets based on type
+      if (formData.target_type === 'lists') {
+        updateData.list_ids = formData.list_ids
+        updateData.contact_ids = []
+        updateData.target_tags = []
+      } else if (formData.target_type === 'contacts') {
+        updateData.list_ids = []
+        updateData.contact_ids = formData.contact_ids
+        updateData.target_tags = []
+      } else if (formData.target_type === 'tags') {
+        updateData.list_ids = []
+        updateData.contact_ids = []
+        updateData.target_tags = formData.target_tags
+      }
+
+      // Set send date
+      updateData.send_date = formData.schedule_type === 'scheduled' ? formData.send_date : ''
+
       const response = await fetch(`/api/campaigns/${campaign.id}`, {
-        method: "PUT",
+        method: 'PUT',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          status: "Draft",
-          send_date: "",
-        }),
-      });
+        body: JSON.stringify(updateData)
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(
-          errorData.error || "Failed to revert campaign to draft"
-        );
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to update campaign')
       }
 
       toast({
-        title: "Success!",
-        description: "Campaign reverted to draft successfully!",
-        variant: "success",
-      });
-      router.refresh();
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Failed to revert campaign to draft";
-      setError(errorMessage);
+        title: 'Success',
+        description: 'Campaign updated successfully',
+        variant: 'default'
+      })
+
+      router.refresh()
+    } catch (error: any) {
+      console.error('Campaign update error:', error)
       toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+        title: 'Error',
+        description: error.message || 'Failed to update campaign',
+        variant: 'destructive'
+      })
     } finally {
-      setIsLoading(false);
+      setIsLoading(false)
     }
-  };
+  }
 
-  const canEdit = campaign.metadata?.status?.value === "Draft";
-  const isScheduled = campaign.metadata?.status?.value === "Scheduled";
+  const handleListSelect = (listId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      list_ids: checked 
+        ? [...prev.list_ids, listId]
+        : prev.list_ids.filter(id => id !== listId)
+    }))
+  }
 
-  // Create a submit handler that can be called from outside
-  const handleExternalSubmit = useCallback(async () => {
-    await handleSubmit({ preventDefault: () => {} } as React.FormEvent);
-  }, [handleSubmit]);
+  const handleContactSelect = (contactId: string, checked: boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      contact_ids: checked
+        ? [...prev.contact_ids, contactId]
+        : prev.contact_ids.filter(id => id !== contactId)
+    }))
+  }
 
-  // Notify parent component of form data changes
-  useEffect(() => {
-    if (onFormDataChange) {
-      onFormDataChange(formData, isLoading, handleExternalSubmit);
+  const getSelectedCount = () => {
+    if (formData.target_type === 'lists') {
+      return formData.list_ids.length
+    } else if (formData.target_type === 'contacts') {
+      return formData.contact_ids.length
+    } else if (formData.target_type === 'tags') {
+      return formData.target_tags.length
     }
-  }, [formData, isLoading, handleExternalSubmit, onFormDataChange]);
+    return 0
+  }
 
-  // Get contacts to display - either searched results or selected contacts
-  const getContactsToDisplay = () => {
-    if (showingSearchResults && contactSearchTerm.trim()) {
-      return searchedContacts;
-    }
-    
-    if (formData.contact_ids.length === 0) {
-      return [];
-    }
-
-    // Show selected contacts
-    return activeContacts.filter(contact => 
-      formData.contact_ids.includes(contact.id)
-    );
-  };
+  const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/public/campaigns/${campaign.id}`
+  
+  // Function to truncate URL for display
+  const getTruncatedUrl = (url: string, maxLength: number = 50) => {
+    if (url.length <= maxLength) return url
+    return url.substring(0, maxLength) + '...'
+  }
 
   return (
-    <div className="card max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">
-          {canEdit ? "Edit Campaign" : "Campaign Details"}
-        </h2>
-        <div className="flex items-center space-x-3">
-          {!canEdit && !isScheduled && (
-            <span className="px-3 py-1 bg-yellow-100 text-yellow-800 text-sm rounded-full">
-              Campaign cannot be edited after sending
-            </span>
-          )}
-          {isScheduled && (
-            <button
-              onClick={handleRevertToDraft}
-              disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {isLoading ? "Reverting..." : "Revert to Draft"}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-          <p className="text-red-600">{error}</p>
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Campaign Name */}
-        <div>
-          <label
-            htmlFor="name"
-            className="block text-sm font-medium text-gray-700 mb-2"
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Settings2 className="h-5 w-5" />
+          <span>Campaign Settings</span>
+          <Badge 
+            variant="outline" 
+            className={status === 'Draft' ? 'bg-gray-100 text-gray-800' : 'bg-blue-100 text-blue-800'}
           >
-            Campaign Name
-          </label>
-          <input
-            type="text"
+            {status}
+          </Badge>
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {/* Campaign Name */}
+        <div className="space-y-2">
+          <Label htmlFor="name">Campaign Name</Label>
+          <Input
             id="name"
-            required
-            className="form-input"
             value={formData.name}
-            onChange={(e) =>
-              setFormData((prev) => ({ ...prev, name: e.target.value }))
-            }
+            onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
             placeholder="Enter campaign name"
             disabled={!canEdit}
           />
         </div>
 
-        {/* Target Type Selection */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Target Audience
-          </label>
+        {/* Public Sharing */}
+        <div className="space-y-4 p-4 bg-gray-50 rounded-lg border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-2">
+              <Share className="h-4 w-4 text-gray-500" />
+              <Label htmlFor="public-sharing" className="text-sm font-medium">
+                Enable Public Sharing
+              </Label>
+            </div>
+            <Switch
+              id="public-sharing"
+              checked={formData.public_sharing_enabled}
+              onCheckedChange={(checked) => setFormData(prev => ({ 
+                ...prev, 
+                public_sharing_enabled: checked 
+              }))}
+              disabled={!canEdit}
+            />
+          </div>
+          
           <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="target_type"
-                value="lists"
-                checked={formData.target_type === "lists"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    target_type: e.target.value as
-                      | "lists"
-                      | "contacts"
-                      | "tags",
-                  }))
-                }
-                className="form-radio"
-                disabled={!canEdit}
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                Select lists (recommended for large audiences)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="target_type"
-                value="contacts"
-                checked={formData.target_type === "contacts"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    target_type: e.target.value as
-                      | "lists"
-                      | "contacts"
-                      | "tags",
-                  }))
-                }
-                className="form-radio"
-                disabled={!canEdit}
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                Select specific contacts
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="target_type"
-                value="tags"
-                checked={formData.target_type === "tags"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    target_type: e.target.value as
-                      | "lists"
-                      | "contacts"
-                      | "tags",
-                  }))
-                }
-                className="form-radio"
-                disabled={!canEdit}
-              />
-              <span className="ml-2 text-sm text-gray-700">Select by tags</span>
-            </label>
+            <p className="text-sm text-gray-600">
+              When enabled, this campaign can be viewed publicly via a shareable link, 
+              and "View in Browser" links will be included in emails.
+            </p>
+            
+            {formData.public_sharing_enabled && (
+              <div className="flex items-center space-x-2 p-2 bg-white rounded border">
+                <ExternalLink className="h-4 w-4 text-blue-500" />
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 font-mono hover:text-blue-800 hover:underline flex-1 truncate"
+                  title={publicUrl}
+                >
+                  {getTruncatedUrl(publicUrl)}
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* List Selection */}
-        {formData.target_type === "lists" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Lists ({formData.list_ids.length} selected)
-            </label>
-            {lists.length > activeLists.length && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> {lists.length - activeLists.length}{" "}
-                  inactive list
-                  {lists.length - activeLists.length !== 1
-                    ? "s are"
-                    : " is"}{" "}
-                  hidden from selection.
-                </p>
-              </div>
-            )}
-            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
-              {activeLists.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  {lists.length === 0 ? (
-                    <>
-                      No lists available.{" "}
-                      <Link
-                        href="/lists/new"
-                        className="text-primary-600 hover:text-primary-700"
-                      >
-                        Create lists first
-                      </Link>
-                      .
-                    </>
-                  ) : (
-                    <>No active lists available. All lists are inactive.</>
-                  )}
-                </p>
-              ) : (
-                activeLists.map((list) => (
-                  <label key={list.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.list_ids.includes(list.id)}
-                      onChange={() => handleListToggle(list.id)}
-                      className="form-checkbox"
-                      disabled={!canEdit}
-                    />
-                    <span className="ml-2 text-sm text-gray-700">
-                      <span className="font-medium">{list.metadata?.name}</span>
-                      {list.metadata?.description && (
-                        <span className="text-gray-500">
-                          {" "}
-                          - {list.metadata.description}
-                        </span>
-                      )}
-                      <span className="ml-2 inline-flex px-2 py-0.5 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-                        {list.metadata?.list_type?.value || "General"}
-                      </span>
-                      {list.metadata?.total_contacts !== undefined && (
-                        <span className="ml-1 text-xs text-gray-500">
-                          ({list.metadata.total_contacts} contacts)
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))
-              )}
-            </div>
-
-            {/* Show selected lists summary */}
-            {formData.list_ids.length > 0 && (
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm text-green-700">
-                  <strong>Selected Lists ({formData.list_ids.length}):</strong>
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.list_ids.map((listId) => {
-                    const list = activeLists.find((l) => l.id === listId);
-                    if (!list) return null;
-                    return (
-                      <span
-                        key={listId}
-                        className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
-                      >
-                        {list.metadata?.name}
-                      </span>
-                    );
-                  })}
+        {/* Target Audience */}
+        <div className="space-y-4">
+          <Label className="text-base font-medium">Target Audience</Label>
+          
+          {/* Target Type Selection */}
+          <Select
+            value={formData.target_type}
+            onValueChange={(value: 'lists' | 'contacts' | 'tags') => 
+              setFormData(prev => ({ ...prev, target_type: value }))
+            }
+            disabled={!canEdit}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select target type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lists">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-4 w-4" />
+                  <span>Email Lists</span>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              </SelectItem>
+              <SelectItem value="contacts">
+                <div className="flex items-center space-x-2">
+                  <Mail className="h-4 w-4" />
+                  <span>Individual Contacts</span>
+                </div>
+              </SelectItem>
+              <SelectItem value="tags">
+                <div className="flex items-center space-x-2">
+                  <Tag className="h-4 w-4" />
+                  <span>Contact Tags</span>
+                </div>
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
-        {/* Contact Selection with Search */}
-        {formData.target_type === "contacts" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Contacts ({formData.contact_ids.length} selected)
-            </label>
-            
-            {/* Contact Search */}
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-                <Input
-                  placeholder="Search contacts by email or name..."
-                  value={contactSearchTerm}
-                  onChange={(e) => setContactSearchTerm(e.target.value)}
-                  className="pl-10 pr-10"
-                  disabled={!canEdit}
-                />
-                {isContactSearching && (
-                  <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
-                  </div>
-                )}
-                {contactSearchTerm && !isContactSearching && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setContactSearchTerm("");
-                      setSearchedContacts([]);
-                      setShowingSearchResults(false);
-                    }}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
+          {/* Lists Selection */}
+          {formData.target_type === 'lists' && (
+            <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Select Email Lists</Label>
+                <span className="text-sm text-gray-500">
+                  {formData.list_ids.length} selected
+                </span>
               </div>
               
-              {contactSearchTerm && (
-                <p className="text-sm text-gray-600 mt-2">
-                  {showingSearchResults ? (
-                    <>Found {searchedContacts.length} contacts matching "{contactSearchTerm}"</>
-                  ) : (
-                    <>Searching for "{contactSearchTerm}"...</>
-                  )}
+              {lists.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">
+                  No email lists available. Create a list first.
                 </p>
-              )}
-            </div>
-
-            {contacts.length > activeContacts.length && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Note:</strong>{" "}
-                  {contacts.length - activeContacts.length} unsubscribed contact
-                  {contacts.length - activeContacts.length !== 1
-                    ? "s are"
-                    : " is"}{" "}
-                  hidden from selection.
-                </p>
-              </div>
-            )}
-
-            <div className="max-h-64 overflow-y-auto border border-gray-300 rounded-md p-3 space-y-2">
-              {getContactsToDisplay().length === 0 ? (
-                <div className="text-center py-8">
-                  {contactSearchTerm ? (
-                    <div className="space-y-2">
-                      <Mail className="mx-auto h-8 w-8 text-gray-400" />
-                      <p className="text-sm text-gray-500">
-                        {isContactSearching 
-                          ? "Searching contacts..." 
-                          : "No contacts found matching your search"
-                        }
-                      </p>
-                    </div>
-                  ) : formData.contact_ids.length === 0 ? (
-                    <div className="space-y-2">
-                      <Users className="mx-auto h-8 w-8 text-gray-400" />
-                      <p className="text-sm text-gray-500">
-                        Search for contacts to select them for this campaign
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No selected contacts to display</p>
-                  )}
-                </div>
               ) : (
-                getContactsToDisplay().map((contact) => (
-                  <label key={contact.id} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.contact_ids.includes(contact.id)}
-                      onChange={() => handleContactToggle(contact.id)}
-                      className="form-checkbox"
-                      disabled={!canEdit}
-                    />
-                    <span className="ml-2 text-sm text-gray-700">
-                      {contact.metadata?.first_name}{" "}
-                      {contact.metadata?.last_name}
-                      <span className="text-gray-500">
-                        ({contact.metadata?.email})
-                      </span>
-                      {contact.metadata?.status?.value === "Active" && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-green-100 text-green-800 rounded-full">
-                          Active
-                        </span>
-                      )}
-                      {contact.metadata?.status?.value === "Bounced" && (
-                        <span className="ml-1 inline-flex px-1.5 py-0.5 text-xs font-medium bg-yellow-100 text-yellow-800 rounded-full">
-                        </span>
-                      )}
-                    </span>
-                  </label>
-                ))
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {lists.map((list) => (
+                    <div key={list.id} className="flex items-center space-x-3 p-2 bg-white rounded border">
+                      <Checkbox
+                        id={`list-${list.id}`}
+                        checked={formData.list_ids.includes(list.id)}
+                        onCheckedChange={(checked) => handleListSelect(list.id, checked as boolean)}
+                        disabled={!canEdit}
+                      />
+                      <label htmlFor={`list-${list.id}`} className="flex-1 cursor-pointer">
+                        <div className="font-medium">{list.metadata.name}</div>
+                        <div className="text-sm text-gray-500">
+                          {list.metadata.total_contacts || 0} contacts
+                        </div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
+          )}
 
-            {/* Show selected contacts summary */}
-            {formData.contact_ids.length > 0 && (
-              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                <p className="text-sm text-green-700">
-                  <strong>
-                    Selected Contacts ({formData.contact_ids.length}):
-                  </strong>
+          {/* Contacts Selection */}
+          {formData.target_type === 'contacts' && (
+            <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-medium">Select Individual Contacts</Label>
+                <span className="text-sm text-gray-500">
+                  {formData.contact_ids.length} selected
+                </span>
+              </div>
+              
+              {contacts.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">
+                  No contacts available. Add contacts first.
                 </p>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {formData.contact_ids.map((contactId) => {
-                    const contact = activeContacts.find(
-                      (c) => c.id === contactId
-                    );
-                    if (!contact) return null;
-                    return (
-                      <span
-                        key={contactId}
-                        className="inline-flex items-center px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full"
-                      >
-                        {contact.metadata?.first_name}{" "}
-                        {contact.metadata?.last_name}
-                      </span>
-                    );
-                  })}
+              ) : (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {contacts.filter(contact => contact.metadata.status.value === 'Active').map((contact) => (
+                    <div key={contact.id} className="flex items-center space-x-3 p-2 bg-white rounded border">
+                      <Checkbox
+                        id={`contact-${contact.id}`}
+                        checked={formData.contact_ids.includes(contact.id)}
+                        onCheckedChange={(checked) => handleContactSelect(contact.id, checked as boolean)}
+                        disabled={!canEdit}
+                      />
+                      <label htmlFor={`contact-${contact.id}`} className="flex-1 cursor-pointer">
+                        <div className="font-medium">
+                          {contact.metadata.first_name} {contact.metadata.last_name}
+                        </div>
+                        <div className="text-sm text-gray-500">{contact.metadata.email}</div>
+                      </label>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {/* Tag Selection */}
-        {formData.target_type === "tags" && (
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">
-              Select Tags ({formData.target_tags.length} selected)
-            </label>
-            {contacts.length > activeContacts.length && (
-              <div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Note:</strong> Tags are based on active contacts only.
-                  Unsubscribed contacts will not receive emails even if they
-                  have matching tags.
-                </p>
-              </div>
-            )}
+          {/* Tags Selection */}
+          {formData.target_type === 'tags' && (
+            <div className="space-y-3 p-4 border rounded-lg bg-gray-50">
+              <Label className="text-sm font-medium">Target Tags (comma-separated)</Label>
+              <Textarea
+                value={formData.target_tags.join(', ')}
+                onChange={(e) => {
+                  const tags = e.target.value.split(',').map(tag => tag.trim()).filter(tag => tag)
+                  setFormData(prev => ({ ...prev, target_tags: tags }))
+                }}
+                placeholder="Enter tags separated by commas"
+                disabled={!canEdit}
+                rows={3}
+              />
+              <p className="text-sm text-gray-500">
+                Campaign will be sent to contacts that have any of these tags
+              </p>
+            </div>
+          )}
+        </div>
+
+        {/* Schedule Settings */}
+        <div className="space-y-4">
+          <Label className="text-base font-medium flex items-center space-x-2">
+            <Calendar className="h-4 w-4" />
+            <span>Schedule Settings</span>
+          </Label>
+          
+          <Select
+            value={formData.schedule_type}
+            onValueChange={(value: 'now' | 'scheduled') => 
+              setFormData(prev => ({ ...prev, schedule_type: value }))
+            }
+            disabled={!canEdit}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="now">Send immediately when triggered</SelectItem>
+              <SelectItem value="scheduled">Schedule for later</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {formData.schedule_type === 'scheduled' && (
             <div className="space-y-2">
-              {uniqueTags.length === 0 ? (
-                <p className="text-sm text-gray-500">
-                  No tags available. Add tags to your active contacts first.
-                </p>
-              ) : (
-                uniqueTags.map((tag) => (
-                  <label key={tag} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.target_tags.includes(tag)}
-                      onChange={() => handleTagToggle(tag)}
-                      className="form-checkbox"
-                      disabled={!canEdit}
-                    />
-                    <span className="ml-2 text-sm text-gray-700">{tag}</span>
-                  </label>
-                ))
-              )}
-            </div>
-
-            {/* Show selected tags summary */}
-            {formData.target_tags.length > 0 && (
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>
-                    Selected Tags ({formData.target_tags.length}):
-                  </strong>{" "}
-                  {formData.target_tags.join(", ")}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Scheduling */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            When to Send
-          </label>
-          <div className="space-y-2">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="schedule_type"
-                value="now"
-                checked={formData.schedule_type === "now"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    schedule_type: e.target.value as "now" | "scheduled",
-                  }))
-                }
-                className="form-radio"
-                disabled={!canEdit}
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                Send immediately (Draft mode)
-              </span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="schedule_type"
-                value="scheduled"
-                checked={formData.schedule_type === "scheduled"}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    schedule_type: e.target.value as "now" | "scheduled",
-                  }))
-                }
-                className="form-radio"
-                disabled={!canEdit}
-              />
-              <span className="ml-2 text-sm text-gray-700">
-                Schedule for later
-              </span>
-            </label>
-          </div>
-
-          {formData.schedule_type === "scheduled" && (
-            <div className="mt-3">
-              <input
+              <Label htmlFor="send-date">Send Date & Time</Label>
+              <Input
+                id="send-date"
                 type="datetime-local"
-                className="form-input"
                 value={formData.send_date}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    send_date: e.target.value,
-                  }))
-                }
-                min={new Date().toISOString().slice(0, 16)}
+                onChange={(e) => setFormData(prev => ({ ...prev, send_date: e.target.value }))}
                 disabled={!canEdit}
               />
             </div>
           )}
         </div>
 
-        {/* Current Campaign Status Info */}
-        <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-700">
-                Current Status:
-              </p>
-              <span
-                className={`inline-flex px-3 py-1 text-sm font-medium rounded-full mt-1 ${
-                  campaign.metadata?.status?.value === "Sent"
-                    ? "bg-green-100 text-green-800"
-                    : campaign.metadata?.status?.value === "Scheduled"
-                    ? "bg-blue-100 text-blue-800"
-                    : campaign.metadata?.status?.value === "Sending"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : campaign.metadata?.status?.value === "Draft"
-                    ? "bg-gray-100 text-gray-800"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                {campaign.metadata?.status?.value || "Draft"}
-              </span>
+        {/* Target Summary */}
+        {getSelectedCount() > 0 && (
+          <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="text-sm font-medium text-blue-800">
+              Campaign Target Summary:
             </div>
-
-            {campaign.metadata?.send_date && (
-              <div>
-                <p className="text-sm font-medium text-gray-700">
-                  Scheduled For:
-                </p>
-                <p className="text-sm text-gray-600 mt-1">
-                  {new Date(campaign.metadata.send_date).toLocaleString()}
-                </p>
-              </div>
-            )}
-
-            <div>
-              <p className="text-sm font-medium text-gray-700">
-                Target Recipients:
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                {formData.target_type === "lists"
-                  ? `${formData.list_ids.length} lists selected`
-                  : formData.target_type === "contacts"
-                  ? `${formData.contact_ids.length} specific contacts`
-                  : `${formData.target_tags.length} tags selected`}
-              </p>
+            <div className="text-sm text-blue-600 mt-1">
+              {getSelectedCount()} {formData.target_type} selected
             </div>
           </div>
-        </div>
-      </form>
-    </div>
-  );
+        )}
+      </CardContent>
+    </Card>
+  )
 }

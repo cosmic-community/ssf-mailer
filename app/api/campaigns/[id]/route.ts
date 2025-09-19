@@ -104,6 +104,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       updateData.target_tags = data.target_tags;
     if (data.send_date !== undefined) updateData.send_date = data.send_date;
     if (data.stats !== undefined) updateData.stats = data.stats;
+    if (data.public_sharing_enabled !== undefined) updateData.public_sharing_enabled = data.public_sharing_enabled;
 
     // Handle status update with special logic
     if (data.status !== undefined) {

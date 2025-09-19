@@ -21,13 +21,14 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, template_id, list_ids, subject, content } =
+    const { name, template_id, list_ids, subject, content, public_sharing_enabled } =
       await request.json();
 
     console.log("Creating campaign with data:", {
       name,
       template_id,
       list_ids,
+      public_sharing_enabled
     });
 
     // Validate required fields
@@ -59,6 +60,7 @@ export async function POST(request: NextRequest) {
       list_ids,
       subject,
       content,
+      public_sharing_enabled: public_sharing_enabled ?? true // Default to true if not specified
     });
 
     console.log("Campaign created successfully:", campaign.id);
