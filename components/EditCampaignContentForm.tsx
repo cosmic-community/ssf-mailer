@@ -23,7 +23,21 @@ import {
   Save,
   Edit,
   X,
+  BookTemplate,
 } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import ContentEditor from "./shared/ContentEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useTemplateSettings } from "@/hooks/useTemplateSettings";
@@ -41,6 +55,130 @@ interface EditCampaignContentFormProps {
   campaign: MarketingCampaign;
 }
 
+interface CreateTemplateDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (templateData: {
+    name: string;
+    template_type: TemplateType;
+    active: boolean;
+  }) => void;
+  defaultSubject: string;
+}
+
+function CreateTemplateDialog({
+  isOpen,
+  onClose,
+  onSave,
+  defaultSubject,
+}: CreateTemplateDialogProps) {
+  const [templateData, setTemplateData] = useState({
+    name: `${defaultSubject} Template`,
+    template_type: "Newsletter" as TemplateType,
+    active: true,
+  });
+
+  // Reset form when dialog opens
+  useEffect(() => {
+    if (isOpen) {
+      setTemplateData({
+        name: `${defaultSubject} Template`,
+        template_type: "Newsletter" as TemplateType,
+        active: true,
+      });
+    }
+  }, [isOpen, defaultSubject]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!templateData.name.trim()) return;
+    onSave(templateData);
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center space-x-2">
+            <BookTemplate className="h-5 w-5 text-blue-600" />
+            <span>Create Template from Campaign</span>
+          </DialogTitle>
+        </DialogHeader>
+        
+        <form onSubmit={handleSubmit} className="space-y-4 pt-4">
+          <div className="space-y-2">
+            <Label htmlFor="template-name">Template Name *</Label>
+            <Input
+              id="template-name"
+              value={templateData.name}
+              onChange={(e) =>
+                setTemplateData((prev) => ({ ...prev, name: e.target.value }))
+              }
+              placeholder="Enter template name"
+              autoFocus
+              required
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Template Type</Label>
+            <Select
+              value={templateData.template_type}
+              onValueChange={(value: TemplateType) =>
+                setTemplateData((prev) => ({ ...prev, template_type: value }))
+              }
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Newsletter">Newsletter</SelectItem>
+                <SelectItem value="Welcome Email">Welcome Email</SelectItem>
+                <SelectItem value="Promotional">Promotional</SelectItem>
+                <SelectItem value="Transactional">Transactional</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div className="space-y-1">
+              <Label htmlFor="template-active" className="text-sm font-medium">
+                Active Template
+              </Label>
+              <p className="text-xs text-gray-600">
+                Make this template available for creating campaigns
+              </p>
+            </div>
+            <input
+              id="template-active"
+              type="checkbox"
+              checked={templateData.active}
+              onChange={(e) =>
+                setTemplateData((prev) => ({ ...prev, active: e.target.checked }))
+              }
+              className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+          </div>
+
+          <div className="flex justify-between pt-4">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              disabled={!templateData.name.trim()}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              <BookTemplate className="h-4 w-4 mr-2" />
+              Create Template
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function EditCampaignContentForm({
   campaign,
 }: EditCampaignContentFormProps) {
@@ -55,6 +193,10 @@ export default function EditCampaignContentForm({
   const [aiProgress, setAiProgress] = useState(0);
   const [editingSessionActive, setEditingSessionActive] = useState(false);
   const { toast } = useToast();
+
+  // Create Template Dialog state
+  const [showCreateTemplateDialog, setShowCreateTemplateDialog] = useState(false);
+  const [isCreatingTemplate, setIsCreatingTemplate] = useState(false);
 
   // Full screen state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -138,6 +280,63 @@ export default function EditCampaignContentForm({
   const handleContentChange = (content: string) => {
     // Immediately update form data to ensure content is saved
     setFormData((prev) => ({ ...prev, content }));
+  };
+
+  // Handle Create Template
+  const handleCreateTemplate = async (templateData: {
+    name: string;
+    template_type: TemplateType;
+    active: boolean;
+  }) => {
+    setIsCreatingTemplate(true);
+    setError("");
+
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/create-template`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: templateData.name,
+          template_type: templateData.template_type,
+          active: templateData.active,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to create template");
+      }
+
+      const result = await response.json();
+
+      toast({
+        title: "Template Created!",
+        description: `"${templateData.name}" has been saved as a template`,
+        variant: "success",
+      });
+
+      setShowCreateTemplateDialog(false);
+
+      // Optionally navigate to templates page
+      setTimeout(() => {
+        router.push(`/templates/${result.template.id}/edit`);
+      }, 1000);
+
+    } catch (error) {
+      console.error("Template creation error:", error);
+      const errorMessage =
+        error instanceof Error ? error.message : "Failed to create template";
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreatingTemplate(false);
+    }
   };
 
   // Handle form submission
@@ -464,6 +663,20 @@ export default function EditCampaignContentForm({
               <span>Campaign Content</span>
             </CardTitle>
             <div className="flex items-center space-x-2">
+              {/* Create Template Button - Show in read-only mode when content exists */}
+              {!editingSessionActive && (displayData.subject && displayData.content) && (
+                <Button
+                  onClick={() => setShowCreateTemplateDialog(true)}
+                  variant="outline"
+                  size="sm"
+                  disabled={isCreatingTemplate}
+                  className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                >
+                  <BookTemplate className="h-4 w-4 mr-2" />
+                  {isCreatingTemplate ? "Creating..." : "Create Template"}
+                </Button>
+              )}
+              
               {!editingSessionActive && canEdit && (
                 <Button
                   onClick={startEditingSession}
@@ -827,10 +1040,35 @@ export default function EditCampaignContentForm({
                   />
                 </div>
               </div>
+
+              {/* Show Create Template suggestion if content exists and no templates created yet */}
+              {(displayData.subject && displayData.content) && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-start space-x-3">
+                    <BookTemplate className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <h4 className="text-sm font-medium text-blue-900">
+                        Save as Template
+                      </h4>
+                      <p className="text-sm text-blue-700 mt-1">
+                        Turn this campaign content into a reusable template for future campaigns.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Create Template Dialog */}
+      <CreateTemplateDialog
+        isOpen={showCreateTemplateDialog}
+        onClose={() => setShowCreateTemplateDialog(false)}
+        onSave={handleCreateTemplate}
+        defaultSubject={displayData.subject}
+      />
     </div>
   );
 }
