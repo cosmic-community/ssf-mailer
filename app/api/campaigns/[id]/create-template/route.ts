@@ -60,13 +60,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         name: name.trim(),
         subject: subject.trim(),
         content: content.trim(),
-        template_type: {
-          key: template_type.toLowerCase().replace(/\s+/g, '_'),
-          value: template_type
-        },
+        template_type: template_type,
         active: active !== false, // Default to true if not specified
-        is_ai_generated: false, // This was manually created from a campaign
-        tags: [`created-from-campaign-${campaign.id}`] // Tag to track origin
       }
     };
 
