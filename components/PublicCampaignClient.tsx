@@ -67,9 +67,9 @@ export default function PublicCampaignClient({ campaignId }: PublicCampaignClien
       color: 'text-blue-600'
     },
     {
-      name: 'Twitter',
+      name: 'X',
       icon: Twitter,
-      url: `https://twitter.com/intent/tweet?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent('Check out this email campaign')}`,
+      url: `https://x.com/intent/tweet?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent('Check out this email campaign')}`,
       color: 'text-sky-500'
     },
     {
