@@ -212,6 +212,12 @@ export default function EditCampaignForm({
   }
 
   const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/public/campaigns/${campaign.id}`
+  
+  // Function to truncate URL for display
+  const getTruncatedUrl = (url: string, maxLength: number = 50) => {
+    if (url.length <= maxLength) return url
+    return url.substring(0, maxLength) + '...'
+  }
 
   return (
     <Card>
@@ -269,9 +275,15 @@ export default function EditCampaignForm({
             {formData.public_sharing_enabled && (
               <div className="flex items-center space-x-2 p-2 bg-white rounded border">
                 <ExternalLink className="h-4 w-4 text-blue-500" />
-                <span className="text-sm text-blue-600 font-mono break-all">
-                  {publicUrl}
-                </span>
+                <a
+                  href={publicUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-blue-600 font-mono hover:text-blue-800 hover:underline flex-1 truncate"
+                  title={publicUrl}
+                >
+                  {getTruncatedUrl(publicUrl)}
+                </a>
               </div>
             )}
           </div>
