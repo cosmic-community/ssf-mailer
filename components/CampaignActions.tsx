@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/useToast";
 import SendCampaignButton from "@/components/SendCampaignButton";
 import TestEmailModal from "@/components/TestEmailModal";
-import { Save, TestTube } from "lucide-react";
+import { Save, TestTube, Share, Copy, ExternalLink } from "lucide-react";
 
 interface CampaignActionsProps {
   campaign: MarketingCampaign;
@@ -41,8 +41,33 @@ export default function CampaignActions({
   isLoading,
   onSubmit,
 }: CampaignActionsProps) {
+  const { toast } = useToast();
   const canEdit = campaign.metadata?.status?.value === "Draft";
   const status = campaign.metadata?.status?.value || "Draft";
+
+  const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/public/campaigns/${campaign.id}`;
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast({
+        title: "Link copied!",
+        description: "The public campaign link has been copied to your clipboard.",
+        variant: "success",
+      });
+    } catch (error) {
+      console.error("Failed to copy link:", error);
+      toast({
+        title: "Copy failed",
+        description: "Unable to copy link to clipboard. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleOpenInNewTab = () => {
+    window.open(publicUrl, '_blank', 'noopener,noreferrer');
+  };
 
   return (
     <div className="space-y-4">
@@ -79,6 +104,38 @@ export default function CampaignActions({
 
       {/* Send Campaign Button */}
       <SendCampaignButton campaign={campaign} />
+
+      {/* Share Campaign Section */}
+      <div className="border-t pt-4">
+        <div className="flex items-center space-x-2 mb-3">
+          <Share className="h-4 w-4 text-gray-500" />
+          <span className="text-sm font-medium text-gray-700">Share Campaign</span>
+        </div>
+        
+        <div className="space-y-2">
+          <Button
+            onClick={handleCopyLink}
+            variant="outline"
+            className="w-full justify-start"
+          >
+            <Copy className="h-4 w-4 mr-2" />
+            Copy Public Link
+          </Button>
+          
+          <Button
+            onClick={handleOpenInNewTab}
+            variant="outline"
+            className="w-full justify-start"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Open in New Tab
+          </Button>
+        </div>
+        
+        <p className="text-xs text-gray-500 mt-2">
+          Share this public link to let anyone view the campaign content without logging in.
+        </p>
+      </div>
     </div>
   );
 }

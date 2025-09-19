@@ -8,7 +8,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.next()
   }
   
-  // Allow access to login page, static assets, and console capture script
+  // Allow access to login page, static assets, console capture script, and public campaign pages
   if (
     pathname === '/login' ||
     pathname.startsWith('/_next') ||
@@ -19,7 +19,8 @@ export function middleware(request: NextRequest) {
     pathname === '/dashboard-console-capture.js' ||
     pathname.startsWith('/api/auth') ||
     pathname.startsWith('/api/unsubscribe') ||
-    pathname.startsWith('/api/track')
+    pathname.startsWith('/api/track') ||
+    pathname.startsWith('/public/campaigns/') // Allow public campaign access
   ) {
     return NextResponse.next()
   }
