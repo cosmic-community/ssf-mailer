@@ -93,7 +93,8 @@ export default function PublicCampaignClient({ campaignId }: PublicCampaignClien
   ];
 
   const handleSocialShare = (url: string) => {
-    window.open(url, '_blank', 'width=600,height=400,scrollbars=yes,resizable=yes');
+    // Open in new tab instead of popup window
+    window.open(url, '_blank', 'noopener,noreferrer');
   };
 
   return (

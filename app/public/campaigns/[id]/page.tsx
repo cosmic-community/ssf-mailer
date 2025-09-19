@@ -1,7 +1,7 @@
 // app/public/campaigns/[id]/page.tsx
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getMarketingCampaign } from "@/lib/cosmic";
+import { getMarketingCampaign, getSettings } from "@/lib/cosmic";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Share, Copy, ExternalLink, ArrowLeft, Mail, FileText } from "lucide-react";
@@ -20,7 +20,10 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
   const { id } = await params;
 
   try {
-    const campaign = await getMarketingCampaign(id);
+    const [campaign, settings] = await Promise.all([
+      getMarketingCampaign(id),
+      getSettings()
+    ]);
 
     if (!campaign) {
       notFound();
@@ -35,6 +38,9 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
                    campaign.metadata.content || 
                    "<p>No content available</p>";
 
+    // Get company name from settings
+    const companyName = settings?.metadata?.company_name || "Email Marketing";
+
     return (
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
@@ -43,9 +49,9 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    Public Campaign View
-                  </p>
+                  <h1 className="text-3xl font-bold text-gray-900">
+                    {companyName}
+                  </h1>
                 </div>
               </div>
               
