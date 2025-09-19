@@ -16,6 +16,30 @@ interface PublicCampaignPageProps {
   params: Promise<{ id: string }>;
 }
 
+// Function to replace template tags with generic text
+function replaceTemplateTags(content: string): string {
+  // Replace common template tags with generic alternatives
+  return content
+    .replace(/\{\{first_name\}\}/gi, "there")
+    .replace(/\{\{last_name\}\}/gi, "")
+    .replace(/\{\{full_name\}\}/gi, "there")
+    .replace(/\{\{name\}\}/gi, "there")
+    .replace(/\{\{email\}\}/gi, "friend")
+    .replace(/\{\{company\}\}/gi, "your company")
+    .replace(/\{\{company_name\}\}/gi, "your company")
+    .replace(/\{\{phone\}\}/gi, "your phone")
+    .replace(/\{\{address\}\}/gi, "your address")
+    .replace(/\{\{city\}\}/gi, "your city")
+    .replace(/\{\{state\}\}/gi, "your state")
+    .replace(/\{\{zip\}\}/gi, "your zip code")
+    .replace(/\{\{country\}\}/gi, "your country")
+    // Remove any remaining template tags that might exist
+    .replace(/\{\{[^}]+\}\}/g, "")
+    // Clean up any double spaces that might result from replacements
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export default async function PublicCampaignPage({ params }: PublicCampaignPageProps) {
   const { id } = await params;
 
@@ -30,13 +54,17 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
     }
 
     // Get the campaign subject and content
-    const subject = campaign.metadata.campaign_content?.subject || 
-                   campaign.metadata.subject || 
-                   "No Subject";
+    const rawSubject = campaign.metadata.campaign_content?.subject || 
+                      campaign.metadata.subject || 
+                      "No Subject";
     
-    const content = campaign.metadata.campaign_content?.content || 
-                   campaign.metadata.content || 
-                   "<p>No content available</p>";
+    const rawContent = campaign.metadata.campaign_content?.content || 
+                      campaign.metadata.content || 
+                      "<p>No content available</p>";
+
+    // Replace template tags with generic text
+    const subject = replaceTemplateTags(rawSubject);
+    const content = replaceTemplateTags(rawContent);
 
     // Get company name from settings
     const companyName = settings?.metadata?.company_name || "Email Marketing";
@@ -65,6 +93,19 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
         {/* Main Content */}
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-6">
+            {/* Subscribe Button - Prominent placement at top */}
+            <div className="text-center mb-8">
+              <Link href="/subscribe">
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 text-lg font-semibold">
+                  <Mail className="w-5 h-5 mr-2" />
+                  Subscribe to updates from {companyName}
+                </Button>
+              </Link>
+              <p className="text-sm text-gray-600 mt-2">
+                Get notified about our latest updates and campaigns
+              </p>
+            </div>
+
             {/* Subject Line */}
             <Card>
               <CardContent className="pt-6">
@@ -113,6 +154,19 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
                 </div>
               </CardContent>
             </Card>
+
+            {/* Subscribe Button - Bottom placement as well */}
+            <div className="text-center py-6 bg-white rounded-lg shadow-sm border border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3">
+                Want to receive updates like this?
+              </h3>
+              <Link href="/subscribe">
+                <Button size="lg" className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Subscribe to {companyName}
+                </Button>
+              </Link>
+            </div>
 
             {/* Footer */}
             <div className="text-center py-8">
