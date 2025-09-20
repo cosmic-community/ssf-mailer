@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Share, Copy, ExternalLink, Check, Facebook, Twitter, Linkedin, Mail, MessageCircle } from "lucide-react";
+import { Share, Copy, ExternalLink, Check, Facebook, Linkedin, Mail, MessageCircle } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,6 +13,29 @@ import {
 
 interface PublicCampaignClientProps {
   campaignId: string;
+}
+
+// X (formerly Twitter) icon component
+function XIcon({ className }: { className?: string }) {
+  return (
+    <svg 
+      className={className} 
+      width="16" 
+      height="16" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <g>
+        <title></title>
+        <path 
+          d="M17.7508 2.96069H20.8175L14.1175 10.619L22 21.0382H15.8283L10.995 14.7182L5.46333 21.0382H2.395L9.56167 12.8465L2 2.96153H8.32833L12.6975 8.73819L17.7508 2.96069ZM16.675 19.2032H18.3742L7.405 4.69986H5.58167L16.675 19.2032Z" 
+          stroke="none"
+          fill="currentColor"
+        />
+      </g>
+    </svg>
+  );
 }
 
 export default function PublicCampaignClient({ campaignId }: PublicCampaignClientProps) {
@@ -68,9 +91,9 @@ export default function PublicCampaignClient({ campaignId }: PublicCampaignClien
     },
     {
       name: 'X',
-      icon: Twitter,
+      icon: XIcon,
       url: `https://x.com/intent/tweet?url=${encodeURIComponent(publicUrl)}&text=${encodeURIComponent('Check out this email campaign')}`,
-      color: 'text-sky-500'
+      color: 'text-gray-900'
     },
     {
       name: 'LinkedIn',
