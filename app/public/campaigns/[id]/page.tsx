@@ -96,14 +96,18 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
             {/* Subject Line */}
             <Card>
               <CardContent className="pt-6">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0">
+                <div className="flex items-start space-x-0 sm:space-x-3">
+                  <div className="hidden sm:flex flex-shrink-0">
                     <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                       <Mail className="w-4 h-4 text-blue-600" />
                     </div>
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-2">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-2 flex items-center sm:hidden">
+                      <Mail className="w-4 h-4 text-blue-600 mr-2" />
+                      Subject Line
+                    </h2>
+                    <h2 className="hidden sm:block text-lg font-semibold text-gray-900 mb-2">
                       Subject Line
                     </h2>
                     <p className="text-gray-700 text-base">
@@ -117,21 +121,25 @@ export default async function PublicCampaignPage({ params }: PublicCampaignPageP
             {/* Email Content */}
             <Card>
               <CardContent className="pt-6">
-                <div className="flex items-start space-x-3 mb-4">
-                  <div className="flex-shrink-0">
+                <div className="flex items-start space-x-0 sm:space-x-3 mb-4">
+                  <div className="hidden sm:flex flex-shrink-0">
                     <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
                       <FileText className="w-4 h-4 text-green-600" />
                     </div>
                   </div>
                   <div className="flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                    <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center sm:hidden">
+                      <FileText className="w-4 h-4 text-green-600 mr-2" />
+                      Email Content
+                    </h2>
+                    <h2 className="hidden sm:block text-lg font-semibold text-gray-900 mb-4">
                       Email Content
                     </h2>
                   </div>
                 </div>
                 
                 {/* Content Preview */}
-                <div className="p-6">
+                <div className="p-0 sm:p-6">
                   <div 
                     className="prose max-w-none prose-sm prose-headings:text-gray-900 prose-p:text-gray-700 prose-a:text-blue-600 prose-strong:text-gray-900"
                     dangerouslySetInnerHTML={{ __html: content }}
