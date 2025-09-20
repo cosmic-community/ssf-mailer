@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, CheckCircle, AlertCircle } from 'lucide-react'
+import { Loader2, CheckCircle, AlertCircle, Mail } from 'lucide-react'
 
 export default function SubscriptionForm() {
   const [email, setEmail] = useState('')
@@ -71,9 +71,15 @@ export default function SubscriptionForm() {
         <p className="text-gray-600 mb-6">
           {message}
         </p>
-        <p className="text-sm text-gray-500">
-          Check your email for a confirmation message.
-        </p>
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-center space-x-2 mb-2">
+            <Mail className="w-5 h-5 text-blue-600" />
+            <p className="text-blue-800 font-medium">Check your inbox!</p>
+          </div>
+          <p className="text-sm text-blue-700">
+            We've sent you a welcome email with important information about your subscription.
+          </p>
+        </div>
         <Button 
           onClick={() => {
             setStatus('idle')
@@ -156,13 +162,18 @@ export default function SubscriptionForm() {
             Subscribing...
           </>
         ) : (
-          'Get subscribers page'
+          'Join Our Newsletter'
         )}
       </Button>
 
-      <p className="text-sm text-gray-500 text-center">
-        We'll never share your email with anyone else.
-      </p>
+      <div className="text-center space-y-2">
+        <p className="text-sm text-gray-500">
+          We'll send you a confirmation email after you subscribe.
+        </p>
+        <p className="text-xs text-gray-400">
+          We'll never share your email with anyone else.
+        </p>
+      </div>
     </form>
   )
 }
