@@ -6,11 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Share, Copy, ExternalLink, ArrowLeft, Mail, FileText } from "lucide-react";
 import PublicCampaignClient from "@/components/PublicCampaignClient";
-
-export const metadata = {
-  title: "Public Campaign View | Email Marketing",
-  description: "View shared email marketing campaign",
-};
+import type { Metadata } from 'next';
 
 interface PublicCampaignPageProps {
   params: Promise<{ id: string }>;
@@ -38,6 +34,125 @@ function replaceTemplateTags(content: string): string {
     // Clean up any double spaces that might result from replacements
     .replace(/\s+/g, " ")
     .trim();
+}
+
+// Function to extract the first image from HTML content
+function extractFirstImage(htmlContent: string): string | null {
+  // Look for img tags with src attributes
+  const imgRegex = /<img[^>]+src=["']([^"']+)["'][^>]*>/i;
+  const match = htmlContent.match(imgRegex);
+  
+  if (match && match[1]) {
+    return match[1];
+  }
+  
+  // Look for background-image in style attributes
+  const bgImageRegex = /background-image:\s*url\(["']?([^"')]+)["']?\)/i;
+  const bgMatch = htmlContent.match(bgImageRegex);
+  
+  if (bgMatch && bgMatch[1]) {
+    return bgMatch[1];
+  }
+  
+  return null;
+}
+
+// Function to clean text content from HTML for description
+function stripHtml(html: string): string {
+  // Remove HTML tags and decode entities
+  return html
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#039;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+// Generate metadata dynamically
+export async function generateMetadata({ params }: PublicCampaignPageProps): Promise<Metadata> {
+  try {
+    const { id } = await params;
+    const [campaign, settings] = await Promise.all([
+      getMarketingCampaign(id),
+      getSettings()
+    ]);
+
+    if (!campaign) {
+      return {
+        title: "Campaign Not Found | Email Marketing",
+        description: "The requested email campaign could not be found."
+      };
+    }
+
+    // Get the campaign subject and content
+    const rawSubject = campaign.metadata.campaign_content?.subject || 
+                      campaign.metadata.subject || 
+                      "Email Campaign";
+    
+    const rawContent = campaign.metadata.campaign_content?.content || 
+                      campaign.metadata.content || 
+                      "";
+
+    // Replace template tags with generic text
+    const subject = replaceTemplateTags(rawSubject);
+    const content = replaceTemplateTags(rawContent);
+    
+    // Get company name from settings
+    const companyName = settings?.metadata?.company_name || "Email Marketing";
+    
+    // Create SEO title
+    const title = `${subject} | ${companyName}`;
+    
+    // Create description from content (first 160 characters)
+    const description = stripHtml(content).substring(0, 157) + (stripHtml(content).length > 157 ? '...' : '') || `View email campaign: ${subject}`;
+    
+    // Extract first image or use fallback
+    const firstImage = extractFirstImage(content);
+    const ogImage = firstImage || 'https://imgix.cosmicjs.com/cae23390-902f-11f0-973b-81e514691025-CleanShot-2025-09-12-at-16-25-032x.png?w=2000&auto=format,compress';
+    
+    // Generate public URL
+    const publicUrl = `${process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'}/public/campaigns/${id}`;
+
+    return {
+      title,
+      description,
+      openGraph: {
+        title,
+        description,
+        url: publicUrl,
+        siteName: companyName,
+        images: [
+          {
+            url: ogImage,
+            width: 1200,
+            height: 630,
+            alt: `${subject} - Email Campaign`,
+          }
+        ],
+        type: 'article'
+      },
+      twitter: {
+        card: 'summary_large_image',
+        title,
+        description,
+        images: [ogImage],
+      },
+      robots: {
+        index: true,
+        follow: true
+      }
+    };
+  } catch (error) {
+    console.error('Error generating metadata:', error);
+    return {
+      title: "Email Campaign | Email Marketing",
+      description: "View shared email marketing campaign"
+    };
+  }
 }
 
 export default async function PublicCampaignPage({ params }: PublicCampaignPageProps) {
