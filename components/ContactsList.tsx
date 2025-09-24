@@ -445,6 +445,26 @@ export default function ContactsList({
                 <SelectItem value="Bounced">Bounced</SelectItem>
               </SelectContent>
             </Select>
+            
+            {/* List Filter Dropdown */}
+            <Select
+              value={listFilter || "all"}
+              onValueChange={handleListFilterChange}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Filter by list..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Lists</SelectItem>
+                <SelectItem value="">No List</SelectItem>
+                {availableLists.map((list) => (
+                  <SelectItem key={list.id} value={list.id}>
+                    {list.metadata.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            
             <ContactsExportButton
               searchTerm={searchTerm}
               statusFilter={statusFilter}
@@ -507,7 +527,7 @@ export default function ContactsList({
               )}
               {listFilter && listFilter !== "all" && (
                 <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                  <span>{currentListName}</span>
+                  <span>{listFilter === "" ? "No List" : currentListName}</span>
                   <button
                     onClick={() => setListFilter("")}
                     className="hover:bg-purple-200 rounded-full p-0.5"
@@ -790,7 +810,7 @@ export default function ContactsList({
               )}
               {listFilter && listFilter !== "all" && (
                 <div className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
-                  <span>{currentListName}</span>
+                  <span>{listFilter === "" ? "No List" : currentListName}</span>
                   <button
                     onClick={() => setListFilter("")}
                     className="hover:bg-purple-200 rounded-full p-0.5"
