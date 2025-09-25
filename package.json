@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "type-check": "tsc --noEmit",
-    "prebuild": "bun run type-check"
+    "prebuild": "bun run type-check",
+    "check-duplicates": "tsx scripts/check-duplicates.ts",
+    "cleanup-duplicates-dry": "tsx scripts/cleanup-duplicates.ts",
+    "cleanup-duplicates-live": "tsx scripts/cleanup-duplicates.ts --live"
   },
   "dependencies": {
     "@cosmicjs/sdk": "^1.5.5",
@@ -46,6 +49,7 @@
     "eslint-config-next": "14.0.3",
     "postcss": "^8",
     "tailwindcss": "^3.3.0",
+    "tsx": "^4.7.0",
     "typescript": "^5"
   }
 }
