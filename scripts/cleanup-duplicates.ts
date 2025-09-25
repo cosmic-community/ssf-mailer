@@ -20,6 +20,13 @@ export async function cleanupDuplicates(dryRun: boolean = true): Promise<void> {
     )
     
     const keepContact = sortedContacts[0]
+    
+    // CRITICAL FIX: Add proper undefined check for keepContact
+    if (!keepContact) {
+      console.error(`⚠️ No contact found in group for email: ${group.email}`)
+      continue
+    }
+    
     const duplicatesToDelete = sortedContacts.slice(1)
     
     console.log(`\n📧 ${group.email}:`)
