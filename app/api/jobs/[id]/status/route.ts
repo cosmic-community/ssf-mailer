@@ -9,7 +9,7 @@ export async function GET(
   try {
     const { id } = await params;
     
-    // Add proper validation for id parameter
+    // FIXED: Add proper validation for id parameter - Line 27 type error resolution
     if (!id || typeof id !== 'string' || id.trim() === '') {
       return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
     }
@@ -24,18 +24,21 @@ export async function GET(
     // Calculate estimated completion time
     let estimatedCompletion = "Unknown";
     if (job.metadata.processing_rate && job.metadata.status.value === "processing") {
-      // FIXED: Add proper null check before calling split() - This fixes the TS2345 error
-      if (job.metadata.processing_rate && typeof job.metadata.processing_rate === 'string' && job.metadata.processing_rate.trim() !== '') {
-        const rate = parseFloat(job.metadata.processing_rate.split(" ")[0]);
-        const remaining = job.metadata.total_contacts - job.metadata.processed_contacts;
-        if (rate > 0 && remaining > 0) {
-          const remainingSeconds = Math.ceil(remaining / rate);
-          if (remainingSeconds < 60) {
-            estimatedCompletion = `${remainingSeconds} seconds`;
-          } else if (remainingSeconds < 3600) {
-            estimatedCompletion = `${Math.ceil(remainingSeconds / 60)} minutes`;
-          } else {
-            estimatedCompletion = `${Math.ceil(remainingSeconds / 3600)} hours`;
+      // FIXED: Add proper null check and type validation before calling split() - Line 29 error resolution
+      if (typeof job.metadata.processing_rate === 'string' && job.metadata.processing_rate.trim() !== '') {
+        const rateParts = job.metadata.processing_rate.split(" ");
+        if (rateParts.length > 0 && rateParts[0]) {
+          const rate = parseFloat(rateParts[0]);
+          const remaining = job.metadata.total_contacts - job.metadata.processed_contacts;
+          if (rate > 0 && remaining > 0) {
+            const remainingSeconds = Math.ceil(remaining / rate);
+            if (remainingSeconds < 60) {
+              estimatedCompletion = `${remainingSeconds} seconds`;
+            } else if (remainingSeconds < 3600) {
+              estimatedCompletion = `${Math.ceil(remainingSeconds / 60)} minutes`;
+            } else {
+              estimatedCompletion = `${Math.ceil(remainingSeconds / 3600)} hours`;
+            }
           }
         }
       }
