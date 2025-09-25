@@ -108,10 +108,10 @@ export async function GET(request: NextRequest) {
     console.log("Upload processor cron job started");
 
     // Get all pending upload jobs
-    const pendingJobs = await getUploadJobs({ status: "pending" });
+    const pendingJobs = await getUploadJobs({ status: "Pending" });
     
     // Also get any processing jobs that might have been interrupted
-    const processingJobs = await getUploadJobs({ status: "processing" });
+    const processingJobs = await getUploadJobs({ status: "Processing" });
     
     const allJobs = [...pendingJobs, ...processingJobs];
 
@@ -183,7 +183,7 @@ async function processUploadJob(job: UploadJob) {
   const jobId = job.id; // Extract to a validated string variable for type safety
   
   // Update job status to processing if it's not already
-  if (job.metadata.status.value !== "processing") {
+  if (job.metadata.status.value !== "Processing") {
     await updateUploadJobProgress(jobId, {
       status: "processing",
     });

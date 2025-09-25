@@ -101,7 +101,7 @@ export async function createUploadJob(data: CreateUploadJobData): Promise<Upload
         validation_errors: 0,
         status: {
           key: "pending",
-          value: "pending",
+          value: "Pending",
         },
         selected_lists: data.selected_lists,
         csv_data: data.csv_data,
@@ -152,9 +152,20 @@ export async function updateUploadJobProgress(
     if (progress.duplicates !== undefined) metadataUpdates.duplicates = progress.duplicates;
 
     if (progress.status !== undefined) {
+      // Map internal status values to exact Cosmic select-dropdown values
+      const statusMapping = {
+        "pending": "Pending",
+        "processing": "Processing", 
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      };
+
+      const cosmicStatusValue = statusMapping[progress.status];
+      
       metadataUpdates.status = {
         key: progress.status,
-        value: progress.status,
+        value: cosmicStatusValue,
       };
     }
 

@@ -49,7 +49,7 @@ export interface UploadJob extends CosmicObject {
     validation_errors: number;
     status: {
       key: string;
-      value: "pending" | "processing" | "completed" | "failed" | "cancelled";
+      value: "Pending" | "Processing" | "Completed" | "Failed" | "Cancelled";
     };
     selected_lists: string[]; // List IDs to add contacts to
     csv_data?: string; // Store CSV content for background processing
