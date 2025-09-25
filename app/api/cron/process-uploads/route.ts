@@ -237,10 +237,10 @@ async function processUploadJob(job: UploadJob) {
     // This acts as a lock mechanism
     console.log(`Attempting to acquire job ${jobId}...`);
     
+    // FIXED: Remove invalid 'started_at' property - this was causing the TS2353 error
     await updateUploadJobProgress(jobId, {
       status: "processing",
       message: "Job acquired by processor, starting...",
-      started_at: new Date().toISOString(),
     });
     
     console.log(`Job ${jobId} successfully acquired and marked as processing`);
