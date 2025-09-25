@@ -79,13 +79,7 @@ export default function UploadJobsPage() {
 
           {/* Upload Jobs List - Enhanced for dedicated page */}
           <div className="bg-white rounded-lg shadow-sm border">
-            <UploadJobList 
-              showAllJobs={true}
-              onJobComplete={() => {
-                // Refresh the page to get latest data
-                window.location.reload()
-              }}
-            />
+            <UploadJobList showAllJobs={true} />
           </div>
         </div>
       </main>
