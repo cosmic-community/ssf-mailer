@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createEmailContact, getEmailContacts } from "@/lib/cosmic";
-import { EmailContact } from "@/types";
+import { createUploadJob } from "@/lib/cosmic";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 interface ContactData {
@@ -17,19 +16,9 @@ interface ContactData {
 interface UploadResult {
   success: boolean;
   message: string;
-  results: {
-    total_processed: number;
-    successful: number;
-    duplicates: number;
-    validation_errors: number;
-    creation_errors: number;
-  };
-  contacts: EmailContact[];
-  duplicates?: string[];
-  validation_errors?: string[];
-  creation_errors?: string[];
-  is_batch_job?: boolean;
-  batch_id?: string;
+  job_id: string;
+  estimated_time: string;
+  total_contacts: number;
 }
 
 // Enhanced column mapping function for flexible CSV parsing
@@ -114,109 +103,28 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// Optimized batch processing for large files
-async function processContactsBatch(
-  contacts: ContactData[],
-  batchSize: number = 100, // Increased from 25 to 100
-  maxProcessingTime: number = 480000 // Increased to 8 minutes (480 seconds)
-): Promise<{
-  created: EmailContact[];
-  creationErrors: string[];
-  totalProcessed: number;
-  shouldContinue: boolean;
-  timeRemaining: number;
-}> {
-  const created: EmailContact[] = [];
-  const creationErrors: string[] = [];
-  const startTime = Date.now();
-  let totalProcessed = 0;
-
-  console.log(`Starting optimized batch processing for ${contacts.length} contacts with batch size ${batchSize}`);
-
-  // Process contacts in larger, more efficient batches
-  for (let i = 0; i < contacts.length; i += batchSize) {
-    const batch = contacts.slice(i, i + batchSize);
-    
-    // More generous time estimation - 2 seconds per batch instead of 5
-    const elapsedTime = Date.now() - startTime;
-    const estimatedTimeForBatch = 2000; // 2 seconds per batch
-    
-    // Only stop if we're very close to timeout (leave 30 second buffer)
-    if (elapsedTime + estimatedTimeForBatch > maxProcessingTime - 30000) {
-      console.log(`Approaching timeout. Processed ${totalProcessed} contacts. Time elapsed: ${elapsedTime}ms`);
-      break;
-    }
-
-    // Process current batch with parallel processing for better performance
-    const batchPromises = batch.map(async (contactData) => {
-      try {
-        const newContact = await createEmailContact(contactData);
-        return { success: true, contact: newContact, error: null };
-      } catch (error: unknown) {
-        const errorMessage =
-          error instanceof Error ? error.message : "Unknown error occurred";
-        return {
-          success: false,
-          contact: null,
-          error: `Failed to create contact ${contactData.email}: ${errorMessage}`,
-        };
-      }
-    });
-
-    // Execute batch in parallel for better performance
-    const batchResults = await Promise.all(batchPromises);
-
-    // Process results
-    batchResults.forEach((result) => {
-      if (result.success && result.contact) {
-        created.push(result.contact);
-      } else if (result.error) {
-        creationErrors.push(result.error);
-      }
-      totalProcessed++;
-    });
-
-    // Reduced delay between batches for faster processing
-    if (i + batchSize < contacts.length) {
-      await new Promise(resolve => setTimeout(resolve, 50)); // Reduced from 100ms to 50ms
-    }
-
-    // Progress logging for large batches
-    if (totalProcessed % 500 === 0) {
-      console.log(`Progress: ${totalProcessed}/${contacts.length} contacts processed`);
-    }
+// Estimate processing time based on contact count
+function estimateProcessingTime(contactCount: number): string {
+  // Background processing can handle ~200-300 contacts per second
+  const estimatedSeconds = Math.ceil(contactCount / 250);
+  if (estimatedSeconds < 60) {
+    return `${estimatedSeconds} seconds`;
+  } else if (estimatedSeconds < 3600) {
+    return `${Math.ceil(estimatedSeconds / 60)} minutes`;
+  } else {
+    return `${Math.ceil(estimatedSeconds / 3600)} hours`;
   }
-
-  const timeElapsed = Date.now() - startTime;
-  const timeRemaining = maxProcessingTime - timeElapsed;
-  const shouldContinue = totalProcessed < contacts.length && timeRemaining > 30000; // 30 seconds buffer
-
-  console.log(`Batch processing completed: ${totalProcessed}/${contacts.length} processed in ${timeElapsed}ms`);
-
-  return {
-    created,
-    creationErrors,
-    totalProcessed,
-    shouldContinue,
-    timeRemaining
-  };
 }
 
 export async function POST(
   request: NextRequest
-): Promise<
-  NextResponse<
-    UploadResult | { error: string; errors?: string[]; total_errors?: number }
-  >
-> {
+): Promise<NextResponse<UploadResult | { error: string; errors?: string[]; total_errors?: number }>> {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const listIdsJson = formData.get("list_ids") as string | null;
-    const batchOffset = parseInt(formData.get("batch_offset") as string || "0");
-    const batchId = formData.get("batch_id") as string | null;
 
-    if (!file && !batchId) {
+    if (!file) {
       return NextResponse.json({ error: "No file uploaded" }, { status: 400 });
     }
 
@@ -234,13 +142,6 @@ export async function POST(
       }
     }
 
-    // For batch continuation, we would need to store processed data somewhere
-    // For now, we'll focus on optimizing the initial processing
-    
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
-    }
-
     // Validate file type
     if (file.type !== "text/csv" && !file.name.endsWith(".csv")) {
       return NextResponse.json(
@@ -249,11 +150,11 @@ export async function POST(
       );
     }
 
-    // Increased file size limit to 100MB for very large datasets
-    const maxSize = 100 * 1024 * 1024; // 100MB
+    // Increased file size limit to 200MB for very large datasets
+    const maxSize = 200 * 1024 * 1024; // 200MB
     if (file.size > maxSize) {
       return NextResponse.json(
-        { error: "File size must be less than 100MB" },
+        { error: "File size must be less than 200MB" },
         { status: 400 }
       );
     }
@@ -305,285 +206,99 @@ export async function POST(
       );
     }
 
-    // Optimized duplicate checking - fetch only emails in batches
-    let existingEmails = new Set<string>();
-    try {
-      console.log("Fetching existing contacts for duplicate checking...");
-      
-      // For large contact databases, we might want to paginate this
-      let allContacts: EmailContact[] = [];
-      let skip = 0;
-      const limit = 1000;
-      
-      while (true) {
-        const result = await getEmailContacts({ limit, skip });
-        if (!result.contacts || result.contacts.length === 0) {
-          break;
-        }
-        allContacts = allContacts.concat(result.contacts);
-        skip += limit;
-        
-        // Prevent infinite loop
-        if (result.contacts.length < limit) {
-          break;
-        }
-      }
-      
-      existingEmails = new Set(
-        allContacts
-          .map((c) => c.metadata?.email)
-          .filter(
-            (email): email is string =>
-              typeof email === "string" && email.length > 0
-          )
-          .map((email) => email.toLowerCase())
-      );
-      
-      console.log(`Found ${existingEmails.size} existing email addresses for duplicate checking`);
-    } catch (error) {
-      console.error("Error fetching existing contacts:", error);
-      // Continue without duplicate checking if we can't fetch existing contacts
-    }
+    // Basic validation - count valid rows for job creation
+    let validContactCount = 0;
+    const validationErrors: string[] = [];
 
-    console.log(`Processing ${lines.length - 1} rows from CSV...`);
-    
-    const contacts: ContactData[] = [];
-    const errors: string[] = [];
-    const duplicates: string[] = [];
-
-    // Process each data row with validation
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = 1; i < lines.length && validationErrors.length < 10; i++) {
       const currentLine = lines[i];
       if (!currentLine || currentLine.trim() === "") {
         continue; // Skip empty lines
       }
 
-      // Increased error threshold for large files
-      if (errors.length > 500) {
-        console.log("Stopping validation due to too many errors");
-        break;
-      }
-
-      let row: string[];
       try {
-        row = parseCSVLine(currentLine);
+        const row = parseCSVLine(currentLine);
+        const emailValue = row[columnMap.email]?.replace(/^["']|["']$/g, "").trim() || "";
+        const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, "").trim() || "";
+
+        // Basic validation
+        if (!firstNameValue) {
+          validationErrors.push(`Row ${i + 1}: First name is required`);
+          continue;
+        }
+
+        if (!emailValue) {
+          validationErrors.push(`Row ${i + 1}: Email is required`);
+          continue;
+        }
+
+        // Basic email format validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(emailValue.toLowerCase())) {
+          validationErrors.push(`Row ${i + 1}: Invalid email format: ${emailValue}`);
+          continue;
+        }
+
+        validContactCount++;
       } catch (parseError) {
-        errors.push(`Row ${i + 1}: Failed to parse CSV line`);
+        validationErrors.push(`Row ${i + 1}: Failed to parse CSV line`);
         continue;
-      }
-
-      const contact: Partial<ContactData> = {};
-
-      // Extract data using column mapping
-      try {
-        // Required fields - Add null checks for undefined values
-        const emailValue =
-          row[columnMap.email]?.replace(/^["']|["']$/g, "").trim() || "";
-        const firstNameValue =
-          row[columnMap.first_name]?.replace(/^["']|["']$/g, "").trim() || "";
-
-        contact.email = emailValue.toLowerCase();
-        contact.first_name = firstNameValue;
-
-        // Optional fields - Add null checks for potentially undefined column indices
-        if (
-          columnMap.last_name !== undefined &&
-          row[columnMap.last_name] !== undefined
-        ) {
-          const lastNameValue =
-            row[columnMap.last_name]?.replace(/^["']|["']$/g, "").trim() || "";
-          contact.last_name = lastNameValue;
-        }
-
-        if (
-          columnMap.status !== undefined &&
-          row[columnMap.status] !== undefined
-        ) {
-          const statusValue =
-            row[columnMap.status]?.replace(/^["']|["']$/g, "").trim() || "";
-          const normalizedStatus = statusValue.toLowerCase();
-          if (
-            ["active", "unsubscribed", "bounced"].includes(normalizedStatus)
-          ) {
-            contact.status = (normalizedStatus.charAt(0).toUpperCase() +
-              normalizedStatus.slice(1)) as
-              | "Active"
-              | "Unsubscribed"
-              | "Bounced";
-          } else {
-            contact.status = "Active";
-          }
-        } else {
-          contact.status = "Active";
-        }
-
-        if (columnMap.tags !== undefined && row[columnMap.tags] !== undefined) {
-          const tagsValue =
-            row[columnMap.tags]?.replace(/^["']|["']$/g, "").trim() || "";
-          if (tagsValue) {
-            // Handle various tag separators (comma, semicolon, pipe)
-            contact.tags = tagsValue
-              .split(/[;,|]/)
-              .map((tag) => tag.trim())
-              .filter((tag) => tag.length > 0);
-          } else {
-            contact.tags = [];
-          }
-        } else {
-          contact.tags = [];
-        }
-
-        if (
-          columnMap.notes !== undefined &&
-          row[columnMap.notes] !== undefined
-        ) {
-          const notesValue =
-            row[columnMap.notes]?.replace(/^["']|["']$/g, "").trim() || "";
-          contact.notes = notesValue;
-        }
-
-        if (
-          columnMap.subscribe_date !== undefined &&
-          row[columnMap.subscribe_date] !== undefined
-        ) {
-          const dateValue =
-            row[columnMap.subscribe_date]?.replace(/^["']|["']$/g, "").trim() ||
-            "";
-          // Try to parse various date formats
-          if (dateValue) {
-            const parsedDate = new Date(dateValue);
-            if (!isNaN(parsedDate.getTime())) {
-              contact.subscribe_date = parsedDate.toISOString().split("T")[0];
-            } else {
-              contact.subscribe_date = new Date().toISOString().split("T")[0];
-            }
-          } else {
-            contact.subscribe_date = new Date().toISOString().split("T")[0];
-          }
-        } else {
-          contact.subscribe_date = new Date().toISOString().split("T")[0];
-        }
-
-        // Add selected list IDs to the contact
-        contact.list_ids = selectedListIds;
-      } catch (extractError) {
-        errors.push(`Row ${i + 1}: Error extracting data from CSV row`);
-        continue;
-      }
-
-      // Validate required fields
-      if (!contact.first_name || contact.first_name.trim() === "") {
-        errors.push(`Row ${i + 1}: First name is required`);
-        continue;
-      }
-
-      if (!contact.email || contact.email.trim() === "") {
-        errors.push(`Row ${i + 1}: Email is required`);
-        continue;
-      }
-
-      // Validate email format
-      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(contact.email)) {
-        errors.push(`Row ${i + 1}: Invalid email format: ${contact.email}`);
-        continue;
-      }
-
-      // Check for duplicates
-      if (
-        contact.email &&
-        typeof contact.email === "string" &&
-        existingEmails.has(contact.email)
-      ) {
-        duplicates.push(contact.email);
-        continue;
-      }
-
-      // Create valid contact with all required fields
-      const validContact: ContactData = {
-        first_name: contact.first_name,
-        last_name: contact.last_name || "",
-        email: contact.email,
-        status: contact.status || "Active",
-        list_ids: contact.list_ids || [],
-        tags: contact.tags || [],
-        subscribe_date:
-          contact.subscribe_date || new Date().toISOString().split("T")[0],
-        notes: contact.notes || "",
-      };
-
-      contacts.push(validContact);
-
-      // Add to existing emails set to prevent duplicates within the same file
-      if (validContact.email) {
-        existingEmails.add(validContact.email);
       }
     }
 
-    // If there are too many errors, abort
-    if (errors.length > 500) {
+    // If too many validation errors, return them
+    if (validationErrors.length > 0 && validContactCount === 0) {
       return NextResponse.json(
         {
-          error:
-            "Too many validation errors in the CSV file. Please check your data format.",
-          errors: errors.slice(0, 20), // Show more errors for debugging
-          total_errors: errors.length,
+          error: "CSV contains validation errors that prevent processing",
+          errors: validationErrors.slice(0, 10),
+          total_errors: validationErrors.length,
         },
         { status: 400 }
       );
     }
 
-    console.log(`Validated ${contacts.length} contacts, starting optimized batch processing...`);
-
-    // Process contacts with optimized batch processing
-    const batchResult = await processContactsBatch(contacts, 100, 480000); // 100 per batch, 8 minute timeout
-    
-    console.log(`Optimized batch processing completed: ${batchResult.totalProcessed}/${contacts.length} processed`);
-
-    // Enhanced cache invalidation after successful upload
-    if (batchResult.created.length > 0) {
-      revalidatePath("/contacts");
-      revalidatePath("/contacts/page");
-      revalidatePath("/(dashboard)/contacts");
-      revalidateTag("contacts");
-      revalidateTag("email-contacts");
-      revalidatePath("/");
+    if (validContactCount === 0) {
+      return NextResponse.json(
+        { error: "No valid contacts found in CSV file" },
+        { status: 400 }
+      );
     }
 
-    // Return results with batch information
+    // Create background job for processing
+    const uploadJob = await createUploadJob({
+      file_name: file.name,
+      file_size: file.size,
+      total_contacts: validContactCount,
+      csv_data: text, // Store entire CSV content for background processing
+      selected_lists: selectedListIds,
+    });
+
+    console.log(`Background job created for CSV upload: ${uploadJob.id} - ${validContactCount} contacts`);
+
+    // Trigger cache revalidation to prepare for new contacts
+    revalidatePath("/contacts");
+    revalidatePath("/contacts/page");
+    revalidatePath("/(dashboard)/contacts");
+    revalidateTag("contacts");
+    revalidateTag("email-contacts");
+
+    // Return immediate response with job ID
     const result: UploadResult = {
       success: true,
-      message: `Successfully imported ${batchResult.created.length} contacts${
-        selectedListIds.length > 0 
-          ? ` and added them to ${selectedListIds.length} selected list${selectedListIds.length !== 1 ? 's' : ''}` 
-          : ''
-      }${
-        batchResult.totalProcessed < contacts.length 
-          ? ` (${contacts.length - batchResult.totalProcessed} remaining due to processing time limits)`
-          : ''
-      }`,
-      results: {
-        total_processed: batchResult.totalProcessed,
-        successful: batchResult.created.length,
-        duplicates: duplicates.length,
-        validation_errors: errors.length,
-        creation_errors: batchResult.creationErrors.length,
-      },
-      contacts: batchResult.created,
-      duplicates: duplicates.length > 0 ? duplicates : undefined,
-      validation_errors: errors.length > 0 ? errors : undefined,
-      creation_errors: batchResult.creationErrors.length > 0 ? batchResult.creationErrors : undefined,
-      is_batch_job: batchResult.totalProcessed < contacts.length,
-      batch_id: batchResult.shouldContinue ? `batch_${Date.now()}` : undefined,
+      message: `Upload job queued successfully! Processing ${validContactCount.toLocaleString()} contacts in the background.`,
+      job_id: uploadJob.id,
+      estimated_time: estimateProcessingTime(validContactCount),
+      total_contacts: validContactCount,
     };
 
     return NextResponse.json(result);
   } catch (error: unknown) {
-    console.error("CSV upload error:", error);
+    console.error("CSV upload job creation error:", error);
     const errorMessage =
       error instanceof Error ? error.message : "An unexpected error occurred";
     return NextResponse.json(
-      { error: `Failed to process CSV file: ${errorMessage}` },
+      { error: `Failed to create upload job: ${errorMessage}` },
       { status: 500 }
     );
   }

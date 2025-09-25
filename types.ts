@@ -35,6 +35,35 @@ export interface MediaItem {
   metadata?: Record<string, any>;
 }
 
+// Upload Job interface for background CSV processing
+export interface UploadJob extends CosmicObject {
+  type: "upload-jobs";
+  metadata: {
+    file_name: string;
+    file_size: number;
+    total_contacts: number;
+    processed_contacts: number;
+    successful_contacts: number;
+    failed_contacts: number;
+    duplicate_contacts: number;
+    validation_errors: number;
+    status: {
+      key: string;
+      value: "Pending" | "Processing" | "Completed" | "Failed" | "Cancelled";
+    };
+    selected_lists: string[]; // List IDs to add contacts to
+    csv_data?: string; // Store CSV content for background processing
+    error_message?: string;
+    progress_percentage: number;
+    started_at?: string;
+    completed_at?: string;
+    processing_rate?: string; // "150 contacts/second"
+    estimated_completion?: string;
+    errors?: string[]; // Detailed error messages
+    duplicates?: string[]; // Duplicate email addresses
+  };
+}
+
 // Email List interface
 export interface EmailList extends CosmicObject {
   type: "email-lists";
@@ -282,6 +311,15 @@ export interface BulkListUpdateData {
   list_ids_to_remove: string[];
 }
 
+// Upload job data types
+export interface CreateUploadJobData {
+  file_name: string;
+  file_size: number;
+  total_contacts: number;
+  csv_data: string;
+  selected_lists: string[];
+}
+
 // Type guards
 export function isEmailList(obj: CosmicObject): obj is EmailList {
   return obj.type === "email-lists";
@@ -303,6 +341,10 @@ export function isMarketingCampaign(
 
 export function isSettings(obj: CosmicObject): obj is Settings {
   return obj.type === "settings";
+}
+
+export function isUploadJob(obj: CosmicObject): obj is UploadJob {
+  return obj.type === "upload-jobs";
 }
 
 export function isMediaItem(obj: any): obj is MediaItem {

@@ -15,6 +15,8 @@ import {
   CampaignStats,
   CosmicResponse,
   MediaItem,
+  UploadJob,
+  CreateUploadJobData,
 } from "@/types";
 
 if (
@@ -31,6 +33,207 @@ export const cosmic = createBucketClient({
   readKey: process.env.COSMIC_READ_KEY,
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
+
+// OPTIMIZED: Batch duplicate checking function to handle large datasets efficiently
+export async function checkEmailsExist(emails: string[]): Promise<string[]> {
+  try {
+    if (!emails || emails.length === 0) {
+      return [];
+    }
+
+    // Cosmic has a limit on query size, so we'll batch the email checks
+    const QUERY_BATCH_SIZE = 50; // Process 50 emails per query to avoid query limits
+    const existingEmails: string[] = [];
+
+    for (let i = 0; i < emails.length; i += QUERY_BATCH_SIZE) {
+      const emailBatch = emails.slice(i, i + QUERY_BATCH_SIZE);
+      
+      try {
+        // Query only the emails in this batch
+        const { objects } = await cosmic.objects
+          .find({
+            type: "email-contacts",
+            "metadata.email": { $in: emailBatch }
+          })
+          .props(["metadata.email"]) // Only fetch email field for efficiency
+          .limit(emailBatch.length);
+
+        // Extract existing emails from results
+        const batchExisting = objects
+          .map((obj: any) => obj.metadata?.email)
+          .filter((email: any): email is string => typeof email === "string" && email.length > 0)
+          .map((email: string) => email.toLowerCase());
+
+        existingEmails.push(...batchExisting);
+      } catch (batchError) {
+        console.error(`Error checking batch ${i}-${i + emailBatch.length}:`, batchError);
+        // Continue with next batch instead of failing entire operation
+        continue;
+      }
+    }
+
+    return existingEmails;
+  } catch (error) {
+    console.error('Error checking duplicate emails:', error);
+    // Return empty array instead of throwing - let the process continue
+    return [];
+  }
+}
+
+// Upload Job Management Functions
+export async function getUploadJobs(options?: {
+  status?: string;
+  limit?: number;
+  skip?: number;
+}): Promise<UploadJob[]> {
+  try {
+    const limit = options?.limit || 50;
+    const skip = options?.skip || 0;
+    const status = options?.status;
+
+    let query: any = { type: "upload-jobs" };
+    
+    if (status && status !== "all") {
+      query["metadata.status.value"] = status;
+    }
+
+    const { objects } = await cosmic.objects
+      .find(query)
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1)
+      .limit(limit)
+      .skip(skip);
+
+    return objects as UploadJob[];
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return [];
+    }
+    console.error("Error fetching upload jobs:", error);
+    throw new Error("Failed to fetch upload jobs");
+  }
+}
+
+export async function getUploadJob(id: string): Promise<UploadJob | null> {
+  try {
+    const { object } = await cosmic.objects
+      .findOne({ id })
+      .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
+      .depth(1);
+
+    return object as UploadJob;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return null;
+    }
+    console.error(`Error fetching upload job ${id}:`, error);
+    throw new Error("Failed to fetch upload job");
+  }
+}
+
+export async function createUploadJob(data: CreateUploadJobData): Promise<UploadJob> {
+  try {
+    const { object } = await cosmic.objects.insertOne({
+      title: `Upload Job - ${data.file_name}`,
+      type: "upload-jobs",
+      metadata: {
+        file_name: data.file_name,
+        file_size: data.file_size,
+        total_contacts: data.total_contacts,
+        processed_contacts: 0,
+        successful_contacts: 0,
+        failed_contacts: 0,
+        duplicate_contacts: 0,
+        validation_errors: 0,
+        status: {
+          key: "pending",
+          value: "Pending",
+        },
+        selected_lists: data.selected_lists,
+        csv_data: data.csv_data,
+        progress_percentage: 0,
+        started_at: new Date().toISOString(),
+      },
+    });
+
+    return object as UploadJob;
+  } catch (error) {
+    console.error("Error creating upload job:", error);
+    throw new Error("Failed to create upload job");
+  }
+}
+
+export async function updateUploadJobProgress(
+  id: string,
+  progress: {
+    processed_contacts?: number;
+    successful_contacts?: number;
+    failed_contacts?: number;
+    duplicate_contacts?: number;
+    validation_errors?: number;
+    status?: "pending" | "processing" | "completed" | "failed" | "cancelled";
+    progress_percentage?: number;
+    processing_rate?: string;
+    estimated_completion?: string;
+    completed_at?: string;
+    error_message?: string;
+    errors?: string[];
+    duplicates?: string[];
+    message?: string; // Add message field for status updates
+  }
+): Promise<void> {
+  try {
+    const metadataUpdates: any = {};
+
+    if (progress.processed_contacts !== undefined) metadataUpdates.processed_contacts = progress.processed_contacts;
+    if (progress.successful_contacts !== undefined) metadataUpdates.successful_contacts = progress.successful_contacts;
+    if (progress.failed_contacts !== undefined) metadataUpdates.failed_contacts = progress.failed_contacts;
+    if (progress.duplicate_contacts !== undefined) metadataUpdates.duplicate_contacts = progress.duplicate_contacts;
+    if (progress.validation_errors !== undefined) metadataUpdates.validation_errors = progress.validation_errors;
+    if (progress.progress_percentage !== undefined) metadataUpdates.progress_percentage = progress.progress_percentage;
+    if (progress.processing_rate !== undefined) metadataUpdates.processing_rate = progress.processing_rate;
+    if (progress.estimated_completion !== undefined) metadataUpdates.estimated_completion = progress.estimated_completion;
+    if (progress.completed_at !== undefined) metadataUpdates.completed_at = progress.completed_at;
+    if (progress.error_message !== undefined) metadataUpdates.error_message = progress.error_message;
+    if (progress.errors !== undefined) metadataUpdates.errors = progress.errors;
+    if (progress.duplicates !== undefined) metadataUpdates.duplicates = progress.duplicates;
+    if (progress.message !== undefined) metadataUpdates.message = progress.message;
+
+    if (progress.status !== undefined) {
+      // Map internal status values to exact Cosmic select-dropdown values
+      const statusMapping = {
+        "pending": "Pending",
+        "processing": "Processing", 
+        "completed": "Completed",
+        "failed": "Failed",
+        "cancelled": "Cancelled"
+      };
+
+      const cosmicStatusValue = statusMapping[progress.status];
+      
+      metadataUpdates.status = {
+        key: progress.status,
+        value: cosmicStatusValue,
+      };
+    }
+
+    await cosmic.objects.updateOne(id, {
+      metadata: metadataUpdates,
+    });
+  } catch (error) {
+    console.error(`Error updating upload job progress ${id}:`, error);
+    throw new Error("Failed to update upload job progress");
+  }
+}
+
+export async function deleteUploadJob(id: string): Promise<void> {
+  try {
+    await cosmic.objects.deleteOne(id);
+  } catch (error) {
+    console.error(`Error deleting upload job ${id}:`, error);
+    throw new Error("Failed to delete upload job");
+  }
+}
 
 // Media Management Functions - All server-side operations
 export async function getMedia(options?: {
@@ -1315,7 +1518,9 @@ export async function createMarketingCampaign(
       });
 
       const validatedIds = await Promise.all(contactPromises);
-      validContactIds = validatedIds.filter((id): id is string => id !== null);
+      validContactIds = validatedIds.filter(
+        (id): id is string => id !== null
+      );
 
       console.log(
         `Found ${validContactIds.length} valid contacts out of ${data.contact_ids.length} requested`
