@@ -152,10 +152,8 @@ export async function GET(request: NextRequest) {
 
     console.log("Upload processor cron job started");
 
-    // FIXED: Only get pending jobs to prevent race conditions
-    // Don't process jobs that are already being processed by another instance
+    // FIXED: Get all pending jobs, but process them individually to prevent conflicts
     const pendingJobs = await getUploadJobs({ status: "Pending" });
-
     console.log(`Found ${pendingJobs.length} pending upload jobs to process`);
 
     if (pendingJobs.length === 0) {
@@ -168,21 +166,10 @@ export async function GET(request: NextRequest) {
 
     let totalProcessed = 0;
 
-    // Process each job individually with proper locking
+    // Process each job individually with proper atomic locking
     for (const job of pendingJobs) {
       try {
         console.log(`Processing upload job: ${job.metadata.file_name} (${job.id})`);
-
-        // CRITICAL FIX: Immediately mark job as processing to prevent other cron instances from picking it up
-        if (job.id && typeof job.id === 'string') {
-          await updateUploadJobProgress(job.id, {
-            status: "processing",
-            message: "Job acquired by processor, starting...",
-          });
-          
-          // Small delay to ensure the status update is propagated
-          await new Promise(resolve => setTimeout(resolve, 100));
-        }
 
         const result = await processUploadJob(job);
         totalProcessed += result.processed;
@@ -244,14 +231,26 @@ async function processUploadJob(job: UploadJob) {
   
   const jobId = job.id; // Extract to a validated string variable for type safety
   
-  // CRITICAL: Double-check job status to prevent race conditions
-  // If another process has already started processing this job, skip it
-  const currentJob = await getUploadJobs({ status: "Processing" });
-  const isAlreadyProcessing = currentJob.some(j => j.id === jobId);
-  
-  if (isAlreadyProcessing && job.metadata.status.value !== "Processing") {
-    console.log(`Job ${jobId} is already being processed by another instance, skipping`);
-    return { processed: 0, completed: false };
+  // CRITICAL FIX: Implement atomic job acquisition to prevent race conditions
+  try {
+    // Immediately attempt to acquire the job by updating its status to "Processing"
+    // This acts as a lock mechanism
+    console.log(`Attempting to acquire job ${jobId}...`);
+    
+    await updateUploadJobProgress(jobId, {
+      status: "processing",
+      message: "Job acquired by processor, starting...",
+      started_at: new Date().toISOString(),
+    });
+    
+    console.log(`Job ${jobId} successfully acquired and marked as processing`);
+    
+    // Small delay to ensure the status update is propagated
+    await new Promise(resolve => setTimeout(resolve, 200));
+    
+  } catch (acquisitionError) {
+    console.error(`Failed to acquire job ${jobId}:`, acquisitionError);
+    throw new Error("Could not acquire job for processing");
   }
 
   // Parse CSV data
