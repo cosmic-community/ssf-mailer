@@ -23,7 +23,8 @@ export async function GET(
 
     // Calculate estimated completion time
     let estimatedCompletion = "Unknown";
-    if (job.metadata.processing_rate && job.metadata.status.value === "processing") {
+    // FIXED: Compare with proper case-sensitive status value "Processing" instead of "processing"
+    if (job.metadata.processing_rate && job.metadata.status.value === "Processing") {
       // FIXED: Add proper null check and type validation before calling split() - Line 29 error resolution
       if (typeof job.metadata.processing_rate === 'string' && job.metadata.processing_rate.trim() !== '') {
         const rateParts = job.metadata.processing_rate.split(" ");
