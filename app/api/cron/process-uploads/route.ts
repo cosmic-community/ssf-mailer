@@ -139,7 +139,7 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         console.error(`Error processing upload job ${job.id}:`, error);
 
-        // Mark job as failed - Add null check for job.id
+        // Mark job as failed - Add proper null check for job.id
         if (job.id) {
           await updateUploadJobProgress(job.id, {
             status: "failed",
@@ -175,12 +175,12 @@ export async function GET(request: NextRequest) {
 async function processUploadJob(job: UploadJob) {
   const startTime = Date.now();
   
-  // Add null check for job.id before using it - FIXED: Line 202 type error
-  if (!job.id) {
-    throw new Error("Job ID is missing");
+  // FIXED: Add proper type guard for job.id - Line 204 error resolution
+  if (!job.id || typeof job.id !== 'string') {
+    throw new Error("Job ID is missing or invalid");
   }
   
-  const jobId = job.id; // Extract to a string variable for type safety
+  const jobId = job.id; // Extract to a validated string variable for type safety
   
   // Update job status to processing if it's not already
   if (job.metadata.status.value !== "processing") {
