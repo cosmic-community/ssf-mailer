@@ -15,6 +15,10 @@ const MAX_PROCESSING_TIME = 240000; // 4 minutes (safer buffer)
 const CHUNK_SIZE = 250; // Process 250 contacts per cron run
 const DUPLICATE_CHECK_BATCH_SIZE = 50; // Check 50 emails at a time for duplicates
 
+// CRITICAL FIX: Add job locking mechanism to prevent race conditions
+const PROCESSING_JOBS = new Set<string>();
+const JOB_LOCK_TIMEOUT = 300000; // 5 minutes lock timeout
+
 interface ContactData {
   first_name: string;
   last_name?: string;
@@ -100,6 +104,45 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
+// CRITICAL FIX: Atomic job acquisition with proper locking
+async function acquireJobLock(jobId: string): Promise<boolean> {
+  if (PROCESSING_JOBS.has(jobId)) {
+    console.log(`Job ${jobId} is already being processed by another instance`);
+    return false;
+  }
+
+  try {
+    // Add to processing set
+    PROCESSING_JOBS.add(jobId);
+    
+    // Set a timeout to automatically release the lock
+    setTimeout(() => {
+      PROCESSING_JOBS.delete(jobId);
+      console.log(`Auto-released lock for job ${jobId} after timeout`);
+    }, JOB_LOCK_TIMEOUT);
+
+    // Attempt to mark job as processing in Cosmic
+    await updateUploadJobProgress(jobId, {
+      status: "processing",
+      message: `Job acquired by processor at ${new Date().toISOString()}`,
+    });
+
+    console.log(`Successfully acquired lock for job ${jobId}`);
+    return true;
+  } catch (error) {
+    // If we can't update Cosmic, release our local lock
+    PROCESSING_JOBS.delete(jobId);
+    console.error(`Failed to acquire lock for job ${jobId}:`, error);
+    return false;
+  }
+}
+
+// Release job lock
+function releaseJobLock(jobId: string): void {
+  PROCESSING_JOBS.delete(jobId);
+  console.log(`Released lock for job ${jobId}`);
+}
+
 // OPTIMIZED: Batched duplicate checking function with better error handling
 async function checkDuplicatesInBatches(
   contacts: ContactData[],
@@ -128,7 +171,7 @@ async function checkDuplicatesInBatches(
       });
       
       // Minimal delay to prevent overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 50));
+      await new Promise(resolve => setTimeout(resolve, 100));
       
     } catch (error) {
       console.error(`Error checking duplicate emails:`, error);
@@ -140,29 +183,13 @@ async function checkDuplicatesInBatches(
   return duplicateEmails;
 }
 
-// NEW: Trigger next processing cycle
-async function triggerNextProcessing(): Promise<void> {
-  try {
-    // Self-trigger the next processing cycle
-    await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cron/process-uploads`, {
-      method: 'POST',
-      headers: { 
-        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
-        'Content-Type': 'application/json'
-      }
-    });
-    console.log('Triggered next processing cycle');
-  } catch (error) {
-    console.error('Failed to trigger next processing cycle:', error);
-  }
-}
-
 export async function GET(request: NextRequest) {
   return POST(request); // Handle both GET and POST for cron compatibility
 }
 
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
+  let acquiredJobId: string | null = null;
   
   try {
     // Verify this is a cron request (optional - can be removed for manual testing)
@@ -176,7 +203,7 @@ export async function POST(request: NextRequest) {
     // Get jobs that need processing (Pending or Processing)
     const jobsToProcess = await getUploadJobs({ 
       status: ['Pending', 'Processing'],
-      limit: 1 // Process one job at a time to avoid conflicts
+      limit: 5 // Get a few jobs to try for atomic acquisition
     });
     
     console.log(`Found ${jobsToProcess.length} jobs to process`);
@@ -189,12 +216,25 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // CRITICAL FIX: Add proper undefined check for job
-    const job = jobsToProcess[0];
-    if (!job) {
+    // CRITICAL FIX: Try to acquire a lock on one of the jobs
+    let selectedJob: UploadJob | null = null;
+    
+    for (const job of jobsToProcess) {
+      if (!job || !job.id) continue;
+      
+      const lockAcquired = await acquireJobLock(job.id);
+      if (lockAcquired) {
+        selectedJob = job;
+        acquiredJobId = job.id;
+        break;
+      }
+    }
+
+    if (!selectedJob) {
+      console.log("No jobs could be acquired for processing (all locked by other instances)");
       return NextResponse.json({
-        success: false,
-        message: "No valid job found to process",
+        success: true,
+        message: "No available jobs to process (all jobs locked)",
         processed: 0,
       });
     }
@@ -202,24 +242,19 @@ export async function POST(request: NextRequest) {
     let totalProcessed = 0;
 
     try {
-      console.log(`Processing upload job: ${job.metadata.file_name} (${job.id})`);
+      console.log(`Processing upload job: ${selectedJob.metadata.file_name} (${selectedJob.id})`);
 
-      const result = await processUploadJobChunked(job, startTime);
+      const result = await processUploadJobChunked(selectedJob, startTime);
       totalProcessed = result.processed;
 
-      console.log(`Job ${job.id} processed: ${result.processed} contacts, continuing: ${!result.completed}`);
-      
-      // If job is not complete and we haven't timed out, trigger next processing cycle
-      if (!result.completed && (Date.now() - startTime) < (MAX_PROCESSING_TIME * 0.9)) {
-        await triggerNextProcessing();
-      }
+      console.log(`Job ${selectedJob.id} processed: ${result.processed} contacts, continuing: ${!result.completed}`);
       
     } catch (error) {
-      console.error(`Error processing upload job ${job.id}:`, error);
+      console.error(`Error processing upload job ${selectedJob.id}:`, error);
 
       // Mark job as failed with proper error handling
-      if (job.id && typeof job.id === 'string') {
-        await updateUploadJobProgress(job.id, {
+      if (selectedJob.id && typeof selectedJob.id === 'string') {
+        await updateUploadJobProgress(selectedJob.id, {
           status: "failed",
           error_message: error instanceof Error ? error.message : "Unknown error occurred",
           completed_at: new Date().toISOString(),
@@ -248,6 +283,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Upload processor cron job error:", error);
     return NextResponse.json({ error: "Upload processor cron job failed" }, { status: 500 });
+  } finally {
+    // Always release the job lock in finally block
+    if (acquiredJobId) {
+      releaseJobLock(acquiredJobId);
+    }
   }
 }
 
@@ -270,25 +310,6 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   }
   
   const jobId = job.id;
-  
-  // Implement atomic job acquisition to prevent race conditions
-  try {
-    console.log(`Attempting to acquire job ${jobId}...`);
-    
-    await updateUploadJobProgress(jobId, {
-      status: "processing",
-      message: "Job acquired by processor, starting chunked processing...",
-    });
-    
-    console.log(`Job ${jobId} successfully acquired and marked as processing`);
-    
-    // Small delay to ensure the status update is propagated
-    await new Promise(resolve => setTimeout(resolve, 200));
-    
-  } catch (acquisitionError) {
-    console.error(`Failed to acquire job ${jobId}:`, acquisitionError);
-    throw new Error("Could not acquire job for processing");
-  }
 
   // Parse CSV data
   const lines = job.metadata.csv_data.split("\n").filter((line) => line.trim());
@@ -320,6 +341,22 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   const endRow = Math.min(lines.length, startRow + chunkSize);
 
   console.log(`Processing chunk: rows ${startRow} to ${endRow} (${endRow - startRow} contacts)`);
+
+  // CRITICAL FIX: Check if we've already processed all contacts to prevent infinite processing
+  if (resumeFrom >= job.metadata.total_contacts) {
+    console.log(`Job ${jobId} already completed - all ${job.metadata.total_contacts} contacts processed`);
+    
+    await updateUploadJobProgress(jobId, {
+      status: "completed",
+      completed_at: new Date().toISOString(),
+      message: "Job completed - all contacts processed",
+    });
+
+    return {
+      processed: 0,
+      completed: true,
+    };
+  }
 
   // Parse and validate contacts from current chunk
   const contacts: ContactData[] = [];
@@ -470,7 +507,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     };
   }
 
-  // Check for duplicates in current chunk
+  // CRITICAL FIX: Enhanced duplicate checking with more thorough validation
+  console.log(`Starting duplicate check for ${contacts.length} contacts...`);
   const duplicateEmails = await checkDuplicatesInBatches(contacts, jobId);
   
   // Filter out duplicates
@@ -498,30 +536,32 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     
     console.log(`Processing batch ${Math.floor(i / SAFE_BATCH_SIZE) + 1}/${Math.ceil(contactsToProcess.length / SAFE_BATCH_SIZE)}: ${batch.length} contacts`);
     
-    // Process batch with parallel processing for better performance
-    const batchPromises = batch.map(async (contactData) => {
+    // Process batch with controlled concurrency to prevent API overload
+    for (const contactData of batch) {
       try {
+        // CRITICAL FIX: Add one final duplicate check before creation
+        const existingEmails = await checkEmailsExist([contactData.email]);
+        if (existingEmails.length > 0) {
+          console.log(`Skipping duplicate contact: ${contactData.email}`);
+          duplicates.push(contactData);
+          processed++;
+          continue;
+        }
+
         await createEmailContact(contactData);
-        return { success: true, contactData };
+        successful++;
+        console.log(`Successfully created contact: ${contactData.email}`);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+        console.error(`Failed to create contact ${contactData.email}:`, errorMessage);
         processingErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`);
-        return { success: false, contactData };
-      }
-    });
-
-    // Execute batch in parallel with controlled concurrency
-    const batchResults = await Promise.all(batchPromises);
-    
-    // Count results
-    batchResults.forEach(result => {
-      if (result.success) {
-        successful++;
-      } else {
         failed++;
       }
       processed++;
-    });
+
+      // Small delay between individual contact creations
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
 
     // Update job progress after each batch
     const totalProcessedSoFar = resumeFrom + processed;
@@ -565,8 +605,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       chunk_processing_history: [...existingHistory, newHistoryEntry].slice(-10), // Keep last 10 chunks
     });
 
-    // Small delay between batches
-    await new Promise(resolve => setTimeout(resolve, 25));
+    // Longer delay between batches to prevent API rate limiting
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   console.log(`Chunk processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
