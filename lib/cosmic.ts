@@ -41,8 +41,8 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
       return [];
     }
 
-    // Cosmic has a limit on query size, so we'll batch the email checks
-    const QUERY_BATCH_SIZE = 50; // Process 50 emails per query to avoid query limits
+    // Reduced batch size for better reliability and reduced API strain
+    const QUERY_BATCH_SIZE = 25; // Reduced from 50 to 25
     const existingEmails: string[] = [];
 
     for (let i = 0; i < emails.length; i += QUERY_BATCH_SIZE) {
@@ -80,9 +80,9 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
   }
 }
 
-// Upload Job Management Functions
+// Enhanced Upload Job Management Functions
 export async function getUploadJobs(options?: {
-  status?: string;
+  status?: string | string[];
   limit?: number;
   skip?: number;
 }): Promise<UploadJob[]> {
@@ -94,7 +94,12 @@ export async function getUploadJobs(options?: {
     let query: any = { type: "upload-jobs" };
     
     if (status && status !== "all") {
-      query["metadata.status.value"] = status;
+      if (Array.isArray(status)) {
+        // Handle multiple status values
+        query["metadata.status.value"] = { $in: status };
+      } else {
+        query["metadata.status.value"] = status;
+      }
     }
 
     const { objects } = await cosmic.objects
@@ -153,6 +158,14 @@ export async function createUploadJob(data: CreateUploadJobData): Promise<Upload
         csv_data: data.csv_data,
         progress_percentage: 0,
         started_at: new Date().toISOString(),
+        // Enhanced chunked processing fields
+        processing_chunk_size: data.processing_chunk_size || 250,
+        auto_resume_enabled: data.auto_resume_enabled !== false, // Default true
+        current_batch_index: 0,
+        total_batches: Math.ceil(data.total_contacts / (data.processing_chunk_size || 250)),
+        resume_from_contact: 0,
+        chunk_processing_history: [],
+        max_processing_time_ms: 240000, // 4 minutes
       },
     });
 
@@ -179,12 +192,29 @@ export async function updateUploadJobProgress(
     error_message?: string;
     errors?: string[];
     duplicates?: string[];
-    message?: string; // Add message field for status updates
+    message?: string;
+    // Enhanced chunked processing fields
+    current_batch_index?: number;
+    batch_size?: number;
+    total_batches?: number;
+    last_processed_row?: number;
+    processing_chunk_size?: number;
+    resume_from_contact?: number;
+    chunk_processing_history?: Array<{
+      chunk_number: number;
+      contacts_processed: number;
+      processing_time_ms: number;
+      timestamp: string;
+      status: "completed" | "partial" | "failed";
+    }>;
+    auto_resume_enabled?: boolean;
+    max_processing_time_ms?: number;
   }
 ): Promise<void> {
   try {
     const metadataUpdates: any = {};
 
+    // Basic progress fields
     if (progress.processed_contacts !== undefined) metadataUpdates.processed_contacts = progress.processed_contacts;
     if (progress.successful_contacts !== undefined) metadataUpdates.successful_contacts = progress.successful_contacts;
     if (progress.failed_contacts !== undefined) metadataUpdates.failed_contacts = progress.failed_contacts;
@@ -198,6 +228,17 @@ export async function updateUploadJobProgress(
     if (progress.errors !== undefined) metadataUpdates.errors = progress.errors;
     if (progress.duplicates !== undefined) metadataUpdates.duplicates = progress.duplicates;
     if (progress.message !== undefined) metadataUpdates.message = progress.message;
+
+    // Enhanced chunked processing fields
+    if (progress.current_batch_index !== undefined) metadataUpdates.current_batch_index = progress.current_batch_index;
+    if (progress.batch_size !== undefined) metadataUpdates.batch_size = progress.batch_size;
+    if (progress.total_batches !== undefined) metadataUpdates.total_batches = progress.total_batches;
+    if (progress.last_processed_row !== undefined) metadataUpdates.last_processed_row = progress.last_processed_row;
+    if (progress.processing_chunk_size !== undefined) metadataUpdates.processing_chunk_size = progress.processing_chunk_size;
+    if (progress.resume_from_contact !== undefined) metadataUpdates.resume_from_contact = progress.resume_from_contact;
+    if (progress.chunk_processing_history !== undefined) metadataUpdates.chunk_processing_history = progress.chunk_processing_history;
+    if (progress.auto_resume_enabled !== undefined) metadataUpdates.auto_resume_enabled = progress.auto_resume_enabled;
+    if (progress.max_processing_time_ms !== undefined) metadataUpdates.max_processing_time_ms = progress.max_processing_time_ms;
 
     if (progress.status !== undefined) {
       // Map internal status values to exact Cosmic select-dropdown values

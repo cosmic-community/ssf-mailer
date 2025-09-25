@@ -4,15 +4,16 @@ import {
   updateUploadJobProgress,
   createEmailContact,
   updateListContactCount,
-  checkEmailsExist, // Import the new efficient duplicate checking function
+  checkEmailsExist,
 } from "@/lib/cosmic";
 import { UploadJob } from "@/types";
 import { revalidatePath, revalidateTag } from "next/cache";
 
-// OPTIMIZED: Increased batch sizes and timeout for better processing
-const BATCH_SIZE = 100; // Increased from 50 to 100 for better throughput
-const MAX_PROCESSING_TIME = 290000; // Increased to 290 seconds (Vercel's 300s limit - 10s buffer)
-const DUPLICATE_CHECK_BATCH_SIZE = 100; // Check 100 emails at a time for duplicates
+// OPTIMIZED: Reduced batch sizes for reliable processing within time limits
+const SAFE_BATCH_SIZE = 25; // Reduced from 100 to 25 for better reliability
+const MAX_PROCESSING_TIME = 240000; // 4 minutes (safer buffer)
+const CHUNK_SIZE = 250; // Process 250 contacts per cron run
+const DUPLICATE_CHECK_BATCH_SIZE = 50; // Check 50 emails at a time for duplicates
 
 interface ContactData {
   first_name: string;
@@ -115,7 +116,7 @@ async function checkDuplicatesInBatches(
     try {
       console.log(`Checking duplicates for batch ${Math.floor(i / DUPLICATE_CHECK_BATCH_SIZE) + 1}/${Math.ceil(contacts.length / DUPLICATE_CHECK_BATCH_SIZE)}: ${batchEmails.length} emails`);
       
-      // Use the new efficient function to check for existing emails
+      // Use the efficient function to check for existing emails
       const existingEmails = await checkEmailsExist(batchEmails);
       existingEmails.forEach(email => duplicateEmails.add(email.toLowerCase()));
       
@@ -132,7 +133,6 @@ async function checkDuplicatesInBatches(
     } catch (error) {
       console.error(`Error checking duplicate emails:`, error);
       // Continue with next batch - don't let duplicate check failures stop the entire process
-      // Log the error but don't add to duplicates set
     }
   }
   
@@ -140,7 +140,28 @@ async function checkDuplicatesInBatches(
   return duplicateEmails;
 }
 
+// NEW: Trigger next processing cycle
+async function triggerNextProcessing(): Promise<void> {
+  try {
+    // Self-trigger the next processing cycle
+    await fetch(`${process.env.NEXTAUTH_URL}/api/cron/process-uploads`, {
+      method: 'POST',
+      headers: { 
+        'Authorization': `Bearer ${process.env.CRON_SECRET}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    console.log('Triggered next processing cycle');
+  } catch (error) {
+    console.error('Failed to trigger next processing cycle:', error);
+  }
+}
+
 export async function GET(request: NextRequest) {
+  return POST(request); // Handle both GET and POST for cron compatibility
+}
+
+export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   try {
@@ -152,11 +173,15 @@ export async function GET(request: NextRequest) {
 
     console.log("Upload processor cron job started");
 
-    // FIXED: Get all pending jobs, but process them individually to prevent conflicts
-    const pendingJobs = await getUploadJobs({ status: "Pending" });
-    console.log(`Found ${pendingJobs.length} pending upload jobs to process`);
+    // Get jobs that need processing (Pending or Processing)
+    const jobsToProcess = await getUploadJobs({ 
+      status: ['Pending', 'Processing'],
+      limit: 1 // Process one job at a time to avoid conflicts
+    });
+    
+    console.log(`Found ${jobsToProcess.length} jobs to process`);
 
-    if (pendingJobs.length === 0) {
+    if (jobsToProcess.length === 0) {
       return NextResponse.json({
         success: true,
         message: "No upload jobs to process",
@@ -164,36 +189,41 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // CRITICAL FIX: Add proper undefined check for job
+    const job = jobsToProcess[0];
+    if (!job) {
+      return NextResponse.json({
+        success: false,
+        message: "No valid job found to process",
+        processed: 0,
+      });
+    }
+
     let totalProcessed = 0;
 
-    // Process each job individually with proper atomic locking
-    for (const job of pendingJobs) {
-      try {
-        console.log(`Processing upload job: ${job.metadata.file_name} (${job.id})`);
+    try {
+      console.log(`Processing upload job: ${job.metadata.file_name} (${job.id})`);
 
-        const result = await processUploadJob(job);
-        totalProcessed += result.processed;
+      const result = await processUploadJobChunked(job, startTime);
+      totalProcessed = result.processed;
 
-        console.log(`Job ${job.id} processed: ${result.processed} contacts, ${result.completed ? 'completed' : 'continuing'}`);
-        
-        // Break if we're running close to the timeout
-        const elapsedTime = Date.now() - startTime;
-        if (elapsedTime > MAX_PROCESSING_TIME * 0.7) { // Use 70% of timeout for safety
-          console.log(`Breaking due to time limit. Processed ${totalProcessed} contacts in ${elapsedTime}ms`);
-          break;
-        }
-        
-      } catch (error) {
-        console.error(`Error processing upload job ${job.id}:`, error);
+      console.log(`Job ${job.id} processed: ${result.processed} contacts, continuing: ${!result.completed}`);
+      
+      // If job is not complete and we haven't timed out, trigger next processing cycle
+      if (!result.completed && (Date.now() - startTime) < (MAX_PROCESSING_TIME * 0.9)) {
+        await triggerNextProcessing();
+      }
+      
+    } catch (error) {
+      console.error(`Error processing upload job ${job.id}:`, error);
 
-        // Mark job as failed - FIXED: Add proper null check for job.id
-        if (job.id && typeof job.id === 'string') {
-          await updateUploadJobProgress(job.id, {
-            status: "failed",
-            error_message: error instanceof Error ? error.message : "Unknown error occurred",
-            completed_at: new Date().toISOString(),
-          });
-        }
+      // Mark job as failed with proper error handling
+      if (job.id && typeof job.id === 'string') {
+        await updateUploadJobProgress(job.id, {
+          status: "failed",
+          error_message: error instanceof Error ? error.message : "Unknown error occurred",
+          completed_at: new Date().toISOString(),
+        });
       }
     }
 
@@ -207,11 +237,11 @@ export async function GET(request: NextRequest) {
     }
 
     const totalElapsed = Date.now() - startTime;
-    console.log(`Upload processor cron job completed. Processed ${totalProcessed} contacts across ${pendingJobs.length} jobs in ${totalElapsed}ms`);
+    console.log(`Upload processor completed. Processed ${totalProcessed} contacts in ${totalElapsed}ms`);
 
     return NextResponse.json({
       success: true,
-      message: `Processed ${totalProcessed} contacts across ${pendingJobs.length} jobs`,
+      message: `Processed ${totalProcessed} contacts`,
       processed: totalProcessed,
       elapsed_time: totalElapsed,
     });
@@ -221,26 +251,33 @@ export async function GET(request: NextRequest) {
   }
 }
 
-async function processUploadJob(job: UploadJob) {
-  const startTime = Date.now();
-  
-  // FIXED: Add proper type guard for job.id - Line 204 error resolution
+async function processUploadJobChunked(job: UploadJob, startTime: number) {
+  // CRITICAL FIX: Add comprehensive validation for job and its properties
+  if (!job) {
+    throw new Error("Job parameter is undefined");
+  }
+
   if (!job.id || typeof job.id !== 'string') {
     throw new Error("Job ID is missing or invalid");
   }
+
+  if (!job.metadata) {
+    throw new Error("Job metadata is missing");
+  }
+
+  if (!job.metadata.csv_data) {
+    throw new Error("No CSV data found in job");
+  }
   
-  const jobId = job.id; // Extract to a validated string variable for type safety
+  const jobId = job.id;
   
-  // CRITICAL FIX: Implement atomic job acquisition to prevent race conditions
+  // Implement atomic job acquisition to prevent race conditions
   try {
-    // Immediately attempt to acquire the job by updating its status to "Processing"
-    // This acts as a lock mechanism
     console.log(`Attempting to acquire job ${jobId}...`);
     
-    // FIXED: Remove invalid 'started_at' property - this was causing the TS2353 error
     await updateUploadJobProgress(jobId, {
       status: "processing",
-      message: "Job acquired by processor, starting...",
+      message: "Job acquired by processor, starting chunked processing...",
     });
     
     console.log(`Job ${jobId} successfully acquired and marked as processing`);
@@ -254,10 +291,6 @@ async function processUploadJob(job: UploadJob) {
   }
 
   // Parse CSV data
-  if (!job.metadata.csv_data) {
-    throw new Error("No CSV data found in job");
-  }
-
   const lines = job.metadata.csv_data.split("\n").filter((line) => line.trim());
   if (lines.length < 2) {
     throw new Error("Invalid CSV data");
@@ -266,7 +299,6 @@ async function processUploadJob(job: UploadJob) {
   // Parse headers and create column mapping
   const headerLine = lines[0];
   
-  // FIXED: Add proper null check before calling parseCSVLine - Line 204 error resolution
   if (!headerLine || typeof headerLine !== 'string') {
     throw new Error("Invalid or missing CSV header line");
   }
@@ -281,18 +313,19 @@ async function processUploadJob(job: UploadJob) {
     throw new Error("Required columns (email, first_name) not found");
   }
 
-  console.log(`Starting optimized duplicate checking for job ${jobId}...`);
+  // CHUNKED PROCESSING: Determine where to start and how much to process
+  const resumeFrom = job.metadata.resume_from_contact || job.metadata.processed_contacts || 0;
+  const chunkSize = job.metadata.processing_chunk_size || CHUNK_SIZE;
+  const startRow = Math.max(1, resumeFrom + 1); // +1 for header row
+  const endRow = Math.min(lines.length, startRow + chunkSize);
 
-  // Parse and validate contacts from CSV
+  console.log(`Processing chunk: rows ${startRow} to ${endRow} (${endRow - startRow} contacts)`);
+
+  // Parse and validate contacts from current chunk
   const contacts: ContactData[] = [];
   const errors: string[] = [];
 
-  // Resume from where we left off
-  const startRow = job.metadata.processed_contacts + 1; // +1 for header row
-
-  console.log(`Parsing contacts starting from row ${startRow}...`);
-
-  for (let i = Math.max(1, startRow); i < lines.length; i++) {
+  for (let i = startRow; i < endRow; i++) {
     const currentLine = lines[i];
     if (!currentLine || currentLine.trim() === "") {
       continue;
@@ -371,8 +404,8 @@ async function processUploadJob(job: UploadJob) {
         contact.subscribe_date = new Date().toISOString().split("T")[0];
       }
 
-      // Add selected list IDs
-      contact.list_ids = job.metadata.selected_lists;
+      // Add selected list IDs - CRITICAL FIX: Add undefined check
+      contact.list_ids = job.metadata.selected_lists || [];
     } catch (extractError) {
       errors.push(`Row ${i + 1}: Error extracting data from CSV row`);
       continue;
@@ -410,23 +443,34 @@ async function processUploadJob(job: UploadJob) {
     contacts.push(validContact);
   }
 
-  console.log(`Parsed ${contacts.length} valid contacts for processing...`);
+  console.log(`Parsed ${contacts.length} valid contacts for processing in this chunk...`);
 
   if (contacts.length === 0) {
-    // Mark job as completed even if no valid contacts
-    await updateUploadJobProgress(jobId, {
-      status: "completed",
-      completed_at: new Date().toISOString(),
-      message: "Job completed - no valid contacts to process",
-    });
+    // No valid contacts in this chunk, check if we're done
+    const totalProcessedNow = resumeFrom + (endRow - startRow);
+    const isComplete = totalProcessedNow >= job.metadata.total_contacts;
+    
+    if (isComplete) {
+      await updateUploadJobProgress(jobId, {
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        message: "Job completed - no more contacts to process",
+      });
+    } else {
+      // Update progress and continue
+      await updateUploadJobProgress(jobId, {
+        resume_from_contact: totalProcessedNow,
+        message: `Continuing processing: ${totalProcessedNow}/${job.metadata.total_contacts} processed`,
+      });
+    }
 
     return {
       processed: 0,
-      completed: true,
+      completed: isComplete,
     };
   }
 
-  // OPTIMIZED: Use batched duplicate checking instead of loading all contacts
+  // Check for duplicates in current chunk
   const duplicateEmails = await checkDuplicatesInBatches(contacts, jobId);
   
   // Filter out duplicates
@@ -435,23 +479,24 @@ async function processUploadJob(job: UploadJob) {
 
   console.log(`After duplicate check: ${contactsToProcess.length} to process, ${duplicates.length} duplicates found`);
 
-  // IMPROVED: Process contacts in batches with better timeout management
+  // Process contacts in safe batches
   let processed = 0;
   let successful = 0;
   let failed = 0;
   const processingErrors: string[] = [];
+  const chunkStartTime = Date.now();
 
-  for (let i = 0; i < contactsToProcess.length; i += BATCH_SIZE) {
-    // More generous timeout check - use 80% of available time
+  for (let i = 0; i < contactsToProcess.length; i += SAFE_BATCH_SIZE) {
+    // Check if we're approaching time limit
     const elapsedTime = Date.now() - startTime;
-    if (elapsedTime > MAX_PROCESSING_TIME * 0.8) { 
-      console.log(`Timeout prevention: Processed ${processed}/${contactsToProcess.length} contacts. Time elapsed: ${elapsedTime}ms`);
+    if (elapsedTime > MAX_PROCESSING_TIME * 0.85) { 
+      console.log(`Time limit approaching: Processed ${processed}/${contactsToProcess.length} contacts in chunk. Elapsed: ${elapsedTime}ms`);
       break;
     }
 
-    const batch = contactsToProcess.slice(i, i + BATCH_SIZE);
+    const batch = contactsToProcess.slice(i, i + SAFE_BATCH_SIZE);
     
-    console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(contactsToProcess.length / BATCH_SIZE)}: ${batch.length} contacts`);
+    console.log(`Processing batch ${Math.floor(i / SAFE_BATCH_SIZE) + 1}/${Math.ceil(contactsToProcess.length / SAFE_BATCH_SIZE)}: ${batch.length} contacts`);
     
     // Process batch with parallel processing for better performance
     const batchPromises = batch.map(async (contactData) => {
@@ -479,17 +524,30 @@ async function processUploadJob(job: UploadJob) {
     });
 
     // Update job progress after each batch
-    const totalProcessedSoFar = job.metadata.processed_contacts + processed;
+    const totalProcessedSoFar = resumeFrom + processed;
     const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
-    const progressPercentage = Math.round(15 + ((totalProcessedSoFar / job.metadata.total_contacts) * 85)); // 15% for duplicate check + 85% for processing
+    const progressPercentage = Math.round((totalProcessedSoFar / job.metadata.total_contacts) * 100);
     
-    // FIXED: Defensive error handling for arrays - this is the source of the original error
+    // Safe error handling for arrays - CRITICAL FIX: Add proper undefined checks
     const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
     const existingDuplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
     
     // Combine all errors safely
     const allErrors = [...existingErrors, ...errors, ...processingErrors];
     const allDuplicates = [...existingDuplicates, ...duplicates.map(d => d.email)];
+    
+    // Record chunk processing history
+    const chunkProcessingTime = Date.now() - chunkStartTime;
+    const existingHistory = Array.isArray(job.metadata.chunk_processing_history) ? job.metadata.chunk_processing_history : [];
+    const chunkNumber = Math.floor(resumeFrom / chunkSize);
+    
+    const newHistoryEntry = {
+      chunk_number: chunkNumber,
+      contacts_processed: processed,
+      processing_time_ms: chunkProcessingTime,
+      timestamp: new Date().toISOString(),
+      status: "completed" as const
+    };
     
     await updateUploadJobProgress(jobId, {
       processed_contacts: totalProcessedSoFar,
@@ -498,19 +556,22 @@ async function processUploadJob(job: UploadJob) {
       duplicate_contacts: totalDuplicatesSoFar,
       validation_errors: job.metadata.validation_errors + errors.length,
       progress_percentage: progressPercentage,
-      processing_rate: `${Math.round(processed / ((Date.now() - startTime) / 1000))} contacts/second`,
-      errors: allErrors.slice(0, 100), // Limit to 100 most recent errors
-      duplicates: allDuplicates.slice(0, 100), // Limit to 100 most recent duplicates
-      message: `Processing contacts: ${totalProcessedSoFar}/${job.metadata.total_contacts} completed`,
+      processing_rate: `${Math.round(processed / (chunkProcessingTime / 1000))} contacts/second`,
+      errors: allErrors.slice(-100), // Keep last 100 errors
+      duplicates: allDuplicates.slice(-100), // Keep last 100 duplicates
+      message: `Processing chunk: ${totalProcessedSoFar}/${job.metadata.total_contacts} completed`,
+      resume_from_contact: totalProcessedSoFar,
+      current_batch_index: Math.floor(totalProcessedSoFar / SAFE_BATCH_SIZE),
+      chunk_processing_history: [...existingHistory, newHistoryEntry].slice(-10), // Keep last 10 chunks
     });
 
-    // Smaller delay between batches
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Small delay between batches
+    await new Promise(resolve => setTimeout(resolve, 25));
   }
 
-  console.log(`Contact processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
+  console.log(`Chunk processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
 
-  // Update contact counts for affected lists
+  // Update contact counts for affected lists - CRITICAL FIX: Add proper undefined check
   if (job.metadata.selected_lists && job.metadata.selected_lists.length > 0) {
     console.log(`Updating contact counts for ${job.metadata.selected_lists.length} lists...`);
     for (const listId of job.metadata.selected_lists) {
@@ -523,14 +584,14 @@ async function processUploadJob(job: UploadJob) {
   }
 
   // Check if job is complete
-  const totalProcessedNow = job.metadata.processed_contacts + processed;
+  const totalProcessedNow = resumeFrom + processed;
   const isComplete = totalProcessedNow >= job.metadata.total_contacts;
 
   if (isComplete) {
     await updateUploadJobProgress(jobId, {
       status: "completed",
       completed_at: new Date().toISOString(),
-      message: `Job completed successfully: ${successful} contacts added, ${duplicates.length} duplicates skipped, ${failed} failed`,
+      message: `Job completed successfully: ${job.metadata.successful_contacts + successful} contacts added, ${job.metadata.duplicate_contacts + duplicates.length} duplicates skipped, ${job.metadata.failed_contacts + failed} failed`,
     });
     console.log(`Job ${jobId} completed successfully`);
   } else {
