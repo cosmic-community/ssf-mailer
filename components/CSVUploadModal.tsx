@@ -176,15 +176,17 @@ export default function CSVUploadModal() {
 
   const handleClose = (open: boolean) => {
     if (!open) {
-      // Check if upload was successful based on different possible response structures
-      const success = uploadResult?.success || 
-                      (uploadResult?.results && uploadResult.results.successful > 0) ||
-                      (uploadResult?.job_id !== undefined) // Background job created
+      // CRITICAL FIX: Always refresh the page when closing after an upload attempt
+      // This ensures the upload job progress area will be displayed
+      const hasUploadAttempt = uploadResult?.success || 
+                              (uploadResult?.results && uploadResult.results.successful > 0) ||
+                              (uploadResult?.job_id !== undefined) // Background job created
       
-      if (success) {
-        // Refresh the page to show new contacts
-        router.refresh()
+      if (hasUploadAttempt) {
+        // Force refresh to show the upload job progress area
+        window.location.reload()
       }
+      
       resetForm()
       setIsOpen(false)
     }
