@@ -45,6 +45,10 @@ export async function GET(
       }
     }
 
+    // CRITICAL FIX: Ensure errors and duplicates are arrays before calling slice
+    const errors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
+    const duplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
+
     const response = {
       job_id: job.id,
       status: job.metadata.status.value,
@@ -63,8 +67,8 @@ export async function GET(
       started_at: job.metadata.started_at,
       completed_at: job.metadata.completed_at,
       error_message: job.metadata.error_message,
-      errors: job.metadata.errors?.slice(0, 10) || [], // Return first 10 errors
-      duplicates: job.metadata.duplicates?.slice(0, 10) || [], // Return first 10 duplicates
+      errors: errors.slice(0, 10), // Safe slice on guaranteed array
+      duplicates: duplicates.slice(0, 10), // Safe slice on guaranteed array
       created_at: job.created_at,
       updated_at: job.modified_at,
     };
