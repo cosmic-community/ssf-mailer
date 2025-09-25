@@ -5,6 +5,7 @@ import { RefreshCw, Upload } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
 import CreateListModal from "@/components/CreateListModal";
+import UploadJobList from "@/components/UploadJobList";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = "force-dynamic";
@@ -63,15 +64,21 @@ export default async function ContactsPage({
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <ContactsList
-          contacts={contacts}
-          total={total}
-          currentPage={page}
-          itemsPerPage={limit}
-          searchTerm={search}
-          statusFilter={status}
-          listFilter={listId}
-        />
+        <div className="space-y-6">
+          {/* Upload Jobs Progress Section */}
+          <UploadJobList />
+          
+          {/* Contacts List */}
+          <ContactsList
+            contacts={contacts}
+            total={total}
+            currentPage={page}
+            itemsPerPage={limit}
+            searchTerm={search}
+            statusFilter={status}
+            listFilter={listId}
+          />
+        </div>
       </main>
     </div>
   );
