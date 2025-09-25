@@ -129,9 +129,8 @@ export default function CSVUploadForm() {
   }
 
   const handleViewJobStatus = () => {
-    if (uploadResult?.job_id) {
-      router.push(`/jobs/${uploadResult.job_id}`)
-    }
+    // Redirect to the new upload jobs page after upload
+    router.push('/contacts/jobs')
   }
 
   return (
@@ -427,7 +426,7 @@ export default function CSVUploadForm() {
               className="bg-blue-600 hover:bg-blue-700"
             >
               <Clock className="mr-2 h-4 w-4" />
-              Track Progress
+              View Upload Jobs
             </Button>
           </div>
         </div>
