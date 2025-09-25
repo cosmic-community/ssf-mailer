@@ -175,14 +175,16 @@ export async function GET(request: NextRequest) {
 async function processUploadJob(job: UploadJob) {
   const startTime = Date.now();
   
-  // Add null check for job.id before using it
+  // Add null check for job.id before using it - FIXED: Line 202 type error
   if (!job.id) {
     throw new Error("Job ID is missing");
   }
   
+  const jobId = job.id; // Extract to a string variable for type safety
+  
   // Update job status to processing if it's not already
   if (job.metadata.status.value !== "processing") {
-    await updateUploadJobProgress(job.id, {
+    await updateUploadJobProgress(jobId, {
       status: "processing",
     });
   }
@@ -428,7 +430,7 @@ async function processUploadJob(job: UploadJob) {
     const totalProcessedSoFar = job.metadata.processed_contacts + processed;
     const progressPercentage = Math.round((totalProcessedSoFar / job.metadata.total_contacts) * 100);
     
-    await updateUploadJobProgress(job.id, {
+    await updateUploadJobProgress(jobId, {
       processed_contacts: totalProcessedSoFar,
       successful_contacts: job.metadata.successful_contacts + successful,
       failed_contacts: job.metadata.failed_contacts + failed,
@@ -460,7 +462,7 @@ async function processUploadJob(job: UploadJob) {
   const isComplete = totalProcessedNow >= job.metadata.total_contacts;
 
   if (isComplete) {
-    await updateUploadJobProgress(job.id, {
+    await updateUploadJobProgress(jobId, {
       status: "completed",
       completed_at: new Date().toISOString(),
     });

@@ -9,11 +9,12 @@ export async function GET(
   try {
     const { id } = await params;
     
-    // Add proper validation for id parameter
+    // Add proper validation for id parameter - FIXED: Line 26 type error
     if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
     }
 
+    // Now id is guaranteed to be a string
     const job = await getUploadJob(id);
     
     if (!job) {
