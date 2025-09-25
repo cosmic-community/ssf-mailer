@@ -15,7 +15,8 @@ import {
   Clock,
   CheckCircle,
   AlertCircle,
-  Activity
+  Activity,
+  Zap
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -96,40 +97,40 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'Completed':
-        return <CheckCircle className="h-4 w-4 text-green-600" />
+        return <CheckCircle className="h-5 w-5 text-green-600" />
       case 'Processing':
-        return <Activity className="h-4 w-4 text-blue-600 animate-pulse" />
+        return <Activity className="h-5 w-5 text-blue-600 animate-pulse" />
       case 'Failed':
-        return <AlertCircle className="h-4 w-4 text-red-600" />
+        return <AlertCircle className="h-5 w-5 text-red-600" />
       case 'Pending':
-        return <Clock className="h-4 w-4 text-yellow-600" />
+        return <Clock className="h-5 w-5 text-yellow-600" />
       default:
-        return <Upload className="h-4 w-4 text-gray-600" />
+        return <Upload className="h-5 w-5 text-gray-600" />
     }
   }
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Completed':
-        return 'bg-green-100 text-green-800'
+        return 'bg-green-100 text-green-800 border-green-200'
       case 'Processing':
-        return 'bg-blue-100 text-blue-800'
+        return 'bg-blue-100 text-blue-800 border-blue-200'
       case 'Failed':
-        return 'bg-red-100 text-red-800'
+        return 'bg-red-100 text-red-800 border-red-200'
       case 'Pending':
-        return 'bg-yellow-100 text-yellow-800'
+        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
       default:
-        return 'bg-gray-100 text-gray-800'
+        return 'bg-gray-100 text-gray-800 border-gray-200'
     }
   }
 
   if (loading) {
     return (
-      <Card>
+      <Card className="mb-6">
         <CardContent className="pt-6">
-          <div className="flex items-center space-x-3">
-            <LoadingSpinner size="sm" />
-            <span className="text-sm text-gray-600">Loading upload jobs...</span>
+          <div className="flex items-center justify-center space-x-3 py-8">
+            <LoadingSpinner size="md" />
+            <span className="text-gray-600">Loading upload jobs...</span>
           </div>
         </CardContent>
       </Card>
@@ -138,12 +139,12 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
 
   if (error) {
     return (
-      <Card className="border-red-200 bg-red-50">
+      <Card className="mb-6 border-red-200 bg-red-50">
         <CardContent className="pt-6">
-          <div className="flex items-center space-x-3">
-            <AlertCircle className="h-5 w-5 text-red-600" />
+          <div className="flex items-center space-x-3 mb-4">
+            <AlertCircle className="h-6 w-6 text-red-600" />
             <div>
-              <p className="text-sm text-red-800 font-medium">Error loading upload jobs</p>
+              <p className="font-medium text-red-800">Error loading upload jobs</p>
               <p className="text-sm text-red-600">{error}</p>
             </div>
           </div>
@@ -151,7 +152,7 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
             variant="outline"
             size="sm"
             onClick={fetchJobs}
-            className="mt-3 border-red-200 text-red-700 hover:bg-red-100"
+            className="border-red-300 text-red-700 hover:bg-red-100"
           >
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry
@@ -177,22 +178,32 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
+    <Card className="mb-6">
+      <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center space-x-2">
-            <Upload className="h-5 w-5" />
-            <span>Recent Upload Jobs</span>
-            <Badge variant="secondary" className="ml-2">
-              {recentJobs.length}
-            </Badge>
-          </CardTitle>
+          <div className="flex items-center space-x-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Upload className="h-6 w-6 text-blue-600" />
+            </div>
+            <div>
+              <CardTitle className="text-xl flex items-center space-x-2">
+                <span>Recent Upload Jobs</span>
+                <Badge variant="secondary" className="ml-2 px-2 py-1">
+                  {recentJobs.length}
+                </Badge>
+              </CardTitle>
+              <p className="text-sm text-gray-600 mt-1">
+                Background processing status and progress tracking
+              </p>
+            </div>
+          </div>
           <div className="flex items-center space-x-2">
             <Button
               variant="ghost"
               size="sm"
               onClick={fetchJobs}
               disabled={loading}
+              className="text-gray-600 hover:text-gray-900"
             >
               {loading ? (
                 <LoadingSpinner size="sm" />
@@ -204,6 +215,7 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
               variant="ghost"
               size="sm"
               onClick={() => setIsCollapsed(!isCollapsed)}
+              className="text-gray-600 hover:text-gray-900"
             >
               {isCollapsed ? (
                 <ChevronDown className="h-4 w-4" />
@@ -217,65 +229,112 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
       
       {!isCollapsed && (
         <CardContent className="space-y-4">
-          {recentJobs.map((job) => (
-            <div key={job.id} className="space-y-2">
-              {/* Job Summary */}
-              <div 
-                className="p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
-                onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3 flex-1 min-w-0">
-                    {getStatusIcon(job.status)}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center space-x-2">
-                        <FileText className="h-4 w-4 text-gray-500" />
-                        <span className="font-medium text-gray-900 truncate">
-                          {job.file_name}
-                        </span>
+          {/* Background Processing Notice */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start space-x-3">
+              <div className="p-1 bg-blue-100 rounded-full">
+                <Zap className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-blue-800 mb-1">🚀 Background Processing Active</h3>
+                <p className="text-sm text-blue-700">
+                  Your CSV uploads process automatically in the background. Navigate freely while we handle everything!
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Job List */}
+          <div className="space-y-3">
+            {recentJobs.map((job) => (
+              <div key={job.id} className="space-y-2">
+                {/* Job Summary Card */}
+                <Card 
+                  className={`transition-all duration-200 hover:shadow-md cursor-pointer ${
+                    expandedJob === job.id ? 'ring-2 ring-blue-200 bg-blue-50/30' : 'hover:bg-gray-50'
+                  }`}
+                  onClick={() => setExpandedJob(expandedJob === job.id ? null : job.id)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4 flex-1 min-w-0">
+                        <div className="p-2 bg-white rounded-lg shadow-sm">
+                          {getStatusIcon(job.status)}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <FileText className="h-4 w-4 text-gray-500" />
+                            <span className="font-medium text-gray-900 truncate">
+                              {job.file_name}
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-4 text-sm text-gray-600">
+                            <span className="flex items-center space-x-1">
+                              <CheckCircle className="h-3 w-3 text-green-600" />
+                              <span>{job.successful_contacts.toLocaleString()} successful</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <FileText className="h-3 w-3 text-blue-600" />
+                              <span>{job.total_contacts.toLocaleString()} total</span>
+                            </span>
+                            <span className="flex items-center space-x-1">
+                              <Clock className="h-3 w-3 text-gray-500" />
+                              <span>{formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}</span>
+                            </span>
+                          </div>
+                          
+                          {/* Progress Bar for Processing Jobs */}
+                          {job.status === 'Processing' && (
+                            <div className="mt-2">
+                              <div className="flex justify-between text-xs text-gray-600 mb-1">
+                                <span>Progress</span>
+                                <span>{job.progress_percentage}%</span>
+                              </div>
+                              <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                <div
+                                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                                  style={{ width: `${job.progress_percentage}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
-                        <span>{job.successful_contacts.toLocaleString()} successful</span>
-                        <span>{job.total_contacts.toLocaleString()} total</span>
-                        <span>
-                          {formatDistanceToNow(new Date(job.created_at), { addSuffix: true })}
-                        </span>
+                      <div className="flex items-center space-x-3">
+                        <Badge className={`${getStatusColor(job.status)} border`}>
+                          {job.status}
+                        </Badge>
+                        <div className="text-gray-400">
+                          {expandedJob === job.id ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </div>
                       </div>
                     </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Expanded Progress */}
+                {expandedJob === job.id && (
+                  <div className="ml-4 border-l-2 border-blue-200 pl-4">
+                    <UploadJobProgress
+                      jobId={job.id}
+                      onComplete={handleJobComplete}
+                      onDismiss={() => setExpandedJob(null)}
+                    />
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Badge className={getStatusColor(job.status)}>
-                      {job.status}
-                    </Badge>
-                    {job.status === 'Processing' && (
-                      <span className="text-sm text-gray-600">
-                        {job.progress_percentage}%
-                      </span>
-                    )}
-                    {expandedJob === job.id ? (
-                      <ChevronUp className="h-4 w-4 text-gray-400" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4 text-gray-400" />
-                    )}
-                  </div>
-                </div>
+                )}
               </div>
-              
-              {/* Expanded Progress */}
-              {expandedJob === job.id && (
-                <UploadJobProgress
-                  jobId={job.id}
-                  onComplete={handleJobComplete}
-                  onDismiss={() => setExpandedJob(null)}
-                />
-              )}
-            </div>
-          ))}
+            ))}
+          </div>
           
           {recentJobs.length > 3 && (
-            <div className="text-center">
-              <Button variant="ghost" size="sm" className="text-gray-600">
-                View all upload jobs
+            <div className="text-center pt-2">
+              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                <FileText className="h-4 w-4 mr-2" />
+                View all upload history
               </Button>
             </div>
           )}
