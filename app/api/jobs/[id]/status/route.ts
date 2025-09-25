@@ -24,16 +24,19 @@ export async function GET(
     // Calculate estimated completion time
     let estimatedCompletion = "Unknown";
     if (job.metadata.processing_rate && job.metadata.status.value === "processing") {
-      const rate = parseFloat(job.metadata.processing_rate.split(" ")[0]);
-      const remaining = job.metadata.total_contacts - job.metadata.processed_contacts;
-      if (rate > 0 && remaining > 0) {
-        const remainingSeconds = Math.ceil(remaining / rate);
-        if (remainingSeconds < 60) {
-          estimatedCompletion = `${remainingSeconds} seconds`;
-        } else if (remainingSeconds < 3600) {
-          estimatedCompletion = `${Math.ceil(remainingSeconds / 60)} minutes`;
-        } else {
-          estimatedCompletion = `${Math.ceil(remainingSeconds / 3600)} hours`;
+      // FIXED: Add proper null check before calling split() - Line 27 error resolution
+      if (typeof job.metadata.processing_rate === 'string' && job.metadata.processing_rate.trim() !== '') {
+        const rate = parseFloat(job.metadata.processing_rate.split(" ")[0]);
+        const remaining = job.metadata.total_contacts - job.metadata.processed_contacts;
+        if (rate > 0 && remaining > 0) {
+          const remainingSeconds = Math.ceil(remaining / rate);
+          if (remainingSeconds < 60) {
+            estimatedCompletion = `${remainingSeconds} seconds`;
+          } else if (remainingSeconds < 3600) {
+            estimatedCompletion = `${Math.ceil(remainingSeconds / 60)} minutes`;
+          } else {
+            estimatedCompletion = `${Math.ceil(remainingSeconds / 3600)} hours`;
+          }
         }
       }
     }

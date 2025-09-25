@@ -201,6 +201,12 @@ async function processUploadJob(job: UploadJob) {
 
   // Parse headers and create column mapping
   const headerLine = lines[0];
+  
+  // FIXED: Add proper null check before calling parseCSVLine - Line 204 error resolution
+  if (!headerLine || typeof headerLine !== 'string') {
+    throw new Error("Invalid or missing CSV header line");
+  }
+  
   const headers = parseCSVLine(headerLine).map((h) =>
     h.replace(/^["']|["']$/g, "").trim()
   );
