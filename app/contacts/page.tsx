@@ -5,7 +5,6 @@ import { RefreshCw, Upload, Users2, Activity } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
 import CreateListModal from "@/components/CreateListModal";
-import UploadJobList from "@/components/UploadJobList";
 import Link from "next/link";
 
 // Force dynamic rendering to ensure fresh data
@@ -78,9 +77,6 @@ export default async function ContactsPage({
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Upload Jobs Progress Section - Compact version for main page */}
-          <UploadJobList showAllJobs={false} />
-          
           {/* Contacts List */}
           <ContactsList
             contacts={contacts}
