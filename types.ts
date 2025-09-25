@@ -35,7 +35,7 @@ export interface MediaItem {
   metadata?: Record<string, any>;
 }
 
-// Upload Job interface for background CSV processing
+// Enhanced Upload Job interface for background CSV processing with chunked support
 export interface UploadJob extends CosmicObject {
   type: "upload-jobs";
   metadata: {
@@ -61,6 +61,24 @@ export interface UploadJob extends CosmicObject {
     estimated_completion?: string;
     errors?: string[]; // Detailed error messages
     duplicates?: string[]; // Duplicate email addresses
+    message?: string; // Current processing status message
+    
+    // NEW FIELDS FOR CHUNKED PROCESSING:
+    current_batch_index?: number; // Track which batch we're currently processing
+    batch_size?: number; // Size of each processing batch
+    total_batches?: number; // Total number of batches needed
+    last_processed_row?: number; // Exact row number last processed
+    processing_chunk_size?: number; // Number of contacts to process per cron run
+    resume_from_contact?: number; // Contact index to resume from
+    chunk_processing_history?: Array<{
+      chunk_number: number;
+      contacts_processed: number;
+      processing_time_ms: number;
+      timestamp: string;
+      status: "completed" | "partial" | "failed";
+    }>; // Track processing history for optimization
+    auto_resume_enabled?: boolean; // Whether job should auto-resume after timeout
+    max_processing_time_ms?: number; // Maximum time allowed per processing cycle
   };
 }
 
@@ -311,13 +329,15 @@ export interface BulkListUpdateData {
   list_ids_to_remove: string[];
 }
 
-// Upload job data types
+// Enhanced upload job data types with chunked processing support
 export interface CreateUploadJobData {
   file_name: string;
   file_size: number;
   total_contacts: number;
   csv_data: string;
   selected_lists: string[];
+  processing_chunk_size?: number; // Optional chunk size override
+  auto_resume_enabled?: boolean; // Optional auto-resume setting
 }
 
 // Type guards
