@@ -189,7 +189,16 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    // CRITICAL FIX: Add proper undefined check for job
     const job = jobsToProcess[0];
+    if (!job) {
+      return NextResponse.json({
+        success: false,
+        message: "No valid job found to process",
+        processed: 0,
+      });
+    }
+
     let totalProcessed = 0;
 
     try {
@@ -243,9 +252,21 @@ export async function POST(request: NextRequest) {
 }
 
 async function processUploadJobChunked(job: UploadJob, startTime: number) {
-  // Validate job ID for type safety
+  // CRITICAL FIX: Add comprehensive validation for job and its properties
+  if (!job) {
+    throw new Error("Job parameter is undefined");
+  }
+
   if (!job.id || typeof job.id !== 'string') {
     throw new Error("Job ID is missing or invalid");
+  }
+
+  if (!job.metadata) {
+    throw new Error("Job metadata is missing");
+  }
+
+  if (!job.metadata.csv_data) {
+    throw new Error("No CSV data found in job");
   }
   
   const jobId = job.id;
@@ -270,10 +291,6 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   }
 
   // Parse CSV data
-  if (!job.metadata.csv_data) {
-    throw new Error("No CSV data found in job");
-  }
-
   const lines = job.metadata.csv_data.split("\n").filter((line) => line.trim());
   if (lines.length < 2) {
     throw new Error("Invalid CSV data");
@@ -387,8 +404,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
         contact.subscribe_date = new Date().toISOString().split("T")[0];
       }
 
-      // Add selected list IDs
-      contact.list_ids = job.metadata.selected_lists;
+      // Add selected list IDs - CRITICAL FIX: Add undefined check
+      contact.list_ids = job.metadata.selected_lists || [];
     } catch (extractError) {
       errors.push(`Row ${i + 1}: Error extracting data from CSV row`);
       continue;
@@ -511,7 +528,7 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
     const progressPercentage = Math.round((totalProcessedSoFar / job.metadata.total_contacts) * 100);
     
-    // Safe error handling for arrays
+    // Safe error handling for arrays - CRITICAL FIX: Add proper undefined checks
     const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
     const existingDuplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
     
@@ -554,7 +571,7 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
 
   console.log(`Chunk processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
 
-  // Update contact counts for affected lists
+  // Update contact counts for affected lists - CRITICAL FIX: Add proper undefined check
   if (job.metadata.selected_lists && job.metadata.selected_lists.length > 0) {
     console.log(`Updating contact counts for ${job.metadata.selected_lists.length} lists...`);
     for (const listId of job.metadata.selected_lists) {
