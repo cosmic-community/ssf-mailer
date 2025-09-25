@@ -9,7 +9,8 @@ export async function GET(
   try {
     const { id } = await params;
     
-    if (!id) {
+    // Add proper validation for id parameter
+    if (!id || typeof id !== 'string') {
       return NextResponse.json({ error: "Job ID is required" }, { status: 400 });
     }
 

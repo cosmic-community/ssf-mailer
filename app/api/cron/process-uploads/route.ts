@@ -139,12 +139,14 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         console.error(`Error processing upload job ${job.id}:`, error);
 
-        // Mark job as failed
-        await updateUploadJobProgress(job.id, {
-          status: "failed",
-          error_message: error instanceof Error ? error.message : "Unknown error occurred",
-          completed_at: new Date().toISOString(),
-        });
+        // Mark job as failed - Add null check for job.id
+        if (job.id) {
+          await updateUploadJobProgress(job.id, {
+            status: "failed",
+            error_message: error instanceof Error ? error.message : "Unknown error occurred",
+            completed_at: new Date().toISOString(),
+          });
+        }
       }
     }
 
@@ -172,6 +174,11 @@ export async function GET(request: NextRequest) {
 
 async function processUploadJob(job: UploadJob) {
   const startTime = Date.now();
+  
+  // Add null check for job.id before using it
+  if (!job.id) {
+    throw new Error("Job ID is missing");
+  }
   
   // Update job status to processing if it's not already
   if (job.metadata.status.value !== "processing") {
