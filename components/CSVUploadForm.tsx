@@ -39,7 +39,7 @@ export default function CSVUploadForm() {
       const response = await fetch('/api/lists')
       if (response.ok) {
         const result = await response.json()
-        if (result.success && Array.isArray(result.data)) {
+        if (result?.success && Array.isArray(result.data)) {
           setAvailableLists(result.data)
         }
       }
@@ -99,12 +99,17 @@ export default function CSVUploadForm() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Upload failed')
+        throw new Error(result?.error || 'Upload failed')
       }
 
-      setUploadResult(result)
-      
-      console.log(`Background job created: ${result.job_id} for ${result.total_contacts} contacts`)
+      // Validate the result structure before setting state
+      if (result && typeof result === 'object' && 'success' in result) {
+        setUploadResult(result)
+        
+        console.log(`Background job created: ${result.job_id} for ${result.total_contacts} contacts`)
+      } else {
+        throw new Error('Invalid response format from server')
+      }
 
     } catch (err) {
       console.error('Upload error:', err)
@@ -267,21 +272,21 @@ export default function CSVUploadForm() {
                           htmlFor={`list-${list.id}`}
                           className="text-sm font-medium text-gray-900 cursor-pointer"
                         >
-                          {list.metadata.name}
+                          {list.metadata?.name || 'Unnamed List'}
                         </label>
-                        {list.metadata.description && (
+                        {list.metadata?.description && (
                           <p className="text-sm text-gray-600 mt-1">
                             {list.metadata.description}
                           </p>
                         )}
                         <div className="flex items-center space-x-3 mt-2">
                           <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                            {list.metadata.list_type?.value || 'General'}
+                            {list.metadata?.list_type?.value || 'General'}
                           </span>
                           <span className="text-xs text-gray-500">
-                            {list.metadata.total_contacts || 0} contacts
+                            {list.metadata?.total_contacts || 0} contacts
                           </span>
-                          {list.metadata.active === false && (
+                          {list.metadata?.active === false && (
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
                               Inactive
                             </span>
@@ -309,7 +314,7 @@ export default function CSVUploadForm() {
                 <div className="mt-2 text-xs text-green-700">
                   Selected: {availableLists
                     .filter(list => selectedListIds.includes(list.id))
-                    .map(list => list.metadata.name)
+                    .map(list => list.metadata?.name || 'Unnamed')
                     .join(', ')
                   }
                 </div>
@@ -366,7 +371,7 @@ export default function CSVUploadForm() {
                 🚀 Background Job Created Successfully!
               </h3>
               <p className="text-gray-600">
-                Processing {uploadResult.total_contacts.toLocaleString()} contacts in the background
+                Processing {uploadResult.total_contacts?.toLocaleString() || 0} contacts in the background
                 {selectedListIds.length > 0 && ` and adding them to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
               </p>
               <p className="text-sm text-green-600 mt-1">
@@ -380,11 +385,11 @@ export default function CSVUploadForm() {
             <h4 className="font-medium text-blue-800 mb-2">Job Summary</h4>
             <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
               <div>
-                <p><strong>File:</strong> {fileInputRef.current?.files?.[0]?.name}</p>
-                <p><strong>Total Contacts:</strong> {uploadResult.total_contacts.toLocaleString()}</p>
+                <p><strong>File:</strong> {fileInputRef.current?.files?.[0]?.name || 'Unknown'}</p>
+                <p><strong>Total Contacts:</strong> {uploadResult.total_contacts?.toLocaleString() || 0}</p>
               </div>
               <div>
-                <p><strong>Estimated Time:</strong> {uploadResult.estimated_time}</p>
+                <p><strong>Estimated Time:</strong> {uploadResult.estimated_time || 'Unknown'}</p>
                 <p><strong>Status:</strong> Processing in background</p>
               </div>
             </div>

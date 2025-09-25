@@ -13,20 +13,24 @@ import { EmailList } from '@/types'
 interface UploadResult {
   success: boolean
   message: string
-  results: {
+  results?: {
     total_processed: number
     successful: number
     duplicates: number
     validation_errors: number
     creation_errors: number
   }
-  contacts: any[]
+  contacts?: any[]
   duplicates?: string[]
   validation_errors?: string[]
   creation_errors?: string[]
   is_batch_job?: boolean
   batch_id?: string
   remaining_contacts?: number
+  // Background job properties
+  job_id?: string
+  estimated_time?: string
+  total_contacts?: number
 }
 
 export default function CSVUploadModal() {
@@ -58,7 +62,7 @@ export default function CSVUploadModal() {
       const response = await fetch('/api/lists')
       if (response.ok) {
         const result = await response.json()
-        if (result.success && Array.isArray(result.data)) {
+        if (result?.success && Array.isArray(result.data)) {
           setAvailableLists(result.data)
         }
       }
@@ -141,10 +145,15 @@ export default function CSVUploadModal() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || 'Upload failed')
+        throw new Error(result?.error || 'Upload failed')
       }
 
-      setUploadResult(result)
+      // Validate the result structure before setting state
+      if (result && typeof result === 'object' && 'success' in result) {
+        setUploadResult(result)
+      } else {
+        throw new Error('Invalid response format from server')
+      }
 
     } catch (err) {
       console.error('Smart upload error:', err)
@@ -167,7 +176,11 @@ export default function CSVUploadModal() {
 
   const handleClose = (open: boolean) => {
     if (!open) {
-      const success = uploadResult?.results?.successful ? uploadResult.results.successful > 0 : false
+      // Check if upload was successful based on different possible response structures
+      const success = uploadResult?.success || 
+                      (uploadResult?.results && uploadResult.results.successful > 0) ||
+                      (uploadResult?.job_id !== undefined) // Background job created
+      
       if (success) {
         // Refresh the page to show new contacts
         router.refresh()
@@ -187,6 +200,27 @@ export default function CSVUploadModal() {
     setError('')
     setUploadProgress(null)
     // Don't clear file input - user can re-upload same file for continuation
+  }
+
+  // Helper function to safely get successful count
+  const getSuccessfulCount = (result: UploadResult): number => {
+    if (result.results?.successful !== undefined) {
+      return result.results.successful
+    }
+    if (result.total_contacts !== undefined) {
+      return result.total_contacts // For background jobs
+    }
+    return 0
+  }
+
+  // Helper function to safely get duplicates count
+  const getDuplicatesCount = (result: UploadResult): number => {
+    return result.results?.duplicates || 0
+  }
+
+  // Helper function to safely get validation errors count
+  const getValidationErrorsCount = (result: UploadResult): number => {
+    return result.results?.validation_errors || 0
   }
 
   return (
@@ -319,19 +353,19 @@ export default function CSVUploadModal() {
                             htmlFor={`list-${list.id}`}
                             className="text-sm font-medium text-gray-900 cursor-pointer"
                           >
-                            {list.metadata.name}
+                            {list.metadata?.name || 'Unnamed List'}
                           </label>
-                          {list.metadata.description && (
+                          {list.metadata?.description && (
                             <p className="text-xs text-gray-500 mt-1">
                               {list.metadata.description}
                             </p>
                           )}
                           <div className="flex items-center space-x-3 mt-1">
                             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                              {list.metadata.list_type?.value || 'General'}
+                              {list.metadata?.list_type?.value || 'General'}
                             </span>
                             <span className="text-xs text-gray-500">
-                              {list.metadata.total_contacts || 0} contacts
+                              {list.metadata?.total_contacts || 0} contacts
                             </span>
                           </div>
                         </div>
@@ -403,25 +437,50 @@ export default function CSVUploadModal() {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {uploadResult.is_batch_job ? '🚀 Smart Processing Complete' : '✅ Upload Complete'}
+                  {uploadResult.job_id ? '🚀 Background Job Created!' : 
+                   uploadResult.is_batch_job ? '🚀 Smart Processing Complete' : 
+                   '✅ Upload Complete'}
                 </h3>
                 <p className="text-gray-600">
-                  {uploadResult.results.successful.toLocaleString()} contacts imported successfully
+                  {uploadResult.job_id ? 
+                    `Processing ${uploadResult.total_contacts?.toLocaleString() || 0} contacts in the background` :
+                    `${getSuccessfulCount(uploadResult).toLocaleString()} contacts imported successfully`
+                  }
                   {selectedListIds.length > 0 && ` and added to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
-                  {uploadResult.results.validation_errors > 0 && `, ${uploadResult.results.validation_errors} errors`}
+                  {getValidationErrorsCount(uploadResult) > 0 && `, ${getValidationErrorsCount(uploadResult)} errors`}
                 </p>
+                {uploadResult.job_id && (
+                  <p className="text-sm text-green-600 mt-1">
+                    Job ID: {uploadResult.job_id}
+                  </p>
+                )}
               </div>
             </div>
 
-            {/* Performance Success Notice */}
-            {uploadResult.results.successful >= 1000 && (
+            {/* Background Job Notice */}
+            {uploadResult.job_id && (
+              <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+                <div className="flex items-start space-x-2">
+                  <Zap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <h4 className="font-medium text-green-800 mb-1">🎉 Background Processing Activated!</h4>
+                    <p className="text-sm text-green-700">
+                      Your upload is now processing in the background. You can close this modal and check progress anytime.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Performance Success Notice - only show if we have results data */}
+            {uploadResult.results && getSuccessfulCount(uploadResult) >= 1000 && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
                 <div className="flex items-start space-x-2">
                   <Zap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
                   <div>
                     <h4 className="font-medium text-green-800 mb-1">🎉 Massive Dataset Success!</h4>
                     <p className="text-sm text-green-700">
-                      Successfully processed {uploadResult.results.successful.toLocaleString()} contacts using smart batch processing - completely eliminating the old 250-contact limit!
+                      Successfully processed {getSuccessfulCount(uploadResult).toLocaleString()} contacts using smart batch processing - completely eliminating the old 250-contact limit!
                     </p>
                   </div>
                 </div>
@@ -436,7 +495,7 @@ export default function CSVUploadModal() {
                   <div>
                     <h4 className="font-medium text-yellow-800 mb-1">🔄 Smart Continuation</h4>
                     <p className="text-sm text-yellow-700">
-                      Processed {uploadResult.results.total_processed.toLocaleString()} contacts. 
+                      Processed {uploadResult.results?.total_processed?.toLocaleString() || 0} contacts. 
                       {uploadResult.remaining_contacts.toLocaleString()} remaining - re-upload to continue automatically.
                     </p>
                     <Button
@@ -453,33 +512,40 @@ export default function CSVUploadModal() {
               </div>
             )}
 
-            {/* Detailed Results */}
-            <div className="grid grid-cols-2 gap-4 text-center">
-              <div className="p-3 bg-green-50 border border-green-200 rounded">
-                <div className="text-2xl font-bold text-green-600">{uploadResult.results.successful.toLocaleString()}</div>
-                <div className="text-sm text-green-700">Imported</div>
+            {/* Detailed Results - only show if we have results data */}
+            {uploadResult.results && (
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="text-2xl font-bold text-green-600">{getSuccessfulCount(uploadResult).toLocaleString()}</div>
+                  <div className="text-sm text-green-700">Imported</div>
+                </div>
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
+                  <div className="text-2xl font-bold text-yellow-600">{getDuplicatesCount(uploadResult).toLocaleString()}</div>
+                  <div className="text-sm text-yellow-700">Duplicates Skipped</div>
+                </div>
               </div>
-              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded">
-                <div className="text-2xl font-bold text-yellow-600">{uploadResult.results.duplicates.toLocaleString()}</div>
-                <div className="text-sm text-yellow-700">Duplicates Skipped</div>
-              </div>
-            </div>
+            )}
 
             {/* Success Summary */}
-            {uploadResult.results.successful > 0 && (
+            {getSuccessfulCount(uploadResult) > 0 && (
               <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-                <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful.toLocaleString()})</h4>
+                <h4 className="font-medium text-green-800 mb-2">
+                  {uploadResult.job_id ? 'Background Job Queued' : 'Successfully Imported'} ({getSuccessfulCount(uploadResult).toLocaleString()})
+                </h4>
                 <p className="text-sm text-green-700">
-                  {uploadResult.results.successful.toLocaleString()} contacts have been added using smart processing
+                  {uploadResult.job_id ? 
+                    `${getSuccessfulCount(uploadResult).toLocaleString()} contacts are being processed in the background` :
+                    `${getSuccessfulCount(uploadResult).toLocaleString()} contacts have been added using smart processing`
+                  }
                   {selectedListIds.length > 0 && ` and assigned to the selected lists`} and are ready to receive campaigns.
                 </p>
               </div>
             )}
 
             {/* Duplicates Summary */}
-            {uploadResult.results.duplicates > 0 && uploadResult.duplicates && (
+            {getDuplicatesCount(uploadResult) > 0 && uploadResult.duplicates && (
               <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-                <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({uploadResult.results.duplicates.toLocaleString()})</h4>
+                <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({getDuplicatesCount(uploadResult).toLocaleString()})</h4>
                 <div className="max-h-24 overflow-y-auto">
                   <p className="text-sm text-yellow-700">
                     These email addresses already exist: {uploadResult.duplicates.slice(0, 5).join(', ')}
@@ -490,9 +556,9 @@ export default function CSVUploadModal() {
             )}
 
             {/* Error Summary */}
-            {uploadResult.results.validation_errors > 0 && uploadResult.validation_errors && (
+            {getValidationErrorsCount(uploadResult) > 0 && uploadResult.validation_errors && (
               <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-                <h4 className="font-medium text-red-800 mb-2">Validation Errors ({uploadResult.results.validation_errors.toLocaleString()})</h4>
+                <h4 className="font-medium text-red-800 mb-2">Validation Errors ({getValidationErrorsCount(uploadResult).toLocaleString()})</h4>
                 <div className="max-h-32 overflow-y-auto space-y-1">
                   {uploadResult.validation_errors.slice(0, 3).map((error, index) => (
                     <div key={index} className="text-sm text-red-700">
