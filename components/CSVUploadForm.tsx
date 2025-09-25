@@ -7,26 +7,15 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
-import { CheckCircle, AlertCircle, Upload, Info, List, Clock, Zap, RotateCcw } from 'lucide-react'
+import { CheckCircle, AlertCircle, Upload, Info, List, Clock, Zap } from 'lucide-react'
 import { EmailList } from '@/types'
 
 interface UploadResult {
   success: boolean
   message: string
-  results: {
-    total_processed: number
-    successful: number
-    duplicates: number
-    validation_errors: number
-    creation_errors: number
-  }
-  contacts: any[]
-  duplicates?: string[]
-  validation_errors?: string[]
-  creation_errors?: string[]
-  is_batch_job?: boolean
-  batch_id?: string
-  remaining_contacts?: number
+  job_id: string
+  estimated_time: string
+  total_contacts: number
 }
 
 export default function CSVUploadForm() {
@@ -38,13 +27,6 @@ export default function CSVUploadForm() {
   const [availableLists, setAvailableLists] = useState<EmailList[]>([])
   const [selectedListIds, setSelectedListIds] = useState<string[]>([])
   const [isLoadingLists, setIsLoadingLists] = useState(true)
-  const [uploadProgress, setUploadProgress] = useState<{
-    processed: number
-    total: number
-    percentage: number
-    estimatedTimeRemaining?: string
-    currentRate?: string
-  } | null>(null)
 
   // Fetch available lists on component mount
   useEffect(() => {
@@ -76,23 +58,10 @@ export default function CSVUploadForm() {
     }
   }
 
-  const estimateProcessingTime = (contactCount: number): string => {
-    // Updated estimate: Smart batch processing can handle ~100-200 contacts per second
-    const estimatedSeconds = Math.ceil(contactCount / 150) // ~150 contacts per second with smart batching
-    if (estimatedSeconds < 60) {
-      return `${estimatedSeconds} seconds`
-    } else if (estimatedSeconds < 3600) {
-      return `${Math.ceil(estimatedSeconds / 60)} minutes`
-    } else {
-      return `${Math.ceil(estimatedSeconds / 3600)} hours`
-    }
-  }
-
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
     setUploadResult(null)
-    setUploadProgress(null)
     
     const fileInput = fileInputRef.current
     if (!fileInput) {
@@ -114,22 +83,6 @@ export default function CSVUploadForm() {
     setIsUploading(true)
 
     try {
-      // Quick file size check for user feedback
-      const fileSizeMB = (file.size / (1024 * 1024)).toFixed(1)
-      console.log(`Processing CSV file with smart batching: ${file.name} (${fileSizeMB}MB)`)
-
-      // Enhanced row count estimation for progress indication
-      const text = await file.text()
-      const estimatedRows = text.split('\n').filter(line => line.trim()).length - 1
-      
-      setUploadProgress({
-        processed: 0,
-        total: estimatedRows,
-        percentage: 0,
-        estimatedTimeRemaining: estimateProcessingTime(estimatedRows),
-        currentRate: 'Initializing...'
-      })
-
       const formData = new FormData()
       formData.append('file', file)
       
@@ -138,7 +91,6 @@ export default function CSVUploadForm() {
         formData.append('list_ids', JSON.stringify(selectedListIds))
       }
 
-      const startTime = Date.now()
       const response = await fetch('/api/contacts/upload', {
         method: 'POST',
         body: formData,
@@ -150,31 +102,15 @@ export default function CSVUploadForm() {
         throw new Error(result.error || 'Upload failed')
       }
 
-      // Calculate actual processing rate
-      const endTime = Date.now()
-      const processingTimeSeconds = (endTime - startTime) / 1000
-      const actualRate = result.results.successful / processingTimeSeconds
-
-      setUploadResult({
-        ...result,
-        actualProcessingRate: `${actualRate.toFixed(1)} contacts/second`
-      })
-
-      // Show completion notification with smart batching info
-      if (result.results.successful > 0) {
-        console.log(`Smart batch processing successfully imported ${result.results.successful} contacts at ${actualRate.toFixed(1)} contacts/second`)
-      }
-
-      if (result.is_batch_job && result.remaining_contacts > 0) {
-        console.log(`Large dataset processing: ${result.results.total_processed} out of ${estimatedRows} contacts processed. ${result.remaining_contacts} contacts can be processed in next batch.`)
-      }
+      setUploadResult(result)
+      
+      console.log(`Background job created: ${result.job_id} for ${result.total_contacts} contacts`)
 
     } catch (err) {
-      console.error('Smart upload error:', err)
+      console.error('Upload error:', err)
       setError(err instanceof Error ? err.message : 'Failed to upload CSV file')
     } finally {
       setIsUploading(false)
-      setUploadProgress(null)
     }
   }
 
@@ -182,65 +118,52 @@ export default function CSVUploadForm() {
     setUploadResult(null)
     setError('')
     setSelectedListIds([])
-    setUploadProgress(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
   }
 
-  const handleViewContacts = async () => {
-    // Multiple approaches to ensure cache is refreshed
-    try {
-      // 1. Call the revalidate API endpoint
-      await fetch('/api/revalidate', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ path: '/contacts' }),
-      })
-
-      // 2. Add a small delay to allow server-side updates to complete
-      await new Promise(resolve => setTimeout(resolve, 500))
-
-      // 3. Hard refresh the router to bypass any client-side caching
-      router.push('/contacts')
-      router.refresh()
-
-      // 4. Additional refresh after navigation to ensure data is current
-      setTimeout(() => {
-        window.location.reload()
-      }, 100)
-
-    } catch (error) {
-      console.error('Failed to refresh contacts page:', error)
-      // Still navigate even if refresh fails
-      router.push('/contacts')
-      router.refresh()
+  const handleViewJobStatus = () => {
+    if (uploadResult?.job_id) {
+      router.push(`/jobs/${uploadResult.job_id}`)
     }
-  }
-
-  const handleContinueUpload = () => {
-    // Reset form but keep same file for continuation
-    setUploadResult(null)
-    setError('')
-    setUploadProgress(null)
-    // Don't clear file input - user can re-upload same file for continuation
   }
 
   return (
     <div className="card max-w-4xl">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Upload Contacts from CSV</h2>
       
+      {/* Background Processing Notice */}
+      <div className="mb-6">
+        <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+          <div className="flex items-start space-x-2">
+            <Zap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <div>
+              <h3 className="text-sm font-medium text-green-800 mb-2">🚀 Revolutionary Background Processing</h3>
+              <p className="text-sm text-green-700 mb-2">
+                Your CSV uploads now process in the background! Upload your file, get an instant job ID, and navigate away while we handle everything. No more waiting or timeouts.
+              </p>
+              <ul className="text-xs text-green-600 space-y-1 ml-4">
+                <li>• Process 10,000+ contacts without crashes</li>
+                <li>• Real-time progress tracking</li>
+                <li>• Navigate away during processing</li>
+                <li>• Automatic error handling and retry</li>
+                <li>• Smart duplicate detection</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Enhanced Instructions */}
       <div className="mb-6 space-y-4">
         <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
           <div className="flex items-start space-x-2">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div>
-              <h3 className="text-sm font-medium text-blue-800 mb-2">🚀 Smart Batch Processing - No More Crashes!</h3>
+              <h3 className="text-sm font-medium text-blue-800 mb-2">Smart Column Detection</h3>
               <p className="text-sm text-blue-700 mb-2">
-                Revolutionary smart batching system automatically detects and maps your CSV columns, then processes files with intelligent round-trip uploads to handle massive datasets without timeouts.
+                Our system automatically detects and maps your CSV columns, so any format works.
               </p>
               <div className="text-sm text-blue-700">
                 <strong>Required columns (auto-detected):</strong>
@@ -267,19 +190,16 @@ export default function CSVUploadForm() {
           
           <div className="p-4 bg-purple-50 border border-purple-200 rounded-md">
             <div className="flex items-start space-x-2">
-              <Zap className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+              <Clock className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
               <div>
-                <h3 className="text-sm font-medium text-purple-800 mb-2">⚡ Performance Revolution</h3>
-                <p className="text-sm text-purple-700 mb-1">
-                  Completely eliminates the 250-contact crash limit:
-                </p>
+                <h3 className="text-sm font-medium text-purple-800 mb-2">⚡ Background Processing Benefits</h3>
                 <ul className="text-xs text-purple-600 space-y-1">
-                  <li>• Processes 5,000-10,000+ contacts seamlessly</li>
-                  <li>• Smart timeout prevention with round-trip uploads</li>
-                  <li>• Up to 200 contacts/second processing speed</li>
-                  <li>• Handles 200MB+ files without issues</li>
-                  <li>• Automatic continuation for massive datasets</li>
-                  <li>• Zero data loss with intelligent duplicate detection</li>
+                  <li>• No browser timeout issues</li>
+                  <li>• Close your browser - processing continues</li>
+                  <li>• Real-time job status tracking</li>
+                  <li>• Automatic error recovery</li>
+                  <li>• Handle massive datasets (200MB+ files)</li>
+                  <li>• Get notified when complete</li>
                 </ul>
               </div>
             </div>
@@ -287,9 +207,9 @@ export default function CSVUploadForm() {
         </div>
         
         <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-          <h3 className="text-sm font-medium text-gray-800 mb-2">What gets ignored (any other columns)</h3>
+          <h3 className="text-sm font-medium text-gray-800 mb-2">Ignored Columns</h3>
           <p className="text-sm text-gray-600 mb-2">
-            All other columns will be automatically ignored during smart processing:
+            All other columns will be automatically ignored during processing:
           </p>
           <ul className="text-xs text-gray-500 space-y-1">
             <li>• MEMBER_RATING, LEID, EUID, OPTIN_IP, CONFIRM_IP, TIMEZONE</li>
@@ -313,32 +233,9 @@ export default function CSVUploadForm() {
               required
             />
             <p className="text-sm text-gray-500">
-              Any CSV format with email and name columns will work. Maximum file size: 200MB. Smart batching handles massive datasets automatically.
+              Any CSV format with email and name columns will work. Maximum file size: 200MB. Background processing handles massive datasets automatically.
             </p>
           </div>
-
-          {/* Enhanced Upload Progress */}
-          {uploadProgress && isUploading && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
-              <div className="flex items-center space-x-3">
-                <LoadingSpinner size="md" className="flex-shrink-0" />
-                <div className="flex-1">
-                  <h4 className="text-sm font-medium text-blue-800 mb-1">🚀 Smart Batch Processing in Progress...</h4>
-                  <p className="text-sm text-blue-700">
-                    Processing {uploadProgress.total.toLocaleString()} contacts with intelligent batching system
-                  </p>
-                  {uploadProgress.estimatedTimeRemaining && (
-                    <p className="text-xs text-blue-600 mt-1">
-                      Estimated time: {uploadProgress.estimatedTimeRemaining} | Rate: {uploadProgress.currentRate}
-                    </p>
-                  )}
-                  <div className="mt-2 text-xs text-blue-600">
-                    <strong>Smart Features:</strong> 200-300 contacts per batch • Dynamic timeout prevention • Zero crashes • Auto-continuation for massive files
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* List Selection Section */}
           <div className="space-y-4">
@@ -444,7 +341,7 @@ export default function CSVUploadForm() {
               {isUploading ? (
                 <>
                   <LoadingSpinner size="sm" variant="white" className="mr-2" />
-                  Smart Processing...
+                  Creating Job...
                 </>
               ) : (
                 <>
@@ -457,7 +354,7 @@ export default function CSVUploadForm() {
         </form>
       )}
 
-      {/* Enhanced Upload Results */}
+      {/* Upload Results */}
       {uploadResult && (
         <div className="space-y-6">
           <div className="flex items-center space-x-4">
@@ -466,131 +363,51 @@ export default function CSVUploadForm() {
             </div>
             <div>
               <h3 className="text-lg font-semibold text-gray-900">
-                {uploadResult.is_batch_job ? '🚀 Smart Batch Processing Complete' : '✅ Upload Complete'}
+                🚀 Background Job Created Successfully!
               </h3>
               <p className="text-gray-600">
-                {uploadResult.results.successful.toLocaleString()} contacts imported successfully
-                {selectedListIds.length > 0 && ` and added to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
-                {uploadResult.results.validation_errors > 0 && `, ${uploadResult.results.validation_errors} errors`}
+                Processing {uploadResult.total_contacts.toLocaleString()} contacts in the background
+                {selectedListIds.length > 0 && ` and adding them to ${selectedListIds.length} list${selectedListIds.length !== 1 ? 's' : ''}`}
               </p>
-              {(uploadResult as any).actualProcessingRate && (
-                <p className="text-xs text-green-600 mt-1">
-                  Processing rate: {(uploadResult as any).actualProcessingRate}
-                </p>
-              )}
+              <p className="text-sm text-green-600 mt-1">
+                Job ID: {uploadResult.job_id}
+              </p>
             </div>
           </div>
 
-          {/* Revolutionary Processing Success Notice */}
-          {uploadResult.results.successful >= 1000 && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-start space-x-2">
-                <Zap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-medium text-green-800 mb-1">🎉 Massive Dataset Successfully Processed!</h4>
-                  <p className="text-sm text-green-700">
-                    Successfully processed {uploadResult.results.successful.toLocaleString()} contacts using revolutionary smart batch processing! 
-                    This completely eliminates the previous 250-contact limit and can handle datasets with tens of thousands of contacts.
-                  </p>
-                </div>
+          {/* Job Summary */}
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-md">
+            <h4 className="font-medium text-blue-800 mb-2">Job Summary</h4>
+            <div className="grid md:grid-cols-2 gap-4 text-sm text-blue-700">
+              <div>
+                <p><strong>File:</strong> {fileInputRef.current?.files?.[0]?.name}</p>
+                <p><strong>Total Contacts:</strong> {uploadResult.total_contacts.toLocaleString()}</p>
               </div>
-            </div>
-          )}
-
-          {/* Smart Continuation Notice - Only for truly massive files */}
-          {uploadResult.is_batch_job && uploadResult.remaining_contacts && uploadResult.remaining_contacts > 0 && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <div className="flex items-start space-x-2">
-                <Clock className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <h4 className="font-medium text-yellow-800 mb-1">🔄 Smart Continuation Available</h4>
-                  <p className="text-sm text-yellow-700 mb-2">
-                    Successfully processed {uploadResult.results.total_processed.toLocaleString()} contacts. 
-                    {uploadResult.remaining_contacts.toLocaleString()} contacts remain in your file and can be processed in the next round.
-                  </p>
-                  <p className="text-sm text-yellow-700">
-                    Simply re-upload the same file - the system will automatically skip already processed contacts and continue where it left off.
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleContinueUpload}
-                    className="mt-3"
-                  >
-                    <RotateCcw className="mr-2 h-4 w-4" />
-                    Continue Processing ({uploadResult.remaining_contacts.toLocaleString()} remaining)
-                  </Button>
-                </div>
+              <div>
+                <p><strong>Estimated Time:</strong> {uploadResult.estimated_time}</p>
+                <p><strong>Status:</strong> Processing in background</p>
               </div>
-            </div>
-          )}
-
-          {/* Detailed Results Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded">
-              <div className="text-2xl font-bold text-blue-600">{uploadResult.results.total_processed.toLocaleString()}</div>
-              <div className="text-sm text-blue-700">Rows Processed</div>
-            </div>
-            <div className="p-4 bg-green-50 border border-green-200 rounded">
-              <div className="text-2xl font-bold text-green-600">{uploadResult.results.successful.toLocaleString()}</div>
-              <div className="text-sm text-green-700">Successfully Imported</div>
-            </div>
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
-              <div className="text-2xl font-bold text-yellow-600">{uploadResult.results.duplicates.toLocaleString()}</div>
-              <div className="text-sm text-yellow-700">Duplicates Skipped</div>
-            </div>
-            <div className="p-4 bg-red-50 border border-red-200 rounded">
-              <div className="text-2xl font-bold text-red-600">{uploadResult.results.validation_errors.toLocaleString()}</div>
-              <div className="text-sm text-red-700">Validation Errors</div>
             </div>
           </div>
 
-          {/* Success Summary */}
-          {uploadResult.results.successful > 0 && (
-            <div className="p-4 bg-green-50 border border-green-200 rounded-md">
-              <h4 className="font-medium text-green-800 mb-2">Successfully Imported ({uploadResult.results.successful.toLocaleString()})</h4>
-              <p className="text-sm text-green-700">
-                {uploadResult.results.successful.toLocaleString()} contacts have been added to your database using smart batch processing
-                {selectedListIds.length > 0 && ` and assigned to the selected lists`} and are ready to receive campaigns.
-              </p>
-            </div>
-          )}
-
-          {/* Duplicates Summary */}
-          {uploadResult.results.duplicates > 0 && uploadResult.duplicates && (
-            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
-              <h4 className="font-medium text-yellow-800 mb-2">Duplicates Skipped ({uploadResult.results.duplicates.toLocaleString()})</h4>
-              <div className="max-h-32 overflow-y-auto">
-                <p className="text-sm text-yellow-700">
-                  These email addresses already exist: 
+          {/* Background Benefits */}
+          <div className="p-4 bg-green-50 border border-green-200 rounded-md">
+            <div className="flex items-start space-x-2">
+              <Zap className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <h4 className="font-medium text-green-800 mb-1">🎉 Background Processing Activated!</h4>
+                <p className="text-sm text-green-700 mb-2">
+                  Your upload is now processing in the background. You can:
                 </p>
-                <div className="mt-1 text-xs text-yellow-600">
-                  {uploadResult.duplicates.slice(0, 10).join(', ')}
-                  {uploadResult.duplicates.length > 10 && ` and ${(uploadResult.duplicates.length - 10).toLocaleString()} more`}
-                </div>
+                <ul className="text-sm text-green-700 space-y-1 ml-4">
+                  <li>• Navigate to other pages</li>
+                  <li>• Close your browser</li>
+                  <li>• Check progress anytime</li>
+                  <li>• Get notified when complete</li>
+                </ul>
               </div>
             </div>
-          )}
-
-          {/* Error Summary */}
-          {uploadResult.results.validation_errors > 0 && uploadResult.validation_errors && (
-            <div className="p-4 bg-red-50 border border-red-200 rounded-md">
-              <h4 className="font-medium text-red-800 mb-2">Validation Errors ({uploadResult.results.validation_errors.toLocaleString()})</h4>
-              <div className="max-h-40 overflow-y-auto space-y-1">
-                {uploadResult.validation_errors.slice(0, 5).map((error, index) => (
-                  <div key={index} className="text-sm text-red-700">
-                    {error}
-                  </div>
-                ))}
-                {uploadResult.validation_errors.length > 5 && (
-                  <div className="text-sm text-red-600 mt-2 p-2 bg-red-100 rounded">
-                    ... and {(uploadResult.validation_errors.length - 5).toLocaleString()} more errors. 
-                    Please check your CSV format and try again.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
 
           {/* Actions */}
           <div className="flex space-x-4">
@@ -601,9 +418,11 @@ export default function CSVUploadForm() {
               Upload Another File
             </Button>
             <Button
-              onClick={handleViewContacts}
+              onClick={handleViewJobStatus}
+              className="bg-blue-600 hover:bg-blue-700"
             >
-              View All Contacts ({uploadResult.results.successful.toLocaleString()} new)
+              <Clock className="mr-2 h-4 w-4" />
+              Track Progress
             </Button>
           </div>
         </div>
