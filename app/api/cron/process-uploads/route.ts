@@ -139,8 +139,8 @@ export async function GET(request: NextRequest) {
       } catch (error) {
         console.error(`Error processing upload job ${job.id}:`, error);
 
-        // Mark job as failed - Add proper null check for job.id
-        if (job.id) {
+        // Mark job as failed - FIXED: Add proper null check for job.id
+        if (job.id && typeof job.id === 'string') {
           await updateUploadJobProgress(job.id, {
             status: "failed",
             error_message: error instanceof Error ? error.message : "Unknown error occurred",
