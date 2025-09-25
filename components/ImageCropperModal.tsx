@@ -421,8 +421,8 @@ export default function ImageCropperModal({
                   {/* Image with crop tool */}
                   <ReactCrop
                     crop={crop}
-                    onChange={(_, percentCrop) => setCrop(percentCrop)}
-                    onComplete={(c) => {
+                    onChange={(_: PixelCrop, percentCrop: Crop) => setCrop(percentCrop)}
+                    onComplete={(c: PixelCrop) => {
                       if (imgRef.current) {
                         const pixelCrop = convertToPixelCrop(
                           c,

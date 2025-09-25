@@ -141,6 +141,8 @@ async function checkDuplicatesInBatches(
 }
 
 export async function GET(request: NextRequest) {
+  const startTime = Date.now();
+  
   try {
     // Verify this is a cron request (optional - can be removed for manual testing)
     const authHeader = request.headers.get("authorization");
@@ -150,17 +152,13 @@ export async function GET(request: NextRequest) {
 
     console.log("Upload processor cron job started");
 
-    // Get all pending upload jobs
+    // FIXED: Only get pending jobs to prevent race conditions
+    // Don't process jobs that are already being processed by another instance
     const pendingJobs = await getUploadJobs({ status: "Pending" });
-    
-    // Also get any processing jobs that might have been interrupted
-    const processingJobs = await getUploadJobs({ status: "Processing" });
-    
-    const allJobs = [...pendingJobs, ...processingJobs];
 
-    console.log(`Found ${allJobs.length} upload jobs to process (${pendingJobs.length} pending, ${processingJobs.length} processing)`);
+    console.log(`Found ${pendingJobs.length} pending upload jobs to process`);
 
-    if (allJobs.length === 0) {
+    if (pendingJobs.length === 0) {
       return NextResponse.json({
         success: true,
         message: "No upload jobs to process",
@@ -170,15 +168,34 @@ export async function GET(request: NextRequest) {
 
     let totalProcessed = 0;
 
-    // Process each job
-    for (const job of allJobs) {
+    // Process each job individually with proper locking
+    for (const job of pendingJobs) {
       try {
         console.log(`Processing upload job: ${job.metadata.file_name} (${job.id})`);
+
+        // CRITICAL FIX: Immediately mark job as processing to prevent other cron instances from picking it up
+        if (job.id && typeof job.id === 'string') {
+          await updateUploadJobProgress(job.id, {
+            status: "processing",
+            message: "Job acquired by processor, starting...",
+          });
+          
+          // Small delay to ensure the status update is propagated
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
         const result = await processUploadJob(job);
         totalProcessed += result.processed;
 
         console.log(`Job ${job.id} processed: ${result.processed} contacts, ${result.completed ? 'completed' : 'continuing'}`);
+        
+        // Break if we're running close to the timeout
+        const elapsedTime = Date.now() - startTime;
+        if (elapsedTime > MAX_PROCESSING_TIME * 0.7) { // Use 70% of timeout for safety
+          console.log(`Breaking due to time limit. Processed ${totalProcessed} contacts in ${elapsedTime}ms`);
+          break;
+        }
+        
       } catch (error) {
         console.error(`Error processing upload job ${job.id}:`, error);
 
@@ -202,12 +219,14 @@ export async function GET(request: NextRequest) {
       revalidateTag("email-contacts");
     }
 
-    console.log(`Upload processor cron job completed. Processed ${totalProcessed} contacts across ${allJobs.length} jobs`);
+    const totalElapsed = Date.now() - startTime;
+    console.log(`Upload processor cron job completed. Processed ${totalProcessed} contacts across ${pendingJobs.length} jobs in ${totalElapsed}ms`);
 
     return NextResponse.json({
       success: true,
-      message: `Processed ${totalProcessed} contacts across ${allJobs.length} jobs`,
+      message: `Processed ${totalProcessed} contacts across ${pendingJobs.length} jobs`,
       processed: totalProcessed,
+      elapsed_time: totalElapsed,
     });
   } catch (error) {
     console.error("Upload processor cron job error:", error);
@@ -225,12 +244,14 @@ async function processUploadJob(job: UploadJob) {
   
   const jobId = job.id; // Extract to a validated string variable for type safety
   
-  // Update job status to processing if it's not already
-  if (job.metadata.status.value !== "Processing") {
-    await updateUploadJobProgress(jobId, {
-      status: "processing",
-      message: "Starting contact processing...",
-    });
+  // CRITICAL: Double-check job status to prevent race conditions
+  // If another process has already started processing this job, skip it
+  const currentJob = await getUploadJobs({ status: "Processing" });
+  const isAlreadyProcessing = currentJob.some(j => j.id === jobId);
+  
+  if (isAlreadyProcessing && job.metadata.status.value !== "Processing") {
+    console.log(`Job ${jobId} is already being processed by another instance, skipping`);
+    return { processed: 0, completed: false };
   }
 
   // Parse CSV data
