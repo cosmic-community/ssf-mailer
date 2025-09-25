@@ -144,7 +144,7 @@ async function checkDuplicatesInBatches(
 async function triggerNextProcessing(): Promise<void> {
   try {
     // Self-trigger the next processing cycle
-    await fetch(`${process.env.NEXTAUTH_URL}/api/cron/process-uploads`, {
+    await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/cron/process-uploads`, {
       method: 'POST',
       headers: { 
         'Authorization': `Bearer ${process.env.CRON_SECRET}`,
