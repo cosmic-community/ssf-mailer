@@ -450,6 +450,14 @@ async function processUploadJob(job: UploadJob) {
     const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
     const progressPercentage = Math.round(20 + ((totalProcessedSoFar / job.metadata.total_contacts) * 80)); // 20% for duplicate check + 80% for processing
     
+    // FIXED: Defensive error handling for arrays - this is the source of the original error
+    const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
+    const existingDuplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
+    
+    // Combine all errors safely
+    const allErrors = [...existingErrors, ...errors, ...processingErrors];
+    const allDuplicates = [...existingDuplicates, ...duplicates.map(d => d.email)];
+    
     await updateUploadJobProgress(jobId, {
       processed_contacts: totalProcessedSoFar,
       successful_contacts: job.metadata.successful_contacts + successful,
@@ -458,8 +466,8 @@ async function processUploadJob(job: UploadJob) {
       validation_errors: job.metadata.validation_errors + errors.length,
       progress_percentage: progressPercentage,
       processing_rate: `${Math.round(processed / ((Date.now() - startTime) / 1000))} contacts/second`,
-      errors: [...(job.metadata.errors || []), ...errors, ...processingErrors].slice(0, 100),
-      duplicates: [...(job.metadata.duplicates || []), ...duplicates.map(d => d.email)].slice(0, 100),
+      errors: allErrors.slice(0, 100), // Limit to 100 most recent errors
+      duplicates: allDuplicates.slice(0, 100), // Limit to 100 most recent duplicates
       message: `Processing contacts: ${totalProcessedSoFar}/${job.metadata.total_contacts} completed`,
     });
 
