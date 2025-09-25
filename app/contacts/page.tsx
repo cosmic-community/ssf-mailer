@@ -1,11 +1,12 @@
 import { getEmailContacts } from "@/lib/cosmic";
 import ContactsList from "@/components/ContactsList";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Upload } from "lucide-react";
+import { RefreshCw, Upload, Users2 } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
 import CreateListModal from "@/components/CreateListModal";
 import UploadJobList from "@/components/UploadJobList";
+import Link from "next/link";
 
 // Force dynamic rendering to ensure fresh data
 export const dynamic = "force-dynamic";
@@ -54,6 +55,12 @@ export default async function ContactsPage({
               </p>
             </div>
             <div className="flex space-x-3">
+              <Link href="/admin/duplicates">
+                <Button variant="outline">
+                  <Users2 className="h-4 w-4 mr-2" />
+                  Check Duplicates
+                </Button>
+              </Link>
               <CreateListModal />
               <CSVUploadModal />
               <CreateContactModal />
