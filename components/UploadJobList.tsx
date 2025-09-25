@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import UploadJobProgress from './UploadJobProgress'
+import Link from 'next/link'
 import { 
   RefreshCw, 
   Upload, 
@@ -16,7 +17,8 @@ import {
   CheckCircle,
   AlertCircle,
   Activity,
-  Zap
+  Zap,
+  ArrowRight
 } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 
@@ -36,9 +38,10 @@ interface UploadJobSummary {
 
 interface UploadJobListProps {
   onJobComplete?: () => void
+  showAllJobs?: boolean // New prop to control display mode
 }
 
-export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
+export default function UploadJobList({ onJobComplete, showAllJobs = false }: UploadJobListProps) {
   const [jobs, setJobs] = useState<UploadJobSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -48,7 +51,9 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
   const fetchJobs = async () => {
     try {
       setError(null)
-      const response = await fetch('/api/jobs?limit=10')
+      // Fetch more jobs for the dedicated page
+      const limit = showAllJobs ? 50 : 10
+      const response = await fetch(`/api/jobs?limit=${limit}`)
       
       if (!response.ok) {
         throw new Error('Failed to fetch upload jobs')
@@ -85,7 +90,7 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
 
   useEffect(() => {
     fetchJobs()
-  }, [])
+  }, [showAllJobs])
 
   const handleJobComplete = () => {
     fetchJobs()
@@ -163,22 +168,46 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
   }
 
   if (jobs.length === 0) {
-    return null // Don't show anything if no jobs
+    if (showAllJobs) {
+      return (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center py-12">
+              <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Upload Jobs Found</h3>
+              <p className="text-gray-600 mb-6">
+                You haven't uploaded any CSV files yet. Start by uploading your first contact list.
+              </p>
+              <Link href="/contacts/upload">
+                <Button>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload CSV File
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )
+    }
+    return null // Don't show anything if no jobs on main contacts page
   }
 
-  // Filter jobs to show recent activity (last 24 hours) or active jobs
-  const recentJobs = jobs.filter(job => {
-    const jobDate = new Date(job.created_at)
-    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
-    return jobDate > oneDayAgo || job.status === 'Processing' || job.status === 'Pending'
-  })
-
-  if (recentJobs.length === 0) {
-    return null
+  // For compact mode (main contacts page), filter jobs to show recent activity
+  let displayJobs = jobs
+  if (!showAllJobs) {
+    displayJobs = jobs.filter(job => {
+      const jobDate = new Date(job.created_at)
+      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      return jobDate > oneDayAgo || job.status === 'Processing' || job.status === 'Pending'
+    }).slice(0, 5) // Limit to 5 most recent for compact view
+    
+    if (displayJobs.length === 0) {
+      return null
+    }
   }
 
   return (
-    <Card className="mb-6">
+    <Card className={showAllJobs ? '' : 'mb-6'}>
       <CardHeader className="pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-3">
@@ -187,13 +216,16 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
             </div>
             <div>
               <CardTitle className="text-xl flex items-center space-x-2">
-                <span>Recent Upload Jobs</span>
+                <span>{showAllJobs ? 'All Upload Jobs' : 'Recent Upload Jobs'}</span>
                 <Badge variant="secondary" className="ml-2 px-2 py-1">
-                  {recentJobs.length}
+                  {showAllJobs ? jobs.length : displayJobs.length}
                 </Badge>
               </CardTitle>
               <p className="text-sm text-gray-600 mt-1">
-                Background processing status and progress tracking
+                {showAllJobs 
+                  ? 'Complete history of all CSV upload jobs and their processing status'
+                  : 'Background processing status and progress tracking'
+                }
               </p>
             </div>
           </div>
@@ -211,23 +243,25 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
                 <RefreshCw className="h-4 w-4" />
               )}
             </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              {isCollapsed ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <ChevronUp className="h-4 w-4" />
-              )}
-            </Button>
+            {!showAllJobs && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsCollapsed(!isCollapsed)}
+                className="text-gray-600 hover:text-gray-900"
+              >
+                {isCollapsed ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <ChevronUp className="h-4 w-4" />
+                )}
+              </Button>
+            )}
           </div>
         </div>
       </CardHeader>
       
-      {!isCollapsed && (
+      {(!isCollapsed || showAllJobs) && (
         <CardContent className="space-y-4">
           {/* Background Processing Notice */}
           <div className="p-4 bg-gradient-to-r from-blue-50 to-green-50 border border-blue-200 rounded-lg">
@@ -246,7 +280,7 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
 
           {/* Job List */}
           <div className="space-y-3">
-            {recentJobs.map((job) => (
+            {displayJobs.map((job) => (
               <div key={job.id} className="space-y-2">
                 {/* Job Summary Card */}
                 <Card 
@@ -330,12 +364,16 @@ export default function UploadJobList({ onJobComplete }: UploadJobListProps) {
             ))}
           </div>
           
-          {recentJobs.length > 3 && (
-            <div className="text-center pt-2">
-              <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
-                <FileText className="h-4 w-4 mr-2" />
-                View all upload history
-              </Button>
+          {/* View All Jobs Link (only on compact mode) */}
+          {!showAllJobs && jobs.length > displayJobs.length && (
+            <div className="text-center pt-4 border-t border-gray-200">
+              <Link href="/contacts/jobs">
+                <Button variant="ghost" size="sm" className="text-gray-600 hover:text-gray-900">
+                  <FileText className="h-4 w-4 mr-2" />
+                  View all upload jobs ({jobs.length} total)
+                  <ArrowRight className="h-4 w-4 ml-2" />
+                </Button>
+              </Link>
             </div>
           )}
         </CardContent>

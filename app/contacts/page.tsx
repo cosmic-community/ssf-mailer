@@ -1,7 +1,7 @@
 import { getEmailContacts } from "@/lib/cosmic";
 import ContactsList from "@/components/ContactsList";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, Upload, Users2 } from "lucide-react";
+import { RefreshCw, Upload, Users2, Activity } from "lucide-react";
 import CSVUploadModal from "@/components/CSVUploadModal";
 import CreateContactModal from "@/components/CreateContactModal";
 import CreateListModal from "@/components/CreateListModal";
@@ -55,6 +55,12 @@ export default async function ContactsPage({
               </p>
             </div>
             <div className="flex space-x-3">
+              <Link href="/contacts/jobs">
+                <Button variant="outline">
+                  <Activity className="h-4 w-4 mr-2" />
+                  Upload Jobs
+                </Button>
+              </Link>
               <Link href="/admin/duplicates">
                 <Button variant="outline">
                   <Users2 className="h-4 w-4 mr-2" />
@@ -72,8 +78,8 @@ export default async function ContactsPage({
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="space-y-6">
-          {/* Upload Jobs Progress Section */}
-          <UploadJobList />
+          {/* Upload Jobs Progress Section - Compact version for main page */}
+          <UploadJobList showAllJobs={false} />
           
           {/* Contacts List */}
           <ContactsList
