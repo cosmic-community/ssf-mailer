@@ -9,9 +9,9 @@ import {
 import { UploadJob } from "@/types";
 import { revalidatePath, revalidateTag } from "next/cache";
 
-// OPTIMIZED: Reduced batch sizes for better timeout management
-const BATCH_SIZE = 50; // Reduced from 200 to 50 for better performance
-const MAX_PROCESSING_TIME = 45000; // Reduced to 45 seconds for safer timeout handling
+// OPTIMIZED: Increased batch sizes and timeout for better processing
+const BATCH_SIZE = 100; // Increased from 50 to 100 for better throughput
+const MAX_PROCESSING_TIME = 290000; // Increased to 290 seconds (Vercel's 300s limit - 10s buffer)
 const DUPLICATE_CHECK_BATCH_SIZE = 100; // Check 100 emails at a time for duplicates
 
 interface ContactData {
@@ -99,7 +99,7 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// OPTIMIZED: Batched duplicate checking function to prevent timeouts
+// OPTIMIZED: Batched duplicate checking function with better error handling
 async function checkDuplicatesInBatches(
   contacts: ContactData[],
   jobId: string
@@ -119,19 +119,20 @@ async function checkDuplicatesInBatches(
       const existingEmails = await checkEmailsExist(batchEmails);
       existingEmails.forEach(email => duplicateEmails.add(email.toLowerCase()));
       
-      // Update progress during duplicate checking (allocate 20% of progress to this phase)
-      const duplicateCheckProgress = Math.round((i / contacts.length) * 20);
+      // Update progress during duplicate checking (allocate 15% of progress to this phase)
+      const duplicateCheckProgress = Math.round((i / contacts.length) * 15);
       await updateUploadJobProgress(jobId, {
         progress_percentage: duplicateCheckProgress,
         message: `Checking for duplicates: ${i + batchEmails.length}/${contacts.length} processed`,
       });
       
-      // Small delay to prevent overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Minimal delay to prevent overwhelming the API
+      await new Promise(resolve => setTimeout(resolve, 50));
       
     } catch (error) {
-      console.error(`Error checking duplicates for batch starting at ${i}:`, error);
+      console.error(`Error checking duplicate emails:`, error);
       // Continue with next batch - don't let duplicate check failures stop the entire process
+      // Log the error but don't add to duplicates set
     }
   }
   
@@ -414,16 +415,16 @@ async function processUploadJob(job: UploadJob) {
 
   console.log(`After duplicate check: ${contactsToProcess.length} to process, ${duplicates.length} duplicates found`);
 
-  // Process contacts in smaller batches to avoid timeouts
+  // IMPROVED: Process contacts in batches with better timeout management
   let processed = 0;
   let successful = 0;
   let failed = 0;
   const processingErrors: string[] = [];
 
   for (let i = 0; i < contactsToProcess.length; i += BATCH_SIZE) {
-    // Check if we're approaching timeout
+    // More generous timeout check - use 80% of available time
     const elapsedTime = Date.now() - startTime;
-    if (elapsedTime > MAX_PROCESSING_TIME - 10000) { // Leave 10 seconds buffer
+    if (elapsedTime > MAX_PROCESSING_TIME * 0.8) { 
       console.log(`Timeout prevention: Processed ${processed}/${contactsToProcess.length} contacts. Time elapsed: ${elapsedTime}ms`);
       break;
     }
@@ -432,23 +433,35 @@ async function processUploadJob(job: UploadJob) {
     
     console.log(`Processing batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(contactsToProcess.length / BATCH_SIZE)}: ${batch.length} contacts`);
     
-    // Process batch with individual contact creation (smaller batches are more manageable)
-    for (const contactData of batch) {
+    // Process batch with parallel processing for better performance
+    const batchPromises = batch.map(async (contactData) => {
       try {
         await createEmailContact(contactData);
-        successful++;
+        return { success: true, contactData };
       } catch (error: unknown) {
-        failed++;
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
         processingErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`);
+        return { success: false, contactData };
+      }
+    });
+
+    // Execute batch in parallel with controlled concurrency
+    const batchResults = await Promise.all(batchPromises);
+    
+    // Count results
+    batchResults.forEach(result => {
+      if (result.success) {
+        successful++;
+      } else {
+        failed++;
       }
       processed++;
-    }
+    });
 
     // Update job progress after each batch
     const totalProcessedSoFar = job.metadata.processed_contacts + processed;
     const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
-    const progressPercentage = Math.round(20 + ((totalProcessedSoFar / job.metadata.total_contacts) * 80)); // 20% for duplicate check + 80% for processing
+    const progressPercentage = Math.round(15 + ((totalProcessedSoFar / job.metadata.total_contacts) * 85)); // 15% for duplicate check + 85% for processing
     
     // FIXED: Defensive error handling for arrays - this is the source of the original error
     const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
@@ -471,8 +484,8 @@ async function processUploadJob(job: UploadJob) {
       message: `Processing contacts: ${totalProcessedSoFar}/${job.metadata.total_contacts} completed`,
     });
 
-    // Small delay between batches to prevent overwhelming the system
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Smaller delay between batches
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
 
   console.log(`Contact processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);

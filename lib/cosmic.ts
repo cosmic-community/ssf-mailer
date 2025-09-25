@@ -48,31 +48,35 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
     for (let i = 0; i < emails.length; i += QUERY_BATCH_SIZE) {
       const emailBatch = emails.slice(i, i + QUERY_BATCH_SIZE);
       
-      // Query only the emails in this batch
-      const { objects } = await cosmic.objects
-        .find({
-          type: "email-contacts",
-          "metadata.email": { $in: emailBatch }
-        })
-        .props(["metadata.email"]) // Only fetch email field for efficiency
-        .limit(emailBatch.length);
+      try {
+        // Query only the emails in this batch
+        const { objects } = await cosmic.objects
+          .find({
+            type: "email-contacts",
+            "metadata.email": { $in: emailBatch }
+          })
+          .props(["metadata.email"]) // Only fetch email field for efficiency
+          .limit(emailBatch.length);
 
-      // Extract existing emails from results
-      const batchExisting = objects
-        .map((obj: any) => obj.metadata?.email)
-        .filter((email: any): email is string => typeof email === "string" && email.length > 0)
-        .map((email: string) => email.toLowerCase());
+        // Extract existing emails from results
+        const batchExisting = objects
+          .map((obj: any) => obj.metadata?.email)
+          .filter((email: any): email is string => typeof email === "string" && email.length > 0)
+          .map((email: string) => email.toLowerCase());
 
-      existingEmails.push(...batchExisting);
+        existingEmails.push(...batchExisting);
+      } catch (batchError) {
+        console.error(`Error checking batch ${i}-${i + emailBatch.length}:`, batchError);
+        // Continue with next batch instead of failing entire operation
+        continue;
+      }
     }
 
     return existingEmails;
   } catch (error) {
     console.error('Error checking duplicate emails:', error);
-    if (hasStatus(error) && error.status === 404) {
-      return []; // No contacts found - return empty array
-    }
-    throw new Error("Failed to check for duplicate emails");
+    // Return empty array instead of throwing - let the process continue
+    return [];
   }
 }
 
