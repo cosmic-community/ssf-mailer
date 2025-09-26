@@ -16,7 +16,7 @@ const CHUNK_SIZE = 500; // Increased from 250 to 500 contacts per cron run
 const DUPLICATE_CHECK_BATCH_SIZE = 100; // Increased from 50 to 100 for more efficient API usage
 
 // CRITICAL FIX: Add job locking mechanism to prevent race conditions
-const PROCESSING_JOBS = new Set<string>();
+const PROCESSING_JOBS = new Map<string, { timestamp: number; processor: string }>();
 const JOB_LOCK_TIMEOUT = 300000; // 5 minutes lock timeout
 
 interface ContactData {
@@ -104,36 +104,48 @@ function parseCSVLine(line: string): string[] {
   return result;
 }
 
-// CRITICAL FIX: Atomic job acquisition with proper locking
-async function acquireJobLock(jobId: string): Promise<boolean> {
-  if (PROCESSING_JOBS.has(jobId)) {
-    console.log(`Job ${jobId} is already being processed by another instance`);
-    return false;
+// CRITICAL FIX: Atomic job acquisition with proper distributed locking
+function generateProcessorId(): string {
+  return `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+async function acquireJobLock(jobId: string): Promise<{ acquired: boolean; processorId?: string }> {
+  const now = Date.now();
+  const processorId = generateProcessorId();
+  
+  // Check if job is already locked by another processor
+  const existingLock = PROCESSING_JOBS.get(jobId);
+  if (existingLock) {
+    const lockAge = now - existingLock.timestamp;
+    
+    // If lock is not expired, reject
+    if (lockAge < JOB_LOCK_TIMEOUT) {
+      console.log(`Job ${jobId} is locked by ${existingLock.processor} (${Math.round(lockAge / 1000)}s ago)`);
+      return { acquired: false };
+    } else {
+      // Lock expired, can be acquired
+      console.log(`Expired lock detected for job ${jobId}, will be replaced`);
+    }
   }
 
   try {
-    // Add to processing set
-    PROCESSING_JOBS.add(jobId);
+    // Set local lock first
+    PROCESSING_JOBS.set(jobId, { timestamp: now, processor: processorId });
     
-    // Set a timeout to automatically release the lock
-    setTimeout(() => {
-      PROCESSING_JOBS.delete(jobId);
-      console.log(`Auto-released lock for job ${jobId} after timeout`);
-    }, JOB_LOCK_TIMEOUT);
-
-    // Attempt to mark job as processing in Cosmic
+    // Attempt to mark job as processing in Cosmic with processorId
     await updateUploadJobProgress(jobId, {
       status: "processing",
-      message: `Job acquired by processor at ${new Date().toISOString()}`,
+      message: `Job acquired by ${processorId} at ${new Date().toISOString()}`,
     });
 
-    console.log(`Successfully acquired lock for job ${jobId}`);
-    return true;
+    console.log(`Successfully acquired lock for job ${jobId} with processor ${processorId}`);
+    return { acquired: true, processorId };
+    
   } catch (error) {
     // If we can't update Cosmic, release our local lock
     PROCESSING_JOBS.delete(jobId);
     console.error(`Failed to acquire lock for job ${jobId}:`, error);
-    return false;
+    return { acquired: false };
   }
 }
 
@@ -141,6 +153,17 @@ async function acquireJobLock(jobId: string): Promise<boolean> {
 function releaseJobLock(jobId: string): void {
   PROCESSING_JOBS.delete(jobId);
   console.log(`Released lock for job ${jobId}`);
+}
+
+// Clean up expired locks periodically
+function cleanupExpiredLocks(): void {
+  const now = Date.now();
+  for (const [jobId, lock] of PROCESSING_JOBS.entries()) {
+    if (now - lock.timestamp > JOB_LOCK_TIMEOUT) {
+      PROCESSING_JOBS.delete(jobId);
+      console.log(`Cleaned up expired lock for job ${jobId}`);
+    }
+  }
 }
 
 // OPTIMIZED: Parallelized duplicate checking function with better error handling
@@ -224,8 +247,12 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
   let acquiredJobId: string | null = null;
+  let processorId: string | null = null;
   
   try {
+    // Clean up expired locks first
+    cleanupExpiredLocks();
+    
     // Verify this is a cron request (optional - can be removed for manual testing)
     const authHeader = request.headers.get("authorization");
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -237,7 +264,7 @@ export async function POST(request: NextRequest) {
     // Get jobs that need processing (Pending or Processing)
     const jobsToProcess = await getUploadJobs({ 
       status: ['Pending', 'Processing'],
-      limit: 5 // Get a few jobs to try for atomic acquisition
+      limit: 10 // Get more jobs to try for atomic acquisition
     });
     
     console.log(`Found ${jobsToProcess.length} jobs to process`);
@@ -250,21 +277,22 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // CRITICAL FIX: Try to acquire a lock on one of the jobs
+    // CRITICAL FIX: Try to acquire a lock on one of the jobs atomically
     let selectedJob: UploadJob | null = null;
     
     for (const job of jobsToProcess) {
       if (!job || !job.id) continue;
       
-      const lockAcquired = await acquireJobLock(job.id);
-      if (lockAcquired) {
+      const lockResult = await acquireJobLock(job.id);
+      if (lockResult.acquired) {
         selectedJob = job;
         acquiredJobId = job.id;
+        processorId = lockResult.processorId || null;
         break;
       }
     }
 
-    if (!selectedJob) {
+    if (!selectedJob || !acquiredJobId) {
       console.log("No jobs could be acquired for processing (all locked by other instances)");
       return NextResponse.json({
         success: true,
@@ -276,7 +304,7 @@ export async function POST(request: NextRequest) {
     let totalProcessed = 0;
 
     try {
-      console.log(`Processing upload job: ${selectedJob.metadata.file_name} (${selectedJob.id})`);
+      console.log(`Processing upload job: ${selectedJob.metadata.file_name} (${selectedJob.id}) with processor ${processorId}`);
 
       const result = await processUploadJobChunked(selectedJob, startTime);
       totalProcessed = result.processed;
@@ -313,6 +341,7 @@ export async function POST(request: NextRequest) {
       message: `Processed ${totalProcessed} contacts`,
       processed: totalProcessed,
       elapsed_time: totalElapsed,
+      processor_id: processorId,
     });
   } catch (error) {
     console.error("Upload processor cron job error:", error);
@@ -368,22 +397,19 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     throw new Error("Required columns (email, first_name) not found");
   }
 
-  // CHUNKED PROCESSING: Determine where to start and how much to process
-  const resumeFrom = job.metadata.resume_from_contact || job.metadata.processed_contacts || 0;
+  // CRITICAL FIX: Use processed_contacts as the canonical counter (not resume_from_contact)
+  const currentProcessedCount = job.metadata.processed_contacts || 0;
   const chunkSize = job.metadata.processing_chunk_size || CHUNK_SIZE;
-  const startRow = Math.max(1, resumeFrom + 1); // +1 for header row
-  const endRow = Math.min(lines.length, startRow + chunkSize);
-
-  console.log(`Processing chunk: rows ${startRow} to ${endRow} (${endRow - startRow} contacts)`);
-
+  
   // CRITICAL FIX: Check if we've already processed all contacts to prevent infinite processing
-  if (resumeFrom >= job.metadata.total_contacts) {
+  if (currentProcessedCount >= job.metadata.total_contacts) {
     console.log(`Job ${jobId} already completed - all ${job.metadata.total_contacts} contacts processed`);
     
     await updateUploadJobProgress(jobId, {
       status: "completed",
       completed_at: new Date().toISOString(),
       message: "Job completed - all contacts processed",
+      progress_percentage: 100,
     });
 
     return {
@@ -391,6 +417,13 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       completed: true,
     };
   }
+
+  // CHUNKED PROCESSING: Determine where to start and how much to process
+  const startRow = Math.max(1, currentProcessedCount + 1); // +1 for header row, use processed_contacts as base
+  const endRow = Math.min(lines.length, startRow + chunkSize);
+  const contactsToProcessInChunk = endRow - startRow;
+
+  console.log(`Processing chunk: rows ${startRow} to ${endRow} (${contactsToProcessInChunk} contacts) - Current progress: ${currentProcessedCount}/${job.metadata.total_contacts}`);
 
   // Parse and validate contacts from current chunk
   const contacts: ContactData[] = [];
@@ -516,27 +549,34 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
 
   console.log(`Parsed ${contacts.length} valid contacts for processing in this chunk...`);
 
+  // CRITICAL FIX: Always update processed_contacts even if no valid contacts in chunk
+  const newProcessedCount = currentProcessedCount + contactsToProcessInChunk;
+  const isComplete = newProcessedCount >= job.metadata.total_contacts;
+  
   if (contacts.length === 0) {
-    // No valid contacts in this chunk, check if we're done
-    const totalProcessedNow = resumeFrom + (endRow - startRow);
-    const isComplete = totalProcessedNow >= job.metadata.total_contacts;
+    // No valid contacts in this chunk, but still mark the rows as processed
+    const progressPercentage = Math.max(0, Math.min(100, Math.round((newProcessedCount / job.metadata.total_contacts) * 100)));
     
     if (isComplete) {
       await updateUploadJobProgress(jobId, {
         status: "completed",
         completed_at: new Date().toISOString(),
-        message: "Job completed - no more contacts to process",
+        processed_contacts: newProcessedCount,
+        progress_percentage: 100,
+        message: "Job completed - all rows processed",
       });
     } else {
       // Update progress and continue
       await updateUploadJobProgress(jobId, {
-        resume_from_contact: totalProcessedNow,
-        message: `Continuing processing: ${totalProcessedNow}/${job.metadata.total_contacts} processed`,
+        processed_contacts: newProcessedCount,
+        progress_percentage: progressPercentage,
+        validation_errors: (job.metadata.validation_errors || 0) + errors.length,
+        message: `Processing: ${newProcessedCount}/${job.metadata.total_contacts} rows processed`,
       });
     }
 
     return {
-      processed: 0,
+      processed: contactsToProcessInChunk, // Return rows processed, not successful contacts
       completed: isComplete,
     };
   }
@@ -552,7 +592,6 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   console.log(`After duplicate check: ${contactsToProcess.length} to process, ${duplicates.length} duplicates found`);
 
   // OPTIMIZED: Process contacts in parallel batches
-  let processed = 0;
   let successful = 0;
   let failed = 0;
   const processingErrors: string[] = [];
@@ -565,7 +604,7 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     // Check if we're approaching time limit
     const elapsedTime = Date.now() - startTime;
     if (elapsedTime > MAX_PROCESSING_TIME * 0.85) { 
-      console.log(`Time limit approaching: Processed ${processed}/${contactsToProcess.length} contacts in chunk. Elapsed: ${elapsedTime}ms`);
+      console.log(`Time limit approaching: Processed ${i} contacts in chunk. Elapsed: ${elapsedTime}ms`);
       break;
     }
 
@@ -587,7 +626,6 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       
       for (const contactData of batch) {
         try {
-          // Single duplicate check before creation (since we've already done bulk checking)
           await createEmailContact(contactData);
           batchResults.successful++;
           console.log(`Successfully created contact: ${contactData.email}`);
@@ -614,11 +652,9 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
           successful += result.value.successful;
           failed += result.value.failed;
           processingErrors.push(...result.value.errors);
-          processed += parallelBatches[index]?.length || 0;
         } else {
           console.error(`Parallel batch ${index} failed:`, result.reason);
           failed += parallelBatches[index]?.length || 0;
-          processed += parallelBatches[index]?.length || 0;
         }
       });
       
@@ -627,56 +663,53 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       // Continue with next batch group
     }
 
-    // Update job progress after each parallel batch group
-    const totalProcessedSoFar = resumeFrom + processed;
-    const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
-    const progressPercentage = Math.round((totalProcessedSoFar / job.metadata.total_contacts) * 100);
-    
-    // Safe error handling for arrays - CRITICAL FIX: Add proper undefined checks
-    const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
-    const existingDuplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
-    
-    // Combine all errors safely
-    const allErrors = [...existingErrors, ...errors, ...processingErrors];
-    const allDuplicates = [...existingDuplicates, ...duplicates.map(d => d.email)];
-    
-    // Record chunk processing history
-    const chunkProcessingTime = Date.now() - chunkStartTime;
-    const existingHistory = Array.isArray(job.metadata.chunk_processing_history) ? job.metadata.chunk_processing_history : [];
-    const chunkNumber = Math.floor(resumeFrom / chunkSize);
-    
-    const newHistoryEntry = {
-      chunk_number: chunkNumber,
-      contacts_processed: processed,
-      processing_time_ms: chunkProcessingTime,
-      timestamp: new Date().toISOString(),
-      status: "completed" as const
-    };
-    
-    await updateUploadJobProgress(jobId, {
-      processed_contacts: totalProcessedSoFar,
-      successful_contacts: job.metadata.successful_contacts + successful,
-      failed_contacts: job.metadata.failed_contacts + failed,
-      duplicate_contacts: totalDuplicatesSoFar,
-      validation_errors: job.metadata.validation_errors + errors.length,
-      progress_percentage: progressPercentage,
-      processing_rate: `${Math.round(processed / (chunkProcessingTime / 1000))} contacts/second`,
-      errors: allErrors.slice(-100), // Keep last 100 errors
-      duplicates: allDuplicates.slice(-100), // Keep last 100 duplicates
-      message: `Processing chunk: ${totalProcessedSoFar}/${job.metadata.total_contacts} completed`,
-      resume_from_contact: totalProcessedSoFar,
-      current_batch_index: Math.floor(totalProcessedSoFar / SAFE_BATCH_SIZE),
-      chunk_processing_history: [...existingHistory, newHistoryEntry].slice(-10), // Keep last 10 chunks
-    });
-
     // Shorter delay between batch groups since we're using parallel processing
     await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
   }
 
   console.log(`Chunk processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
 
+  // CRITICAL FIX: Update progress based on rows processed, not successful contacts
+  const finalProcessedCount = newProcessedCount; // This is the count of CSV rows processed
+  const progressPercentage = Math.max(0, Math.min(100, Math.round((finalProcessedCount / job.metadata.total_contacts) * 100)));
+  
+  // Safe error handling for arrays - CRITICAL FIX: Add proper undefined checks
+  const existingErrors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
+  const existingDuplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
+  
+  // Combine all errors safely
+  const allErrors = [...existingErrors, ...errors, ...processingErrors];
+  const allDuplicates = [...existingDuplicates, ...duplicates.map(d => d.email)];
+  
+  // Record chunk processing history
+  const chunkProcessingTime = Date.now() - chunkStartTime;
+  const existingHistory = Array.isArray(job.metadata.chunk_processing_history) ? job.metadata.chunk_processing_history : [];
+  const chunkNumber = Math.floor(currentProcessedCount / chunkSize);
+  
+  const newHistoryEntry = {
+    chunk_number: chunkNumber,
+    contacts_processed: contactsToProcessInChunk,
+    processing_time_ms: chunkProcessingTime,
+    timestamp: new Date().toISOString(),
+    status: "completed" as const
+  };
+  
+  await updateUploadJobProgress(jobId, {
+    processed_contacts: finalProcessedCount,
+    successful_contacts: (job.metadata.successful_contacts || 0) + successful,
+    failed_contacts: (job.metadata.failed_contacts || 0) + failed,
+    duplicate_contacts: (job.metadata.duplicate_contacts || 0) + duplicates.length,
+    validation_errors: (job.metadata.validation_errors || 0) + errors.length,
+    progress_percentage: progressPercentage,
+    processing_rate: contactsToProcess.length > 0 ? `${Math.round(successful / (chunkProcessingTime / 1000))} contacts/second` : "0 contacts/second",
+    errors: allErrors.slice(-100), // Keep last 100 errors
+    duplicates: allDuplicates.slice(-100), // Keep last 100 duplicates
+    message: `Processing: ${finalProcessedCount}/${job.metadata.total_contacts} rows processed`,
+    chunk_processing_history: [...existingHistory, newHistoryEntry].slice(-10), // Keep last 10 chunks
+  });
+
   // Update contact counts for affected lists - CRITICAL FIX: Add proper undefined check
-  if (job.metadata.selected_lists && job.metadata.selected_lists.length > 0) {
+  if (job.metadata.selected_lists && job.metadata.selected_lists.length > 0 && successful > 0) {
     console.log(`Updating contact counts for ${job.metadata.selected_lists.length} lists...`);
     // Parallelize list count updates too
     const listUpdatePromises = job.metadata.selected_lists.map(async (listId) => {
@@ -691,22 +724,20 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   }
 
   // Check if job is complete
-  const totalProcessedNow = resumeFrom + processed;
-  const isComplete = totalProcessedNow >= job.metadata.total_contacts;
-
   if (isComplete) {
     await updateUploadJobProgress(jobId, {
       status: "completed",
       completed_at: new Date().toISOString(),
-      message: `Job completed successfully: ${job.metadata.successful_contacts + successful} contacts added, ${job.metadata.duplicate_contacts + duplicates.length} duplicates skipped, ${job.metadata.failed_contacts + failed} failed`,
+      progress_percentage: 100,
+      message: `Job completed successfully: ${(job.metadata.successful_contacts || 0) + successful} contacts added, ${(job.metadata.duplicate_contacts || 0) + duplicates.length} duplicates skipped, ${(job.metadata.failed_contacts || 0) + failed} failed`,
     });
     console.log(`Job ${jobId} completed successfully`);
   } else {
-    console.log(`Job ${jobId} continuing: ${totalProcessedNow}/${job.metadata.total_contacts} processed`);
+    console.log(`Job ${jobId} continuing: ${finalProcessedCount}/${job.metadata.total_contacts} rows processed`);
   }
 
   return {
-    processed,
+    processed: contactsToProcessInChunk, // Return rows processed, not just successful contacts
     completed: isComplete,
   };
 }
