@@ -1,6 +1,11 @@
 // app/campaigns/[id]/page.tsx
 import { notFound } from "next/navigation";
 import Link from "next/link";
+
+// Force dynamic rendering to ensure fresh data
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import {
   getMarketingCampaign,
   getEmailTemplates,
