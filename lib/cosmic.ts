@@ -58,12 +58,21 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
     // Process batches sequentially with retry logic
     for (let i = 0; i < allBatches.length; i++) {
       const emailBatch = allBatches[i];
+      
+      // CRITICAL FIX: Add validation that emailBatch is defined and has items
+      if (!emailBatch || emailBatch.length === 0) {
+        console.log(`Skipping undefined or empty email batch ${i + 1}`);
+        continue;
+      }
+      
       let retryCount = 0;
       const maxRetries = 3;
       let success = false;
       
       while (!success && retryCount < maxRetries) {
         try {
+          console.log(`Checking duplicates for batch ${i + 1}/${allBatches.length}: ${emailBatch.length} emails (attempt ${retryCount + 1})`);
+          
           // Query only the emails in this batch
           const { objects } = await cosmic.objects
             .find({

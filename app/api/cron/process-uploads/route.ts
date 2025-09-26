@@ -186,6 +186,13 @@ async function checkDuplicatesInBatches(
   // Process batches sequentially (not parallel) for better reliability and API rate limiting
   for (let i = 0; i < batches.length; i++) {
     const batch = batches[i];
+    
+    // CRITICAL FIX: Add validation that batch is defined and has items
+    if (!batch || batch.length === 0) {
+      console.log(`Skipping undefined or empty batch ${i + 1}`);
+      continue;
+    }
+    
     const batchEmails = batch.map(c => c.email.toLowerCase());
     
     let retryCount = 0;
