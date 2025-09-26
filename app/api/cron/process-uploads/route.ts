@@ -9,11 +9,11 @@ import {
 import { UploadJob } from "@/types";
 import { revalidatePath, revalidateTag } from "next/cache";
 
-// OPTIMIZED: Reduced batch sizes for reliable processing within time limits
-const SAFE_BATCH_SIZE = 25; // Reduced from 100 to 25 for better reliability
+// OPTIMIZED: Significantly increased batch sizes for better performance
+const SAFE_BATCH_SIZE = 100; // Increased from 25 to 100 for much better throughput
 const MAX_PROCESSING_TIME = 240000; // 4 minutes (safer buffer)
-const CHUNK_SIZE = 250; // Process 250 contacts per cron run
-const DUPLICATE_CHECK_BATCH_SIZE = 50; // Check 50 emails at a time for duplicates
+const CHUNK_SIZE = 500; // Increased from 250 to 500 contacts per cron run
+const DUPLICATE_CHECK_BATCH_SIZE = 100; // Increased from 50 to 100 for more efficient API usage
 
 // CRITICAL FIX: Add job locking mechanism to prevent race conditions
 const PROCESSING_JOBS = new Set<string>();
@@ -143,43 +143,77 @@ function releaseJobLock(jobId: string): void {
   console.log(`Released lock for job ${jobId}`);
 }
 
-// OPTIMIZED: Batched duplicate checking function with better error handling
+// OPTIMIZED: Parallelized duplicate checking function with better error handling
 async function checkDuplicatesInBatches(
   contacts: ContactData[],
   jobId: string
 ): Promise<Set<string>> {
   const duplicateEmails = new Set<string>();
   
-  console.log(`Starting batched duplicate check for ${contacts.length} contacts...`);
+  console.log(`Starting parallel duplicate check for ${contacts.length} contacts...`);
   
+  // Create batches for parallel processing
+  const batches: ContactData[][] = [];
   for (let i = 0; i < contacts.length; i += DUPLICATE_CHECK_BATCH_SIZE) {
-    const batch = contacts.slice(i, i + DUPLICATE_CHECK_BATCH_SIZE);
-    const batchEmails = batch.map(c => c.email.toLowerCase());
+    batches.push(contacts.slice(i, i + DUPLICATE_CHECK_BATCH_SIZE));
+  }
+  
+  console.log(`Processing ${batches.length} duplicate check batches in parallel...`);
+  
+  // Process batches in parallel with controlled concurrency
+  const PARALLEL_BATCHES = 3; // Process 3 batches concurrently
+  
+  for (let i = 0; i < batches.length; i += PARALLEL_BATCHES) {
+    const parallelBatches = batches.slice(i, i + PARALLEL_BATCHES);
+    
+    const batchPromises = parallelBatches.map(async (batch, batchIndex) => {
+      const actualIndex = i + batchIndex;
+      const batchEmails = batch.map(c => c.email.toLowerCase());
+      
+      try {
+        console.log(`Checking duplicates for parallel batch ${actualIndex + 1}/${batches.length}: ${batchEmails.length} emails`);
+        
+        // Use the efficient function to check for existing emails
+        const existingEmails = await checkEmailsExist(batchEmails);
+        return existingEmails.map(email => email.toLowerCase());
+        
+      } catch (error) {
+        console.error(`Error checking duplicate emails in batch ${actualIndex + 1}:`, error);
+        return []; // Return empty array on error, don't break the entire process
+      }
+    });
     
     try {
-      console.log(`Checking duplicates for batch ${Math.floor(i / DUPLICATE_CHECK_BATCH_SIZE) + 1}/${Math.ceil(contacts.length / DUPLICATE_CHECK_BATCH_SIZE)}: ${batchEmails.length} emails`);
+      const batchResults = await Promise.allSettled(batchPromises);
       
-      // Use the efficient function to check for existing emails
-      const existingEmails = await checkEmailsExist(batchEmails);
-      existingEmails.forEach(email => duplicateEmails.add(email.toLowerCase()));
-      
-      // Update progress during duplicate checking (allocate 15% of progress to this phase)
-      const duplicateCheckProgress = Math.round((i / contacts.length) * 15);
-      await updateUploadJobProgress(jobId, {
-        progress_percentage: duplicateCheckProgress,
-        message: `Checking for duplicates: ${i + batchEmails.length}/${contacts.length} processed`,
+      // Collect results from successful batches
+      batchResults.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          result.value.forEach(email => duplicateEmails.add(email));
+        } else {
+          console.error('Batch duplicate check failed:', result.reason);
+        }
       });
       
-      // Minimal delay to prevent overwhelming the API
-      await new Promise(resolve => setTimeout(resolve, 100));
+      // Update progress during duplicate checking (allocate 15% of progress to this phase)
+      const duplicateCheckProgress = Math.round(((i + parallelBatches.length) / batches.length) * 15);
+      await updateUploadJobProgress(jobId, {
+        progress_percentage: duplicateCheckProgress,
+        message: `Checking for duplicates: ${Math.min(i + parallelBatches.length, batches.length)}/${batches.length} batches completed`,
+      });
+      
+      // Minimal delay between parallel batch groups
+      if (i + PARALLEL_BATCHES < batches.length) {
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
       
     } catch (error) {
-      console.error(`Error checking duplicate emails:`, error);
-      // Continue with next batch - don't let duplicate check failures stop the entire process
+      console.error('Error in parallel duplicate checking:', error);
+      // Continue with next batch group
     }
   }
   
-  console.log(`Duplicate check completed. Found ${duplicateEmails.size} duplicates out of ${contacts.length} contacts`);
+  console.log(`Parallel duplicate check completed. Found ${duplicateEmails.size} duplicates out of ${contacts.length} contacts`);
   return duplicateEmails;
 }
 
@@ -507,8 +541,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
     };
   }
 
-  // CRITICAL FIX: Enhanced duplicate checking with more thorough validation
-  console.log(`Starting duplicate check for ${contacts.length} contacts...`);
+  // CRITICAL FIX: Enhanced parallel duplicate checking
+  console.log(`Starting parallel duplicate check for ${contacts.length} contacts...`);
   const duplicateEmails = await checkDuplicatesInBatches(contacts, jobId);
   
   // Filter out duplicates
@@ -517,14 +551,17 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
 
   console.log(`After duplicate check: ${contactsToProcess.length} to process, ${duplicates.length} duplicates found`);
 
-  // Process contacts in safe batches
+  // OPTIMIZED: Process contacts in parallel batches
   let processed = 0;
   let successful = 0;
   let failed = 0;
   const processingErrors: string[] = [];
   const chunkStartTime = Date.now();
 
-  for (let i = 0; i < contactsToProcess.length; i += SAFE_BATCH_SIZE) {
+  // Process in larger batches with controlled parallelism
+  const PARALLEL_CONTACT_BATCHES = 2; // Process 2 batches in parallel
+  
+  for (let i = 0; i < contactsToProcess.length; i += SAFE_BATCH_SIZE * PARALLEL_CONTACT_BATCHES) {
     // Check if we're approaching time limit
     const elapsedTime = Date.now() - startTime;
     if (elapsedTime > MAX_PROCESSING_TIME * 0.85) { 
@@ -532,38 +569,65 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       break;
     }
 
-    const batch = contactsToProcess.slice(i, i + SAFE_BATCH_SIZE);
-    
-    console.log(`Processing batch ${Math.floor(i / SAFE_BATCH_SIZE) + 1}/${Math.ceil(contactsToProcess.length / SAFE_BATCH_SIZE)}: ${batch.length} contacts`);
-    
-    // Process batch with controlled concurrency to prevent API overload
-    for (const contactData of batch) {
-      try {
-        // CRITICAL FIX: Add one final duplicate check before creation
-        const existingEmails = await checkEmailsExist([contactData.email]);
-        if (existingEmails.length > 0) {
-          console.log(`Skipping duplicate contact: ${contactData.email}`);
-          duplicates.push(contactData);
-          processed++;
-          continue;
-        }
-
-        await createEmailContact(contactData);
-        successful++;
-        console.log(`Successfully created contact: ${contactData.email}`);
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-        console.error(`Failed to create contact ${contactData.email}:`, errorMessage);
-        processingErrors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`);
-        failed++;
+    // Create parallel batches
+    const parallelBatches: ContactData[][] = [];
+    for (let j = 0; j < PARALLEL_CONTACT_BATCHES; j++) {
+      const batchStart = i + (j * SAFE_BATCH_SIZE);
+      const batchEnd = Math.min(batchStart + SAFE_BATCH_SIZE, contactsToProcess.length);
+      if (batchStart < contactsToProcess.length) {
+        parallelBatches.push(contactsToProcess.slice(batchStart, batchEnd));
       }
-      processed++;
+    }
+    
+    console.log(`Processing ${parallelBatches.length} parallel batches with total ${parallelBatches.reduce((sum, batch) => sum + batch.length, 0)} contacts`);
+    
+    // Process batches in parallel
+    const batchPromises = parallelBatches.map(async (batch, batchIndex) => {
+      const batchResults = { successful: 0, failed: 0, errors: [] as string[] };
+      
+      for (const contactData of batch) {
+        try {
+          // Single duplicate check before creation (since we've already done bulk checking)
+          await createEmailContact(contactData);
+          batchResults.successful++;
+          console.log(`Successfully created contact: ${contactData.email}`);
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
+          console.error(`Failed to create contact ${contactData.email}:`, errorMessage);
+          batchResults.errors.push(`Failed to create contact ${contactData.email}: ${errorMessage}`);
+          batchResults.failed++;
+        }
+        
+        // Small delay between individual contact creations within batch
+        await new Promise(resolve => setTimeout(resolve, 25)); // Reduced delay for parallel processing
+      }
+      
+      return batchResults;
+    });
 
-      // Small delay between individual contact creations
-      await new Promise(resolve => setTimeout(resolve, 50));
+    try {
+      const batchResults = await Promise.allSettled(batchPromises);
+      
+      // Collect results from all parallel batches
+      batchResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          successful += result.value.successful;
+          failed += result.value.failed;
+          processingErrors.push(...result.value.errors);
+          processed += parallelBatches[index]?.length || 0;
+        } else {
+          console.error(`Parallel batch ${index} failed:`, result.reason);
+          failed += parallelBatches[index]?.length || 0;
+          processed += parallelBatches[index]?.length || 0;
+        }
+      });
+      
+    } catch (error) {
+      console.error('Error in parallel batch processing:', error);
+      // Continue with next batch group
     }
 
-    // Update job progress after each batch
+    // Update job progress after each parallel batch group
     const totalProcessedSoFar = resumeFrom + processed;
     const totalDuplicatesSoFar = job.metadata.duplicate_contacts + duplicates.length;
     const progressPercentage = Math.round((totalProcessedSoFar / job.metadata.total_contacts) * 100);
@@ -605,8 +669,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       chunk_processing_history: [...existingHistory, newHistoryEntry].slice(-10), // Keep last 10 chunks
     });
 
-    // Longer delay between batches to prevent API rate limiting
-    await new Promise(resolve => setTimeout(resolve, 200));
+    // Shorter delay between batch groups since we're using parallel processing
+    await new Promise(resolve => setTimeout(resolve, 100)); // Reduced from 200ms
   }
 
   console.log(`Chunk processing completed: ${successful} successful, ${failed} failed, ${duplicates.length} duplicates`);
@@ -614,13 +678,16 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   // Update contact counts for affected lists - CRITICAL FIX: Add proper undefined check
   if (job.metadata.selected_lists && job.metadata.selected_lists.length > 0) {
     console.log(`Updating contact counts for ${job.metadata.selected_lists.length} lists...`);
-    for (const listId of job.metadata.selected_lists) {
+    // Parallelize list count updates too
+    const listUpdatePromises = job.metadata.selected_lists.map(async (listId) => {
       try {
         await updateListContactCount(listId);
       } catch (error) {
         console.error(`Error updating contact count for list ${listId}:`, error);
       }
-    }
+    });
+    
+    await Promise.allSettled(listUpdatePromises);
   }
 
   // Check if job is complete

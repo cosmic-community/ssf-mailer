@@ -34,41 +34,74 @@ export const cosmic = createBucketClient({
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
 
-// OPTIMIZED: Batch duplicate checking function to handle large datasets efficiently
+// OPTIMIZED: Enhanced batch duplicate checking with parallel processing
 export async function checkEmailsExist(emails: string[]): Promise<string[]> {
   try {
     if (!emails || emails.length === 0) {
       return [];
     }
 
-    // Reduced batch size for better reliability and reduced API strain
-    const QUERY_BATCH_SIZE = 25; // Reduced from 50 to 25
+    // Increased batch size for better performance
+    const QUERY_BATCH_SIZE = 50; // Increased from 25 to 50 for better API efficiency
     const existingEmails: string[] = [];
 
+    // Process batches with controlled parallelism for much better performance
+    const PARALLEL_QUERIES = 2; // Process 2 queries in parallel
+    const allBatches: string[][] = [];
+    
+    // Split emails into batches
     for (let i = 0; i < emails.length; i += QUERY_BATCH_SIZE) {
-      const emailBatch = emails.slice(i, i + QUERY_BATCH_SIZE);
+      allBatches.push(emails.slice(i, i + QUERY_BATCH_SIZE));
+    }
+
+    // Process batches in parallel groups
+    for (let i = 0; i < allBatches.length; i += PARALLEL_QUERIES) {
+      const parallelBatches = allBatches.slice(i, i + PARALLEL_QUERIES);
       
+      const batchPromises = parallelBatches.map(async (emailBatch, batchIndex) => {
+        const actualIndex = i + batchIndex;
+        try {
+          // Query only the emails in this batch
+          const { objects } = await cosmic.objects
+            .find({
+              type: "email-contacts",
+              "metadata.email": { $in: emailBatch }
+            })
+            .props(["metadata.email"]) // Only fetch email field for efficiency
+            .limit(emailBatch.length);
+
+          // Extract existing emails from results
+          return objects
+            .map((obj: any) => obj.metadata?.email)
+            .filter((email: any): email is string => typeof email === "string" && email.length > 0)
+            .map((email: string) => email.toLowerCase());
+            
+        } catch (batchError) {
+          console.error(`Error checking parallel batch ${actualIndex}:`, batchError);
+          return []; // Return empty array on error, don't break the process
+        }
+      });
+
       try {
-        // Query only the emails in this batch
-        const { objects } = await cosmic.objects
-          .find({
-            type: "email-contacts",
-            "metadata.email": { $in: emailBatch }
-          })
-          .props(["metadata.email"]) // Only fetch email field for efficiency
-          .limit(emailBatch.length);
-
-        // Extract existing emails from results
-        const batchExisting = objects
-          .map((obj: any) => obj.metadata?.email)
-          .filter((email: any): email is string => typeof email === "string" && email.length > 0)
-          .map((email: string) => email.toLowerCase());
-
-        existingEmails.push(...batchExisting);
-      } catch (batchError) {
-        console.error(`Error checking batch ${i}-${i + emailBatch.length}:`, batchError);
-        // Continue with next batch instead of failing entire operation
-        continue;
+        const batchResults = await Promise.allSettled(batchPromises);
+        
+        // Collect results from successful batches
+        batchResults.forEach((result) => {
+          if (result.status === 'fulfilled') {
+            existingEmails.push(...result.value);
+          } else {
+            console.error('Parallel batch duplicate check failed:', result.reason);
+          }
+        });
+        
+      } catch (error) {
+        console.error('Error in parallel duplicate checking:', error);
+        // Continue with next batch group
+      }
+      
+      // Small delay between parallel batch groups to prevent API overload
+      if (i + PARALLEL_QUERIES < allBatches.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
       }
     }
 
@@ -158,11 +191,11 @@ export async function createUploadJob(data: CreateUploadJobData): Promise<Upload
         csv_data: data.csv_data,
         progress_percentage: 0,
         started_at: new Date().toISOString(),
-        // Enhanced chunked processing fields
-        processing_chunk_size: data.processing_chunk_size || 250,
+        // Enhanced chunked processing fields with optimized defaults
+        processing_chunk_size: data.processing_chunk_size || 500, // Increased from 250 to 500
         auto_resume_enabled: data.auto_resume_enabled !== false, // Default true
         current_batch_index: 0,
-        total_batches: Math.ceil(data.total_contacts / (data.processing_chunk_size || 250)),
+        total_batches: Math.ceil(data.total_contacts / (data.processing_chunk_size || 500)), // Updated calculation
         resume_from_contact: 0,
         chunk_processing_history: [],
         max_processing_time_ms: 240000, // 4 minutes
@@ -1056,9 +1089,9 @@ export async function createEmailContact(
 
     // Update contact counts for associated lists using efficient method
     if (data.list_ids && data.list_ids.length > 0) {
-      for (const listId of data.list_ids) {
-        await updateListContactCount(listId);
-      }
+      // Parallelize list count updates for better performance
+      const listUpdatePromises = data.list_ids.map(listId => updateListContactCount(listId));
+      await Promise.allSettled(listUpdatePromises); // Use allSettled to prevent one failure from breaking all
     }
 
     return object as EmailContact;
@@ -1131,14 +1164,14 @@ export async function updateEmailContact(
 
     const { object } = await cosmic.objects.updateOne(id, updateData);
 
-    // Update contact counts for affected lists
+    // Update contact counts for affected lists with parallel processing
     if (data.list_ids !== undefined) {
       const newListIds = data.list_ids;
       const allAffectedListIds = [...new Set([...oldListIds, ...newListIds])];
 
-      for (const listId of allAffectedListIds) {
-        await updateListContactCount(listId);
-      }
+      // Parallelize list count updates for better performance
+      const listUpdatePromises = allAffectedListIds.map(listId => updateListContactCount(listId));
+      await Promise.allSettled(listUpdatePromises); // Use allSettled to prevent one failure from breaking all
     }
 
     return object as EmailContact;
@@ -1164,9 +1197,10 @@ export async function deleteEmailContact(id: string): Promise<void> {
 
     await cosmic.objects.deleteOne(id);
 
-    // Update contact counts for affected lists
-    for (const listId of affectedListIds) {
-      await updateListContactCount(listId);
+    // Update contact counts for affected lists with parallel processing
+    if (affectedListIds.length > 0) {
+      const listUpdatePromises = affectedListIds.map(listId => updateListContactCount(listId));
+      await Promise.allSettled(listUpdatePromises); // Use allSettled to prevent one failure from breaking all
     }
   } catch (error) {
     console.error(`Error deleting email contact ${id}:`, error);
@@ -1287,7 +1321,7 @@ export async function unsubscribeContact(
 
     const contact = objects[0];
 
-    // Prepare metadata update
+    // Prepare metadata update - only update the specific fields needed
     const updateMetadata: any = {
       status: "Unsubscribed",
       unsubscribed_date: new Date().toISOString(),
@@ -1519,11 +1553,12 @@ export async function createMarketingCampaign(
       templateType = template.metadata.template_type;
     }
 
-    // Validate list IDs if provided using efficient method
+    // Validate list IDs if provided using efficient method with parallel processing
     let validListIds: string[] = [];
     if (data.list_ids && data.list_ids.length > 0) {
       console.log("Validating lists for IDs:", data.list_ids);
 
+      // Parallel validation for better performance
       const listPromises = data.list_ids.map(async (id: string) => {
         try {
           const list = await getEmailList(id);
@@ -1534,20 +1569,23 @@ export async function createMarketingCampaign(
         }
       });
 
-      const validatedIds = await Promise.all(listPromises);
-      validListIds = validatedIds.filter((id): id is string => id !== null);
+      const validatedIds = await Promise.allSettled(listPromises);
+      validListIds = validatedIds
+        .filter((result): result is PromiseFulfilledResult<string> => 
+          result.status === 'fulfilled' && result.value !== null)
+        .map(result => result.value);
 
       console.log(
         `Found ${validListIds.length} valid lists out of ${data.list_ids.length} requested`
       );
     }
 
-    // Validate contact IDs if provided - but don't store full contact objects
+    // Validate contact IDs if provided with parallel processing
     let validContactIds: string[] = [];
     if (data.contact_ids && data.contact_ids.length > 0) {
       console.log("Validating contacts for IDs:", data.contact_ids);
 
-      // Validate each contact ID exists
+      // Parallel validation for better performance
       const contactPromises = data.contact_ids.map(async (id: string) => {
         try {
           const contact = await getEmailContact(id);
@@ -1558,10 +1596,11 @@ export async function createMarketingCampaign(
         }
       });
 
-      const validatedIds = await Promise.all(contactPromises);
-      validContactIds = validatedIds.filter(
-        (id): id is string => id !== null
-      );
+      const validatedIds = await Promise.allSettled(contactPromises);
+      validContactIds = validatedIds
+        .filter((result): result is PromiseFulfilledResult<string> => 
+          result.status === 'fulfilled' && result.value !== null)
+        .map(result => result.value);
 
       console.log(
         `Found ${validContactIds.length} valid contacts out of ${data.contact_ids.length} requested`
@@ -1719,11 +1758,11 @@ export async function updateMarketingCampaign(
       };
     }
 
-    // Handle contact_ids if provided - store only IDs in target_contacts
+    // Handle contact_ids if provided with parallel validation
     if (data.contact_ids !== undefined) {
       let validContactIds: string[] = [];
       if (data.contact_ids.length > 0) {
-        // Validate each contact ID exists
+        // Parallel validation for better performance
         const contactPromises = data.contact_ids.map(async (id: string) => {
           try {
             const contact = await getEmailContact(id);
@@ -1733,10 +1772,12 @@ export async function updateMarketingCampaign(
             return null;
           }
         });
-        const validatedIds = await Promise.all(contactPromises);
-        validContactIds = validatedIds.filter(
-          (id): id is string => id !== null
-        );
+        
+        const validatedIds = await Promise.allSettled(contactPromises);
+        validContactIds = validatedIds
+          .filter((result): result is PromiseFulfilledResult<string> => 
+            result.status === 'fulfilled' && result.value !== null)
+          .map(result => result.value);
       }
       metadataUpdates.target_contacts = validContactIds;
     }
@@ -1775,7 +1816,7 @@ export async function deleteEmailCampaign(id: string): Promise<void> {
   return deleteMarketingCampaign(id);
 }
 
-// OPTIMIZED: Get all contacts that would be targeted by a campaign with efficient counting
+// OPTIMIZED: Get all contacts that would be targeted by a campaign with parallel processing
 export async function getCampaignTargetContacts(
   campaign: MarketingCampaign
 ): Promise<EmailContact[]> {
@@ -1783,71 +1824,89 @@ export async function getCampaignTargetContacts(
     const allContacts: EmailContact[] = [];
     const addedContactIds = new Set<string>();
 
-    // Add contacts from target lists using efficient method
+    // Parallel processing for lists, contacts, and tags
+    const fetchPromises: Promise<void>[] = [];
+
+    // Add contacts from target lists using parallel processing
     if (
       campaign.metadata.target_lists &&
       campaign.metadata.target_lists.length > 0
     ) {
-      for (const listRef of campaign.metadata.target_lists) {
-        const listId = typeof listRef === "string" ? listRef : listRef.id;
-        const listContacts = await getContactsByListId(listId);
+      const listPromise = Promise.all(
+        campaign.metadata.target_lists.map(async (listRef) => {
+          const listId = typeof listRef === "string" ? listRef : listRef.id;
+          try {
+            const listContacts = await getContactsByListId(listId);
+            return listContacts.filter(contact => contact.metadata.status.value === "Active");
+          } catch (error) {
+            console.error(`Error fetching contacts for list ${listId}:`, error);
+            return [];
+          }
+        })
+      ).then(listContactArrays => {
+        for (const listContacts of listContactArrays) {
+          for (const contact of listContacts) {
+            if (!addedContactIds.has(contact.id)) {
+              allContacts.push(contact);
+              addedContactIds.add(contact.id);
+            }
+          }
+        }
+      });
+      
+      fetchPromises.push(listPromise);
+    }
 
-        for (const contact of listContacts) {
+    // Add individual target contacts with parallel processing
+    if (
+      campaign.metadata.target_contacts &&
+      campaign.metadata.target_contacts.length > 0
+    ) {
+      const contactPromise = Promise.allSettled(
+        campaign.metadata.target_contacts.map(contactId => getEmailContact(contactId))
+      ).then(results => {
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value && 
+              result.value.metadata.status.value === "Active" &&
+              !addedContactIds.has(result.value.id)) {
+            allContacts.push(result.value);
+            addedContactIds.add(result.value.id);
+          }
+        }
+      });
+      
+      fetchPromises.push(contactPromise);
+    }
+
+    // Add contacts with matching tags
+    if (
+      campaign.metadata.target_tags &&
+      campaign.metadata.target_tags.length > 0
+    ) {
+      const tagPromise = getEmailContacts({
+        limit: 1000,
+      }).then(({ contacts: allContactsResult }) => {
+        for (const contact of allContactsResult) {
           if (
             !addedContactIds.has(contact.id) &&
-            contact.metadata.status.value === "Active"
+            contact.metadata.status.value === "Active" &&
+            contact.metadata.tags &&
+            campaign.metadata.target_tags &&
+            campaign.metadata.target_tags.some((tag) =>
+              contact.metadata.tags?.includes(tag)
+            )
           ) {
             allContacts.push(contact);
             addedContactIds.add(contact.id);
           }
         }
-      }
-    }
-
-    // Add individual target contacts
-    if (
-      campaign.metadata.target_contacts &&
-      campaign.metadata.target_contacts.length > 0
-    ) {
-      for (const contactId of campaign.metadata.target_contacts) {
-        if (!addedContactIds.has(contactId)) {
-          try {
-            const contact = await getEmailContact(contactId);
-            if (contact && contact.metadata.status.value === "Active") {
-              allContacts.push(contact);
-              addedContactIds.add(contactId);
-            }
-          } catch (error) {
-            console.error(`Error fetching contact ${contactId}:`, error);
-          }
-        }
-      }
-    }
-
-    // Add contacts with matching tags - with proper undefined check
-    if (
-      campaign.metadata.target_tags &&
-      campaign.metadata.target_tags.length > 0
-    ) {
-      // This is a simplified implementation - in a real system you'd want more efficient querying
-      const { contacts: allContactsResult } = await getEmailContacts({
-        limit: 1000,
       });
-
-      for (const contact of allContactsResult) {
-        if (
-          !addedContactIds.has(contact.id) &&
-          contact.metadata.status.value === "Active" &&
-          contact.metadata.tags &&
-          campaign.metadata.target_tags.some((tag) =>
-            contact.metadata.tags?.includes(tag)
-          )
-        ) {
-          allContacts.push(contact);
-          addedContactIds.add(contact.id);
-        }
-      }
+      
+      fetchPromises.push(tagPromise);
     }
+
+    // Wait for all parallel operations to complete
+    await Promise.allSettled(fetchPromises);
 
     return allContacts;
   } catch (error) {
@@ -1856,47 +1915,58 @@ export async function getCampaignTargetContacts(
   }
 }
 
-// OPTIMIZED: Get campaign target count without fetching all contact data
+// OPTIMIZED: Get campaign target count with parallel processing
 export async function getCampaignTargetCount(
   campaign: MarketingCampaign
 ): Promise<number> {
   try {
     const countedContactIds = new Set<string>();
-    let totalCount = 0;
+    const countPromises: Promise<void>[] = [];
 
-    // Count contacts from target lists using efficient method
+    // Count contacts from target lists with parallel processing
     if (
       campaign.metadata.target_lists &&
       campaign.metadata.target_lists.length > 0
     ) {
-      for (const listRef of campaign.metadata.target_lists) {
-        const listId = typeof listRef === "string" ? listRef : listRef.id;
-        
-        // Get contacts for this list but only fetch IDs to avoid duplicates
-        const { objects: listContacts } = await cosmic.objects
-          .find({
-            type: "email-contacts",
-            "metadata.lists": listId,
-            "metadata.status": "Active"
-          })
-          .props(["id"]);
-
-        listContacts.forEach((contact: any) => {
-          if (!countedContactIds.has(contact.id)) {
-            countedContactIds.add(contact.id);
-            totalCount++;
+      const listCountPromise = Promise.allSettled(
+        campaign.metadata.target_lists.map(async (listRef) => {
+          const listId = typeof listRef === "string" ? listRef : listRef.id;
+          try {
+            // Get contacts for this list but only fetch IDs to avoid duplicates
+            const { objects: listContacts } = await cosmic.objects
+              .find({
+                type: "email-contacts",
+                "metadata.lists": listId,
+                "metadata.status": "Active"
+              })
+              .props(["id"]);
+              
+            return listContacts.map((contact: any) => contact.id);
+          } catch (error) {
+            console.error(`Error counting contacts for list ${listId}:`, error);
+            return [];
           }
-        });
-      }
+        })
+      ).then(results => {
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            for (const contactId of result.value) {
+              countedContactIds.add(contactId);
+            }
+          }
+        }
+      });
+      
+      countPromises.push(listCountPromise);
     }
 
-    // Count individual target contacts
+    // Count individual target contacts with parallel processing
     if (
       campaign.metadata.target_contacts &&
       campaign.metadata.target_contacts.length > 0
     ) {
-      for (const contactId of campaign.metadata.target_contacts) {
-        if (!countedContactIds.has(contactId)) {
+      const individualCountPromise = Promise.allSettled(
+        campaign.metadata.target_contacts.map(async (contactId) => {
           try {
             // Verify contact exists and is active (minimal query)
             const { objects } = await cosmic.objects
@@ -1908,46 +1978,56 @@ export async function getCampaignTargetCount(
               .props(["id"])
               .limit(1);
 
-            if (objects.length > 0) {
-              countedContactIds.add(contactId);
-              totalCount++;
-            }
+            return objects.length > 0 ? contactId : null;
           } catch (error) {
             console.error(`Error validating contact ${contactId}:`, error);
+            return null;
+          }
+        })
+      ).then(results => {
+        for (const result of results) {
+          if (result.status === 'fulfilled' && result.value) {
+            countedContactIds.add(result.value);
           }
         }
-      }
+      });
+      
+      countPromises.push(individualCountPromise);
     }
 
-    // Count contacts with matching tags - with proper undefined check
+    // Count contacts with matching tags
     if (
       campaign.metadata.target_tags &&
       campaign.metadata.target_tags.length > 0
     ) {
-      // This is simplified - in production, you might want tag-based indexing
-      const { objects: taggedContacts } = await cosmic.objects
+      const tagCountPromise = cosmic.objects
         .find({
           type: "email-contacts",
           "metadata.status": "Active"
         })
-        .props(["id", "metadata.tags"]);
-
-      taggedContacts.forEach((contact: any) => {
-        if (
-          !countedContactIds.has(contact.id) &&
-          contact.metadata.tags &&
-          campaign.metadata.target_tags &&
-          campaign.metadata.target_tags.some((tag: string) =>
-            contact.metadata.tags?.includes(tag)
-          )
-        ) {
-          countedContactIds.add(contact.id);
-          totalCount++;
-        }
-      });
+        .props(["id", "metadata.tags"])
+        .then(({ objects: taggedContacts }) => {
+          for (const contact of taggedContacts) {
+            if (
+              !countedContactIds.has(contact.id) &&
+              contact.metadata.tags &&
+              campaign.metadata.target_tags &&
+              campaign.metadata.target_tags.some((tag: string) =>
+                contact.metadata.tags?.includes(tag)
+              )
+            ) {
+              countedContactIds.add(contact.id);
+            }
+          }
+        });
+        
+      countPromises.push(tagCountPromise);
     }
 
-    return totalCount;
+    // Wait for all parallel counting operations to complete
+    await Promise.allSettled(countPromises);
+
+    return countedContactIds.size;
   } catch (error) {
     console.error("Error getting campaign target count:", error);
     return 0; // Return 0 on error rather than throwing
