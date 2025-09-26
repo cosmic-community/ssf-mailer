@@ -2,6 +2,10 @@ import { getEmailTemplates, getEmailLists } from "@/lib/cosmic";
 import CreateCampaignForm from "@/components/CreateCampaignForm";
 import Link from "next/link";
 
+// Force dynamic rendering to ensure fresh data
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
   title: "Create New Campaign | Email Marketing",
   description: "Create a new email marketing campaign",
