@@ -19,12 +19,14 @@ export async function findDuplicateContacts(): Promise<DuplicateStats> {
   console.log('🔍 Starting duplicate contact detection...')
   
   let allContacts: EmailContact[] = []
+  const seenIds = new Set<string>() // Track unique contact IDs to prevent API duplicates
   let skip = 0
   const limit = 100 // Batch size for API calls
+  let totalFetched = 0
   
-  // Fetch all contacts in batches (following your existing pagination pattern)
+  // Fetch all contacts in batches with deduplication
   while (true) {
-    console.log(`📥 Fetching contacts ${skip + 1} to ${skip + limit}...`)
+    console.log(`📥 Fetching contacts batch: skip=${skip}, limit=${limit}`)
     
     try {
       const { objects } = await cosmic.objects
@@ -35,65 +37,135 @@ export async function findDuplicateContacts(): Promise<DuplicateStats> {
         .limit(limit)
         .skip(skip)
       
-      if (objects.length === 0) break
+      console.log(`📦 Received ${objects.length} objects from API`)
       
-      // Transform to EmailContact format (matching your existing types)
-      const contacts: EmailContact[] = objects.map((obj: any) => ({
-        id: obj.id,
-        slug: obj.slug,
-        title: obj.title,
-        type: 'email-contacts',
-        metadata: {
-          first_name: obj.metadata.first_name || '',
-          last_name: obj.metadata.last_name || '',
-          email: obj.metadata.email,
-          status: obj.metadata.status?.value ? obj.metadata.status : { key: 'active', value: 'Active' },
-          lists: obj.metadata.lists || [],
-          tags: obj.metadata.tags || [],
-          subscribe_date: obj.metadata.subscribe_date,
-          notes: obj.metadata.notes || '',
-          unsubscribed_date: obj.metadata.unsubscribed_date,
-          unsubscribe_campaign: obj.metadata.unsubscribe_campaign,
-        },
-        created_at: obj.created_at,
-        modified_at: obj.modified_at,
-      }))
+      if (objects.length === 0) {
+        console.log('✅ No more contacts to fetch - breaking pagination loop')
+        break
+      }
       
-      allContacts = [...allContacts, ...contacts]
+      // Transform and deduplicate by ID
+      const newContacts: EmailContact[] = []
+      let duplicatesInBatch = 0
+      
+      for (const obj of objects) {
+        if (seenIds.has(obj.id)) {
+          duplicatesInBatch++
+          console.warn(`⚠️  Duplicate ID detected in API response: ${obj.id}`)
+          continue // Skip this duplicate
+        }
+        
+        seenIds.add(obj.id)
+        
+        // Transform to EmailContact format
+        const contact: EmailContact = {
+          id: obj.id,
+          slug: obj.slug,
+          title: obj.title,
+          type: 'email-contacts',
+          metadata: {
+            first_name: obj.metadata.first_name || '',
+            last_name: obj.metadata.last_name || '',
+            email: obj.metadata.email,
+            status: obj.metadata.status?.value ? obj.metadata.status : { key: 'active', value: 'Active' },
+            lists: obj.metadata.lists || [],
+            tags: obj.metadata.tags || [],
+            subscribe_date: obj.metadata.subscribe_date,
+            notes: obj.metadata.notes || '',
+            unsubscribed_date: obj.metadata.unsubscribed_date,
+            unsubscribe_campaign: obj.metadata.unsubscribe_campaign,
+          },
+          created_at: obj.created_at,
+          modified_at: obj.modified_at,
+        }
+        
+        newContacts.push(contact)
+      }
+      
+      if (duplicatesInBatch > 0) {
+        console.log(`🚨 Found ${duplicatesInBatch} duplicate IDs in this batch (API pagination issue)`)
+      }
+      
+      allContacts.push(...newContacts)
+      totalFetched += newContacts.length
       skip += limit
       
-      if (objects.length < limit) break
+      console.log(`📊 Batch processed: +${newContacts.length} new contacts (total: ${totalFetched})`)
+      
+      // Break if we got fewer objects than limit (last page)
+      if (objects.length < limit) {
+        console.log('✅ Reached last page - breaking pagination loop')
+        break
+      }
+      
     } catch (error) {
-      console.error(`Error fetching batch at skip ${skip}:`, error)
+      console.error(`❌ Error fetching batch at skip ${skip}:`, error)
       break
     }
   }
   
-  console.log(`📊 Total contacts fetched: ${allContacts.length}`)
+  console.log(`📊 Final totals: ${allContacts.length} unique contacts fetched`)
+  console.log(`🔢 Unique IDs tracked: ${seenIds.size}`)
   
-  // Group contacts by email (case-insensitive)
+  if (allContacts.length !== seenIds.size) {
+    console.warn(`⚠️  Contact count mismatch: contacts=${allContacts.length}, uniqueIds=${seenIds.size}`)
+  }
+  
+  // Group contacts by email (case-insensitive and trimmed)
+  console.log('🔄 Grouping contacts by email address...')
   const emailGroups = new Map<string, EmailContact[]>()
+  let contactsWithoutEmail = 0
   
-  allContacts.forEach(contact => {
+  allContacts.forEach((contact, index) => {
+    if (!contact.metadata.email) {
+      contactsWithoutEmail++
+      console.warn(`⚠️  Contact ${contact.id} has no email address (index: ${index})`)
+      return
+    }
+    
     const normalizedEmail = contact.metadata.email.toLowerCase().trim()
+    if (!normalizedEmail) {
+      contactsWithoutEmail++
+      console.warn(`⚠️  Contact ${contact.id} has empty email address (index: ${index})`)
+      return
+    }
+    
     if (!emailGroups.has(normalizedEmail)) {
       emailGroups.set(normalizedEmail, [])
     }
     emailGroups.get(normalizedEmail)!.push(contact)
   })
   
-  // Find duplicate groups
+  if (contactsWithoutEmail > 0) {
+    console.log(`📧 Skipped ${contactsWithoutEmail} contacts without valid email addresses`)
+  }
+  
+  console.log(`📬 Created ${emailGroups.size} unique email groups`)
+  
+  // Find duplicate groups (emails with more than 1 contact)
+  console.log('🔍 Identifying duplicate email groups...')
   const duplicateGroups: DuplicateGroup[] = []
   let totalDuplicates = 0
   
   emailGroups.forEach((contacts, email) => {
     if (contacts.length > 1) {
+      // Sort contacts by creation date (oldest first) for consistent ordering
+      const sortedContacts = contacts.sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      
       duplicateGroups.push({
         email,
-        contacts,
-        count: contacts.length
+        contacts: sortedContacts,
+        count: sortedContacts.length
       })
-      totalDuplicates += contacts.length - 1 // Don't count the original
+      
+      totalDuplicates += sortedContacts.length - 1 // Don't count the original (oldest)
+      
+      console.log(`📧 Duplicate found: ${email} (${sortedContacts.length} contacts)`)
+      sortedContacts.forEach((contact, i) => {
+        console.log(`   ${i + 1}. ID: ${contact.id} | Created: ${contact.created_at} ${i === 0 ? '(OLDEST - KEEP)' : '(DUPLICATE)'}`)
+      })
     }
   })
   
@@ -106,6 +178,16 @@ export async function findDuplicateContacts(): Promise<DuplicateStats> {
     duplicateEmails: duplicateGroups.length,
     totalDuplicates,
     duplicateGroups
+  }
+  
+  console.log('\n📋 DUPLICATE DETECTION SUMMARY')
+  console.log('='.repeat(50))
+  console.log(`📊 Total Contacts: ${stats.totalContacts}`)
+  console.log(`✅ Unique Emails: ${stats.uniqueEmails}`)
+  console.log(`🔄 Duplicate Emails: ${stats.duplicateEmails}`)
+  console.log(`❌ Total Duplicates: ${stats.totalDuplicates}`)
+  if (stats.totalContacts > 0) {
+    console.log(`📉 Duplicate Rate: ${((stats.totalDuplicates / stats.totalContacts) * 100).toFixed(2)}%`)
   }
   
   return stats
@@ -130,7 +212,8 @@ export async function generateDuplicateReport(): Promise<void> {
       stats.duplicateGroups.slice(0, 10).forEach((group, index) => {
         console.log(`\n${index + 1}. ${group.email} (${group.count} duplicates)`)
         group.contacts.forEach((contact, i) => {
-          console.log(`   ${i + 1}. ID: ${contact.id} | Name: ${contact.metadata.first_name} ${contact.metadata.last_name} | Status: ${contact.metadata.status.value} | Created: ${new Date(contact.created_at).toLocaleDateString()}`)
+          const keepLabel = i === 0 ? ' (KEEP - OLDEST)' : ' (DELETE)'
+          console.log(`   ${i + 1}. ID: ${contact.id} | Name: ${contact.metadata.first_name} ${contact.metadata.last_name} | Status: ${contact.metadata.status.value} | Created: ${new Date(contact.created_at).toLocaleDateString()}${keepLabel}`)
         })
       })
       
