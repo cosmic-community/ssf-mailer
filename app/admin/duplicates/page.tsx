@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { LoadingSpinner } from '@/components/ui/loading-spinner'
 import { Users, AlertTriangle, Download, Trash2, Search } from 'lucide-react'
+import { useToast } from '@/hooks/use-toast'
 
 interface DuplicateGroup {
   email: string
@@ -24,11 +25,15 @@ interface DuplicateStats {
 export default function DuplicatesPage() {
   const [stats, setStats] = useState<DuplicateStats | null>(null)
   const [loading, setLoading] = useState(false)
+  const [cleanupLoading, setCleanupLoading] = useState(false)
+  const [cleanupResult, setCleanupResult] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
   
   const checkForDuplicates = async () => {
     setLoading(true)
     setError(null)
+    setCleanupResult(null)
     
     try {
       const response = await fetch('/api/duplicates')
@@ -39,11 +44,139 @@ export default function DuplicatesPage() {
       }
       
       setStats(result.data)
+      
+      if (result.data.duplicateGroups.length === 0) {
+        toast({
+          title: "No Duplicates Found",
+          description: "Your contact list is clean!",
+          variant: "success",
+        })
+      } else {
+        toast({
+          title: "Duplicates Found",
+          description: `Found ${result.data.duplicateGroups.length} groups with ${result.data.totalDuplicates} duplicate contacts`,
+        })
+      }
     } catch (err) {
       console.error('Error checking duplicates:', err)
-      setError(err instanceof Error ? err.message : 'An error occurred')
+      const errorMessage = err instanceof Error ? err.message : 'An error occurred'
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
+    }
+  }
+
+  const performCleanup = async (dryRun: boolean = true) => {
+    if (!stats || stats.duplicateGroups.length === 0) {
+      toast({
+        title: "No Action Needed",
+        description: "No duplicates found to clean up",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setCleanupLoading(true)
+    setError(null)
+    setCleanupResult(null)
+    
+    try {
+      const response = await fetch('/api/duplicates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'cleanup',
+          dryRun: dryRun
+        })
+      })
+      
+      const result = await response.json()
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Cleanup failed')
+      }
+      
+      setCleanupResult(result.message)
+      
+      toast({
+        title: dryRun ? "Preview Complete" : "Cleanup Complete",
+        description: result.message,
+        variant: "success",
+      })
+      
+      // If it was a real cleanup, refresh the duplicates data
+      if (!dryRun) {
+        await checkForDuplicates()
+      }
+      
+    } catch (err) {
+      console.error('Error during cleanup:', err)
+      const errorMessage = err instanceof Error ? err.message : 'Cleanup failed'
+      setError(errorMessage)
+      toast({
+        title: "Cleanup Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
+    } finally {
+      setCleanupLoading(false)
+    }
+  }
+
+  const exportCSVReport = async () => {
+    if (!stats || stats.duplicateGroups.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "No duplicates found to export",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Create CSV content
+      const csvHeader = 'Email,Duplicate Count,Contact IDs,Names,Statuses,Created Dates\n'
+      let csvContent = csvHeader
+      
+      stats.duplicateGroups.forEach(group => {
+        const ids = group.contacts.map(c => c.id).join('; ')
+        const names = group.contacts.map(c => `${c.metadata.first_name} ${c.metadata.last_name}`.trim()).join('; ')
+        const statuses = group.contacts.map(c => c.metadata.status.value).join('; ')
+        const dates = group.contacts.map(c => new Date(c.created_at).toLocaleDateString()).join('; ')
+        
+        csvContent += `"${group.email}",${group.count},"${ids}","${names}","${statuses}","${dates}"\n`
+      })
+      
+      // Download CSV file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      const url = URL.createObjectURL(blob)
+      link.setAttribute('href', url)
+      link.setAttribute('download', `duplicate-contacts-${new Date().toISOString().split('T')[0]}.csv`)
+      link.style.visibility = 'hidden'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      toast({
+        title: "Export Complete",
+        description: "CSV report has been downloaded",
+        variant: "success",
+      })
+    } catch (err) {
+      console.error('Error exporting CSV:', err)
+      toast({
+        title: "Export Failed",
+        description: "Failed to generate CSV report",
+        variant: "destructive",
+      })
     }
   }
   
@@ -183,22 +316,49 @@ export default function DuplicatesPage() {
                 <>
                   {/* Action Buttons */}
                   <Card className="p-6">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between mb-4">
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">Cleanup Actions</h3>
                         <p className="text-gray-600">Export report or clean up duplicates</p>
                       </div>
-                      <div className="flex space-x-3">
-                        <Button variant="outline">
-                          <Download className="h-4 w-4 mr-2" />
-                          Export CSV Report
-                        </Button>
-                        <Button variant="outline" className="text-orange-600 hover:text-orange-700">
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Preview Cleanup (Dry Run)
-                        </Button>
-                      </div>
                     </div>
+                    
+                    <div className="flex items-center gap-4 flex-wrap">
+                      <Button
+                        onClick={exportCSVReport}
+                        variant="outline"
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Export CSV Report
+                      </Button>
+                      
+                      <Button
+                        onClick={() => performCleanup(true)}
+                        disabled={cleanupLoading || !stats}
+                        variant="outline"
+                        className="flex items-center gap-2 text-orange-600 hover:text-orange-700"
+                      >
+                        {cleanupLoading ? <LoadingSpinner size="sm" /> : <Search className="h-4 w-4" />}
+                        Preview Cleanup (Dry Run)
+                      </Button>
+                      
+                      <Button
+                        onClick={() => performCleanup(false)}
+                        disabled={cleanupLoading || !stats || stats.duplicateGroups.length === 0}
+                        variant="destructive"
+                        className="flex items-center gap-2"
+                      >
+                        {cleanupLoading ? <LoadingSpinner size="sm" /> : <Trash2 className="h-4 w-4" />}
+                        Remove Duplicates
+                      </Button>
+                    </div>
+                    
+                    {cleanupResult && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-green-700">{cleanupResult}</p>
+                      </div>
+                    )}
                   </Card>
 
                   {/* Duplicate Groups */}
