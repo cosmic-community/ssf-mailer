@@ -178,7 +178,7 @@ export async function createUploadJob(data: CreateUploadJobData): Promise<Upload
         file_name: data.file_name,
         file_size: data.file_size,
         total_contacts: data.total_contacts,
-        processed_contacts: 0,
+        processed_contacts: 0, // CRITICAL: This is the canonical progress counter
         successful_contacts: 0,
         failed_contacts: 0,
         duplicate_contacts: 0,
@@ -196,7 +196,6 @@ export async function createUploadJob(data: CreateUploadJobData): Promise<Upload
         auto_resume_enabled: data.auto_resume_enabled !== false, // Default true
         current_batch_index: 0,
         total_batches: Math.ceil(data.total_contacts / (data.processing_chunk_size || 500)), // Updated calculation
-        resume_from_contact: 0,
         chunk_processing_history: [],
         max_processing_time_ms: 240000, // 4 minutes
       },
@@ -253,7 +252,12 @@ export async function updateUploadJobProgress(
     if (progress.failed_contacts !== undefined) metadataUpdates.failed_contacts = progress.failed_contacts;
     if (progress.duplicate_contacts !== undefined) metadataUpdates.duplicate_contacts = progress.duplicate_contacts;
     if (progress.validation_errors !== undefined) metadataUpdates.validation_errors = progress.validation_errors;
-    if (progress.progress_percentage !== undefined) metadataUpdates.progress_percentage = progress.progress_percentage;
+    
+    // CRITICAL FIX: Ensure progress percentage never exceeds 100%
+    if (progress.progress_percentage !== undefined) {
+      metadataUpdates.progress_percentage = Math.max(0, Math.min(100, progress.progress_percentage));
+    }
+    
     if (progress.processing_rate !== undefined) metadataUpdates.processing_rate = progress.processing_rate;
     if (progress.estimated_completion !== undefined) metadataUpdates.estimated_completion = progress.estimated_completion;
     if (progress.completed_at !== undefined) metadataUpdates.completed_at = progress.completed_at;

@@ -30,7 +30,8 @@ export async function GET(
         const rateParts = job.metadata.processing_rate.split(" ");
         if (rateParts.length > 0 && rateParts[0]) {
           const rate = parseFloat(rateParts[0]);
-          const remaining = job.metadata.total_contacts - job.metadata.processed_contacts;
+          // CRITICAL FIX: Use processed_contacts as the canonical progress counter
+          const remaining = job.metadata.total_contacts - (job.metadata.processed_contacts || 0);
           if (rate > 0 && remaining > 0) {
             const remainingSeconds = Math.ceil(remaining / rate);
             if (remainingSeconds < 60) {
@@ -49,18 +50,21 @@ export async function GET(
     const errors = Array.isArray(job.metadata.errors) ? job.metadata.errors : [];
     const duplicates = Array.isArray(job.metadata.duplicates) ? job.metadata.duplicates : [];
 
+    // CRITICAL FIX: Ensure progress percentage never exceeds 100%
+    const safeProgressPercentage = Math.max(0, Math.min(100, job.metadata.progress_percentage || 0));
+
     const response = {
       job_id: job.id,
       status: job.metadata.status.value,
       file_name: job.metadata.file_name,
       progress: {
         total: job.metadata.total_contacts,
-        processed: job.metadata.processed_contacts,
-        successful: job.metadata.successful_contacts,
-        failed: job.metadata.failed_contacts,
-        duplicates: job.metadata.duplicate_contacts,
-        validation_errors: job.metadata.validation_errors,
-        percentage: job.metadata.progress_percentage,
+        processed: job.metadata.processed_contacts || 0, // Use processed_contacts as canonical counter
+        successful: job.metadata.successful_contacts || 0,
+        failed: job.metadata.failed_contacts || 0,
+        duplicates: job.metadata.duplicate_contacts || 0,
+        validation_errors: job.metadata.validation_errors || 0,
+        percentage: safeProgressPercentage, // Ensure this never exceeds 100%
       },
       processing_rate: job.metadata.processing_rate || "Calculating...",
       estimated_completion: estimatedCompletion,
