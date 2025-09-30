@@ -100,7 +100,9 @@ export async function sendEmail(
       ) {
         // Try to extract retry-after from error message if available
         const retryMatch = errorMessage.match(/retry after (\d+)/i);
-        const retryAfter = retryMatch ? parseInt(retryMatch[1]) : 3600; // Default 1 hour
+        // CRITICAL FIX: Use nullish coalescing to handle undefined capture group
+        // retryMatch[1] can be undefined, so we provide "3600" as a string fallback
+        const retryAfter = retryMatch ? parseInt(retryMatch[1] ?? "3600") : 3600;
         throw new ResendRateLimitError("Resend API rate limit exceeded", retryAfter);
       }
       throw new Error(result.error.message || "Failed to send email");
