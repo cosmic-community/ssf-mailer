@@ -19,12 +19,14 @@ interface CreateCampaignFormProps {
   templates: EmailTemplate[]
   lists: EmailList[]
   initialTemplateId?: string
+  initialSendDate?: string
 }
 
 export default function CreateCampaignForm({
   templates,
   lists,
-  initialTemplateId
+  initialTemplateId,
+  initialSendDate
 }: CreateCampaignFormProps) {
   const router = useRouter()
   const { toast } = useToast()
@@ -47,8 +49,8 @@ export default function CreateCampaignForm({
     list_ids: [] as string[],
     contact_ids: [] as string[],
     target_tags: [] as string[],
-    send_date: '',
-    schedule_type: 'now' as 'now' | 'scheduled',
+    send_date: initialSendDate || '',
+    schedule_type: initialSendDate ? 'scheduled' as 'now' | 'scheduled' : 'now' as 'now' | 'scheduled',
     public_sharing_enabled: true // Default to true for new campaigns
   })
 
