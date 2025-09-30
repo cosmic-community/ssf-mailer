@@ -120,10 +120,14 @@ export async function GET(request: NextRequest) {
           console.log(`✅ Campaign ${campaign.id} completed! Marking as Sent...`);
           console.log(`📊 Final stats from database:`, result.finalStats);
           
-          // Update campaign with Sent status, final stats, AND sent_at timestamp
-          await updateCampaignStatus(campaign.id, "Sent", result.finalStats);
+          // CRITICAL FIX: Update campaign with both status change AND sent_at timestamp
+          // Use updateEmailCampaign to update both the status and the sent_at field
+          await updateEmailCampaign(campaign.id, {
+            status: "Sent",
+            stats: result.finalStats,
+          } as any);
           
-          // Also update the sent_at field separately using direct Cosmic update
+          // CRITICAL FIX: Separately update the sent_at field using direct metadata update
           const { cosmic } = await import("@/lib/cosmic");
           await cosmic.objects.updateOne(campaign.id, {
             metadata: {
@@ -131,7 +135,7 @@ export async function GET(request: NextRequest) {
             },
           });
           
-          console.log(`✅ Campaign ${campaign.id} marked as Sent at ${sentAt}`);
+          console.log(`✅ Campaign ${campaign.id} marked as Sent with timestamp ${sentAt}`);
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);
