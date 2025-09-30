@@ -172,7 +172,7 @@ export interface CampaignContent {
   original_template_id?: string; // Track which template was used originally
 }
 
-// Marketing Campaign interface - Updated to include lists, campaign_content, and public_sharing_enabled
+// Marketing Campaign interface - Updated to include lists, campaign_content, sent_at, and public_sharing_enabled
 export interface MarketingCampaign extends CosmicObject {
   type: "marketing-campaigns";
   metadata: {
@@ -186,7 +186,8 @@ export interface MarketingCampaign extends CosmicObject {
       key: string;
       value: "Draft" | "Scheduled" | "Sending" | "Sent" | "Cancelled";
     };
-    send_date?: string;
+    send_date?: string; // Scheduled send time (ISO 8601)
+    sent_at?: string; // NEW: Actual sent timestamp (ISO 8601)
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
     public_sharing_enabled?: boolean; // NEW: controls public link sharing
@@ -210,7 +211,8 @@ export interface EmailCampaign extends CosmicObject {
       key: string;
       value: "Draft" | "Scheduled" | "Sending" | "Sent" | "Cancelled";
     };
-    send_date?: string;
+    send_date?: string; // Scheduled send time (ISO 8601)
+    sent_at?: string; // NEW: Actual sent timestamp (ISO 8601)
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
     public_sharing_enabled?: boolean; // NEW: controls public link sharing

@@ -25,7 +25,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    console.log("Cron job started: Processing sending campaigns");
+    const now = new Date();
+    console.log(`Cron job started: Processing sending campaigns at ${now.toISOString()} (UTC)`);
 
     // Get all campaigns that are in "Sending" status
     const campaigns = await getMarketingCampaigns();
@@ -58,6 +59,25 @@ export async function GET(request: NextRequest) {
     // Process each sending campaign
     for (const campaign of sendingCampaigns) {
       try {
+        const sendDate = campaign.metadata.send_date;
+        
+        // Check if campaign is scheduled for future
+        if (sendDate) {
+          const scheduledTime = new Date(sendDate);
+          
+          console.log(`Campaign "${campaign.metadata.name}" schedule check:`, {
+            scheduledTime: scheduledTime.toISOString(),
+            currentTime: now.toISOString(),
+            shouldSend: scheduledTime <= now,
+          });
+          
+          // Only process if scheduled time has passed
+          if (scheduledTime > now) {
+            console.log(`Skipping "${campaign.metadata.name}" - scheduled for ${scheduledTime.toISOString()}`);
+            continue;
+          }
+        }
+
         console.log(
           `Processing campaign: ${campaign.metadata.name} (${campaign.id})`
         );
@@ -65,10 +85,22 @@ export async function GET(request: NextRequest) {
         const result = await processCampaignBatch(campaign, settings);
         totalProcessed += result.processed;
 
-        // If campaign is completed, update status
+        // If campaign is completed, update status and save sent_at timestamp
         if (result.completed) {
+          const sentAt = new Date().toISOString();
+          
+          // Update campaign with Sent status and sent_at timestamp
           await updateCampaignStatus(campaign.id, "Sent", result.finalStats);
-          console.log(`Campaign ${campaign.id} completed successfully`);
+          
+          // Also update the sent_at field using the cosmic library
+          const { cosmic } = await import("@/lib/cosmic");
+          await cosmic.objects.updateOne(campaign.id, {
+            metadata: {
+              sent_at: sentAt,
+            },
+          });
+          
+          console.log(`Campaign ${campaign.id} completed and marked as Sent at ${sentAt}`);
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);

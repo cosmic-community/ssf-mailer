@@ -95,8 +95,15 @@ export default function CampaignsCalendar({ campaigns }: CampaignsCalendarProps)
     const grouped: Record<string, MarketingCampaign[]> = {}
     
     campaigns.forEach((campaign: MarketingCampaign) => {
-      if (campaign.metadata.send_date) {
-        const dateKey = new Date(campaign.metadata.send_date).toISOString().split('T')[0]
+      const status = campaign.metadata.status?.value
+      
+      // Use sent_at for sent campaigns, send_date for others
+      const campaignDate = status === "Sent" 
+        ? campaign.metadata.sent_at 
+        : campaign.metadata.send_date
+      
+      if (campaignDate) {
+        const dateKey = new Date(campaignDate).toISOString().split('T')[0]
         if (dateKey) {
           if (!grouped[dateKey]) {
             grouped[dateKey] = []
