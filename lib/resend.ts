@@ -52,12 +52,14 @@ export async function sendEmail(
 
     // Apply click tracking if this is a campaign email
     let finalHtmlContent = options.html;
+    
+    // FIXED: Validate both campaignId and contactId are defined before adding tracking
     if (options.html && options.campaignId && options.contactId) {
       const { addTrackingToEmail } = await import("./email-tracking");
       finalHtmlContent = addTrackingToEmail(
         options.html,
-        options.campaignId,
-        options.contactId,
+        options.campaignId, // Now guaranteed to be string
+        options.contactId,  // Now guaranteed to be string
         baseUrl
       );
     }
