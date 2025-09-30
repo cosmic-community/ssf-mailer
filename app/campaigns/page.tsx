@@ -1,4 +1,4 @@
-import CampaignsList from '@/components/CampaignsList'
+import CampaignsView from '@/components/CampaignsView'
 import { getMarketingCampaigns } from '@/lib/cosmic'
 import Link from 'next/link'
 
@@ -28,7 +28,7 @@ export default async function CampaignsPage() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CampaignsList campaigns={campaigns} />
+        <CampaignsView campaigns={campaigns} />
       </main>
     </div>
   )

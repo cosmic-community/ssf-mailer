@@ -28,6 +28,7 @@ export default async function NewCampaignPage({ searchParams }: PageProps) {
 
     // Extract URL parameters for pre-population
     const templateId = typeof params.template_id === 'string' ? params.template_id : undefined;
+    const sendDate = typeof params.send_date === 'string' ? params.send_date : undefined;
 
     return (
       <div className="min-h-screen bg-gray-50 pb-16">
@@ -60,6 +61,7 @@ export default async function NewCampaignPage({ searchParams }: PageProps) {
             templates={templates}
             lists={lists}
             initialTemplateId={templateId}
+            initialSendDate={sendDate}
           />
         </div>
       </div>
