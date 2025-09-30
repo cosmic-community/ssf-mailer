@@ -83,17 +83,19 @@ export interface UploadJob extends CosmicObject {
 }
 
 // NEW: Campaign Send Record - tracks individual email sends
+// UPDATED: Added "pending" status for atomic reservation
 export interface CampaignSend extends CosmicObject {
   type: "campaign-sends";
   metadata: {
-    campaign_id: string; // Reference to campaign
-    contact_id: string; // Reference to contact
+    campaign: string; // Reference to campaign (changed from campaign_id for consistency)
+    contact: string; // Reference to contact (changed from contact_id for consistency)
     contact_email: string; // For quick lookups
     status: {
       key: string;
-      value: "sent" | "failed" | "bounced";
+      value: "pending" | "sent" | "failed" | "bounced"; // Added "pending" status
     };
-    sent_at: string; // ISO timestamp
+    sent_at?: string; // ISO timestamp (optional now since pending records won't have this yet)
+    reserved_at?: string; // NEW: Timestamp when contact was reserved
     resend_message_id?: string; // Resend's message ID
     error_message?: string; // If failed
     retry_count?: number; // Number of retries

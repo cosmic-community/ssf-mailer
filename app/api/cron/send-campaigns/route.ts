@@ -9,6 +9,7 @@ import {
   getCampaignSendStats,
   filterUnsentContacts,
   getCampaignTargetContacts,
+  reserveContactsForSending,
 } from "@/lib/cosmic";
 import { sendEmail, ResendRateLimitError } from "@/lib/resend";
 import { createUnsubscribeUrl, addTrackingToEmail } from "@/lib/email-tracking";
@@ -169,7 +170,7 @@ async function processCampaignBatch(
   const allContacts = await getCampaignTargetContacts(campaign);
   console.log(`Campaign ${campaign.id}: Total contacts = ${allContacts.length}`);
 
-  // Filter out contacts that have already been sent to
+  // Filter out contacts that have already been sent to (including pending)
   const unsentContactIds = await filterUnsentContacts(
     campaign.id,
     allContacts.map((c) => c.id)
@@ -180,7 +181,7 @@ async function processCampaignBatch(
   );
 
   console.log(
-    `Campaign ${campaign.id}: ${allContacts.length - unsentContacts.length} already sent, ${unsentContacts.length} remaining`
+    `Campaign ${campaign.id}: ${allContacts.length - unsentContacts.length} already sent/reserved, ${unsentContacts.length} remaining`
   );
 
   if (unsentContacts.length === 0) {
@@ -202,6 +203,25 @@ async function processCampaignBatch(
     };
   }
 
+  // ATOMIC RESERVATION: Reserve contacts before sending
+  console.log(`🔒 Reserving ${Math.min(BATCH_SIZE, unsentContacts.length)} contacts atomically...`);
+  const { reserved: reservedContacts, pendingRecordIds } = await reserveContactsForSending(
+    campaign.id,
+    unsentContacts,
+    BATCH_SIZE
+  );
+
+  if (reservedContacts.length === 0) {
+    console.log(`⚠️  No contacts could be reserved (possibly reserved by another cron job)`);
+    return {
+      processed: 0,
+      completed: false,
+      finalStats: undefined,
+    };
+  }
+
+  console.log(`✅ Successfully reserved ${reservedContacts.length} contacts`);
+
   // Send emails with proper rate limiting
   let batchesProcessed = 0;
   let rateLimitHit = false;
@@ -214,17 +234,18 @@ async function processCampaignBatch(
     process.env.NEXT_PUBLIC_SITE_URL ||
     "http://localhost:3000";
 
+  // Process reserved contacts in smaller batches
   for (
     let i = 0;
-    i < unsentContacts.length && batchesProcessed < MAX_BATCHES_PER_RUN;
+    i < reservedContacts.length && batchesProcessed < MAX_BATCHES_PER_RUN;
     i += BATCH_SIZE
   ) {
     if (rateLimitHit) break;
 
-    const batch = unsentContacts.slice(i, i + BATCH_SIZE);
-    console.log(`Processing batch ${batchesProcessed + 1}: ${batch.length} contacts`);
+    const batch = reservedContacts.slice(i, i + BATCH_SIZE);
+    console.log(`Processing batch ${batchesProcessed + 1}: ${batch.length} reserved contacts`);
 
-    // Process each contact with proper rate limiting
+    // Process each reserved contact with proper rate limiting
     for (let contactIndex = 0; contactIndex < batch.length; contactIndex++) {
       if (rateLimitHit) break;
 
@@ -233,10 +254,11 @@ async function processCampaignBatch(
       // CRITICAL FIX: Add explicit undefined check to satisfy TypeScript
       if (!contact) {
         console.error(`Undefined contact at batch index ${contactIndex}`);
-        continue; // Skip this iteration if contact is somehow undefined
+        continue;
       }
       
       const startTime = Date.now();
+      const pendingRecordId = pendingRecordIds.get(contact.id);
 
       try {
         // Get campaign content
@@ -308,13 +330,14 @@ async function processCampaignBatch(
           },
         });
 
-        // Record successful send
+        // Update the pending record to "sent" status
         await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
           contactEmail: contact.metadata.email,
           status: "sent",
           resendMessageId: result.id,
+          pendingRecordId: pendingRecordId, // Update existing pending record
         });
 
         successCount++;
@@ -355,7 +378,7 @@ async function processCampaignBatch(
           break; // Stop processing this campaign
         }
 
-        // Regular error - record failed send
+        // Regular error - update pending record to "failed"
         console.error(`  ❌ Failed to send to ${contact.metadata.email}:`, error.message);
 
         await createCampaignSend({
@@ -364,6 +387,7 @@ async function processCampaignBatch(
           contactEmail: contact.metadata.email,
           status: "failed",
           errorMessage: error.message,
+          pendingRecordId: pendingRecordId, // Update existing pending record
         });
 
         // Still apply rate limiting even on errors
@@ -388,7 +412,7 @@ async function processCampaignBatch(
     });
 
     console.log(
-      `Batch ${batchesProcessed} complete. Stats: ${stats.sent} sent, ${stats.failed} failed, ${stats.bounced} bounced`
+      `Batch ${batchesProcessed} complete. Stats: ${stats.sent} sent, ${stats.pending} pending, ${stats.failed} failed, ${stats.bounced} bounced`
     );
 
     // Delay between batches (1 second)

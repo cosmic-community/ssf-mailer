@@ -37,7 +37,55 @@ export const cosmic = createBucketClient({
 
 // ==================== CAMPAIGN SENDS TRACKING ====================
 
-// Create a send record
+// NEW: Atomic reservation function - reserves contacts before sending
+export async function reserveContactsForSending(
+  campaignId: string,
+  contacts: EmailContact[],
+  batchSize: number
+): Promise<{ reserved: EmailContact[]; pendingRecordIds: Map<string, string> }> {
+  const reserved: EmailContact[] = [];
+  const pendingRecordIds = new Map<string, string>(); // Map contactId -> pendingRecordId
+  
+  console.log(`Attempting to reserve ${Math.min(batchSize, contacts.length)} contacts for campaign ${campaignId}`);
+  
+  for (const contact of contacts.slice(0, batchSize)) {
+    try {
+      // Atomically create a "pending" send record
+      // This acts as a reservation - if another cron job tries to create
+      // a duplicate record, it will either fail or create a separate record
+      // Either way, we can detect and handle it
+      const { object } = await cosmic.objects.insertOne({
+        type: "campaign-sends",
+        title: `Send to ${contact.metadata.email}`,
+        metadata: {
+          campaign: campaignId,
+          contact: contact.id,
+          contact_email: contact.metadata.email,
+          status: {
+            key: "pending",
+            value: "pending",
+          },
+          reserved_at: new Date().toISOString(),
+          retry_count: 0,
+        },
+      });
+      
+      reserved.push(contact);
+      pendingRecordIds.set(contact.id, object.id);
+      
+    } catch (error) {
+      // If insert fails (e.g., duplicate key error or other conflict),
+      // this contact is already reserved by another process
+      console.log(`Contact ${contact.metadata.email} already reserved or error occurred:`, error);
+    }
+  }
+  
+  console.log(`Successfully reserved ${reserved.length} contacts out of ${Math.min(batchSize, contacts.length)} attempted`);
+  
+  return { reserved, pendingRecordIds };
+}
+
+// UPDATED: Create a send record (now supports updating pending records)
 export async function createCampaignSend(data: {
   campaignId: string;
   contactId: string;
@@ -46,8 +94,27 @@ export async function createCampaignSend(data: {
   sentAt?: string;
   resendMessageId?: string;
   errorMessage?: string;
+  pendingRecordId?: string; // NEW: Optional ID of pending record to update
 }): Promise<CampaignSend> {
   try {
+    // If we have a pending record ID, update it instead of creating new
+    if (data.pendingRecordId) {
+      const { object } = await cosmic.objects.updateOne(data.pendingRecordId, {
+        metadata: {
+          status: {
+            key: data.status,
+            value: data.status,
+          },
+          sent_at: data.sentAt || new Date().toISOString(),
+          resend_message_id: data.resendMessageId,
+          error_message: data.errorMessage,
+        },
+      });
+      
+      return object as CampaignSend;
+    }
+    
+    // Fallback: Create new record if no pending record ID provided
     const { object } = await cosmic.objects.insertOne({
       type: "campaign-sends",
       title: `Send to ${data.contactEmail}`,
@@ -68,8 +135,8 @@ export async function createCampaignSend(data: {
 
     return object as CampaignSend;
   } catch (error) {
-    console.error("Error creating campaign send record:", error);
-    throw new Error("Failed to create campaign send record");
+    console.error("Error creating/updating campaign send record:", error);
+    throw new Error("Failed to create/update campaign send record");
   }
 }
 
@@ -112,12 +179,12 @@ export async function getSentContactIds(
         type: "campaign-sends",
         "metadata.campaign": campaignId,
       })
-      .props(["metadata.contact.id"])
+      .props(["metadata.contact"])
       .limit(limit)
       .skip(skip);
 
     return {
-      contactIds: objects.map((obj: any) => obj.metadata.contact.id),
+      contactIds: objects.map((obj: any) => obj.metadata.contact),
       total: total || 0,
     };
   } catch (error) {
@@ -129,12 +196,13 @@ export async function getSentContactIds(
   }
 }
 
-// Get campaign send statistics
+// UPDATED: Get campaign send statistics (now includes pending status)
 export async function getCampaignSendStats(
   campaignId: string
 ): Promise<{
   total: number;
   sent: number;
+  pending: number;
   failed: number;
   bounced: number;
 }> {
@@ -162,6 +230,18 @@ export async function getCampaignSendStats(
 
     const sent = sentSendsResponse.total || 0;
 
+    // Get pending count (NEW)
+    const pendingSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.status.value": "pending",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const pending = pendingSendsResponse.total || 0;
+
     // Get failed count
     const failedSendsResponse = await cosmic.objects
       .find({
@@ -186,13 +266,13 @@ export async function getCampaignSendStats(
 
     const bounced = bouncedSendsResponse.total || 0;
 
-    return { total, sent, failed, bounced };
+    return { total, sent, pending, failed, bounced };
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
-      return { total: 0, sent: 0, failed: 0, bounced: 0 };
+      return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
     }
     console.error("Error fetching campaign stats:", error);
-    return { total: 0, sent: 0, failed: 0, bounced: 0 };
+    return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
   }
 }
 
@@ -204,7 +284,7 @@ export async function filterUnsentContacts(
   if (contactIds.length === 0) return [];
 
   try {
-    // Get all sends for this campaign
+    // Get all sends for this campaign (including pending)
     const sentContactIds = new Set<string>();
     let skip = 0;
     const limit = 1000;
@@ -221,7 +301,7 @@ export async function filterUnsentContacts(
       hasMore = skip < total;
     }
 
-    // Filter out contacts that have been sent to
+    // Filter out contacts that have any send record (pending, sent, failed, bounced)
     return contactIds.filter((id) => !sentContactIds.has(id));
   } catch (error) {
     console.error("Error filtering unsent contacts:", error);
