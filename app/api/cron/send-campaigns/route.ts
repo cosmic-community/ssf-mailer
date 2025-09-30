@@ -296,13 +296,6 @@ async function processCampaignBatch(
       const startTime = Date.now();
       const pendingRecordId = pendingRecordIds.get(contact.id);
 
-      console.log(
-        `📧 DEBUG: Processing contact ${contact.id} (${contact.metadata.email})`
-      );
-      console.log(
-        `📧 DEBUG: Pending record ID for this contact: ${pendingRecordId}`
-      );
-
       try {
         // Get campaign content
         const emailContent = campaign.metadata.campaign_content?.content || "";
@@ -375,28 +368,16 @@ async function processCampaignBatch(
         });
 
         console.log(`✅ Email sent to ${contact.metadata.email}`);
-        console.log(`📧 DEBUG: Resend message ID: ${result.id}`);
 
         // Update the pending record to "sent" status
-        console.log(
-          `📧 DEBUG: Updating pending record ${pendingRecordId} to "sent" status...`
-        );
 
-        const updatedRecord = await createCampaignSend({
+        await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
           contactEmail: contact.metadata.email,
           status: "sent",
           resendMessageId: result.id,
           pendingRecordId: pendingRecordId,
-        });
-
-        console.log(`📧 DEBUG: Updated campaign-send record:`, {
-          id: updatedRecord.id,
-          status: updatedRecord.metadata.status,
-          contact_email: updatedRecord.metadata.contact_email,
-          sent_at: updatedRecord.metadata.sent_at,
-          resend_message_id: updatedRecord.metadata.resend_message_id,
         });
 
         emailsProcessed++;
@@ -436,9 +417,6 @@ async function processCampaignBatch(
           `❌ Failed to send to ${contact.metadata.email}:`,
           error.message
         );
-        console.log(
-          `📧 DEBUG: Updating pending record ${pendingRecordId} to "failed" status...`
-        );
 
         await createCampaignSend({
           campaignId: campaign.id,
@@ -461,19 +439,7 @@ async function processCampaignBatch(
     batchesProcessed++;
 
     // CRITICAL FIX: Update campaign progress after each batch using fresh database stats
-    console.log(
-      `📊 DEBUG: Fetching fresh stats from database after batch ${batchesProcessed}...`
-    );
-
     const freshStats = await getCampaignSendStats(campaign.id);
-
-    console.log(`📊 DEBUG: Fresh stats breakdown:`, {
-      total: freshStats.total,
-      sent: freshStats.sent,
-      pending: freshStats.pending,
-      failed: freshStats.failed,
-      bounced: freshStats.bounced,
-    });
 
     const progressPercentage = Math.round(
       (freshStats.sent / allContacts.length) * 100
