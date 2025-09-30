@@ -223,7 +223,7 @@ export async function getCampaignSendStats(
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
-        "metadata.status.value": "sent",
+        "metadata.status": "sent",
       })
       .props(["id"])
       .limit(1);
@@ -235,7 +235,7 @@ export async function getCampaignSendStats(
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
-        "metadata.status.value": "pending",
+        "metadata.status": "pending",
       })
       .props(["id"])
       .limit(1);
@@ -247,7 +247,7 @@ export async function getCampaignSendStats(
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
-        "metadata.status.value": "failed",
+        "metadata.status": "failed",
       })
       .props(["id"])
       .limit(1);
@@ -259,7 +259,7 @@ export async function getCampaignSendStats(
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
-        "metadata.status.value": "bounced",
+        "metadata.status": "bounced",
       })
       .props(["id"])
       .limit(1);
@@ -414,9 +414,9 @@ export async function getUploadJobs(options?: {
     if (status && status !== "all") {
       if (Array.isArray(status)) {
         // Handle multiple status values
-        query["metadata.status.value"] = { $in: status };
+        query["metadata.status"] = { $in: status };
       } else {
-        query["metadata.status.value"] = status;
+        query["metadata.status"] = status;
       }
     }
 
@@ -1180,7 +1180,7 @@ export async function getEmailContacts(options?: {
 
     // Add status filter if provided
     if (status && status !== "all") {
-      query["metadata.status.value"] = status;
+      query["metadata.status"] = status;
     }
 
     // Add list filter if provided
