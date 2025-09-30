@@ -229,6 +229,13 @@ async function processCampaignBatch(
       if (rateLimitHit) break;
 
       const contact = batch[contactIndex];
+      
+      // CRITICAL FIX: Add explicit undefined check to satisfy TypeScript
+      if (!contact) {
+        console.error(`Undefined contact at batch index ${contactIndex}`);
+        continue; // Skip this iteration if contact is somehow undefined
+      }
+      
       const startTime = Date.now();
 
       try {
