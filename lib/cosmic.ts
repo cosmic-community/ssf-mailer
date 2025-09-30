@@ -52,8 +52,8 @@ export async function createCampaignSend(data: {
       type: "campaign-sends",
       title: `Send to ${data.contactEmail}`,
       metadata: {
-        campaign_id: data.campaignId,
-        contact_id: data.contactId,
+        campaign: data.campaignId,
+        contact: data.contactId,
         contact_email: data.contactEmail,
         status: {
           key: data.status,
@@ -82,8 +82,8 @@ export async function hasContactBeenSent(
     const { objects } = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
-        "metadata.contact_id": contactId,
+        "metadata.campaign": campaignId,
+        "metadata.contact": contactId,
       })
       .props(["id"])
       .limit(1);
@@ -110,14 +110,14 @@ export async function getSentContactIds(
     const { objects, total } = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
+        "metadata.campaign": campaignId,
       })
-      .props(["metadata.contact_id"])
+      .props(["metadata.contact.id"])
       .limit(limit)
       .skip(skip);
 
     return {
-      contactIds: objects.map((obj: any) => obj.metadata.contact_id),
+      contactIds: objects.map((obj: any) => obj.metadata.contact.id),
       total: total || 0,
     };
   } catch (error) {
@@ -143,7 +143,7 @@ export async function getCampaignSendStats(
     const allSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
+        "metadata.campaign": campaignId,
       })
       .props(["id"])
       .limit(1);
@@ -154,7 +154,7 @@ export async function getCampaignSendStats(
     const sentSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
+        "metadata.campaign": campaignId,
         "metadata.status.value": "sent",
       })
       .props(["id"])
@@ -166,7 +166,7 @@ export async function getCampaignSendStats(
     const failedSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
+        "metadata.campaign": campaignId,
         "metadata.status.value": "failed",
       })
       .props(["id"])
@@ -178,7 +178,7 @@ export async function getCampaignSendStats(
     const bouncedSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
-        "metadata.campaign_id": campaignId,
+        "metadata.campaign": campaignId,
         "metadata.status.value": "bounced",
       })
       .props(["id"])
