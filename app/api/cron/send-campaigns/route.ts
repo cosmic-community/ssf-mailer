@@ -33,8 +33,12 @@ export async function GET(request: NextRequest) {
     }
 
     const now = new Date();
-    console.log(`Cron job started: Processing sending campaigns at ${now.toISOString()} (UTC)`);
-    console.log(`Rate limit: ${EMAILS_PER_SECOND} emails/sec (min ${MIN_DELAY_MS}ms between sends)`);
+    console.log(
+      `Cron job started: Processing sending campaigns at ${now.toISOString()} (UTC)`
+    );
+    console.log(
+      `Rate limit: ${EMAILS_PER_SECOND} emails/sec (min ${MIN_DELAY_MS}ms between sends)`
+    );
 
     // Get all campaigns that are in "Sending" status
     const campaigns = await getMarketingCampaigns();
@@ -71,16 +75,20 @@ export async function GET(request: NextRequest) {
         const sendDate = campaign.metadata.send_date;
         if (sendDate) {
           const scheduledTime = new Date(sendDate);
-          
+
           console.log(`Campaign "${campaign.metadata.name}" schedule check:`, {
             scheduledTime: scheduledTime.toISOString(),
             currentTime: now.toISOString(),
             shouldSend: scheduledTime <= now,
           });
-          
+
           // Only process if scheduled time has passed
           if (scheduledTime > now) {
-            console.log(`Skipping "${campaign.metadata.name}" - scheduled for ${scheduledTime.toISOString()}`);
+            console.log(
+              `Skipping "${
+                campaign.metadata.name
+              }" - scheduled for ${scheduledTime.toISOString()}`
+            );
             continue;
           }
         }
@@ -90,14 +98,16 @@ export async function GET(request: NextRequest) {
           const hitAt = new Date(campaign.metadata.rate_limit_hit_at);
           const retryAfter = campaign.metadata.retry_after || 3600;
           const canRetryAt = new Date(hitAt.getTime() + retryAfter * 1000);
-          
+
           if (now < canRetryAt) {
             console.log(
-              `Skipping campaign ${campaign.id} - rate limit cooldown until ${canRetryAt.toISOString()}`
+              `Skipping campaign ${
+                campaign.id
+              } - rate limit cooldown until ${canRetryAt.toISOString()}`
             );
             continue;
           }
-          
+
           // Clear rate limit flag since we can retry now
           console.log(`Clearing rate limit flag for campaign ${campaign.id}`);
           await updateEmailCampaign(campaign.id, {
@@ -113,29 +123,31 @@ export async function GET(request: NextRequest) {
         const result = await processCampaignBatch(campaign, settings);
         totalProcessed += result.processed;
 
-        // CRITICAL FIX: Check completion status using fresh database stats
-        if (result.completed) {
+        // Check if campaign completed
+        if (result.completed && result.finalStats) {
           const sentAt = new Date().toISOString();
-          
-          console.log(`✅ Campaign ${campaign.id} completed! Marking as Sent...`);
-          console.log(`📊 Final stats from database:`, result.finalStats);
-          
-          // CRITICAL FIX: Update campaign with both status change AND sent_at timestamp
-          // Use updateEmailCampaign to update both the status and the sent_at field
-          await updateEmailCampaign(campaign.id, {
-            status: "Sent",
-            stats: result.finalStats,
-          } as any);
-          
-          // CRITICAL FIX: Separately update the sent_at field using direct metadata update
+
+          console.log(
+            `✅ Campaign ${campaign.id} completed! Marking as Sent...`
+          );
+          console.log(`📊 Final stats:`, result.finalStats);
+
+          // Update status, stats, and sent_at in ONE atomic operation
           const { cosmic } = await import("@/lib/cosmic");
           await cosmic.objects.updateOne(campaign.id, {
             metadata: {
+              status: {
+                key: "sent",
+                value: "Sent",
+              },
+              stats: result.finalStats,
               sent_at: sentAt,
             },
           });
-          
-          console.log(`✅ Campaign ${campaign.id} marked as Sent with timestamp ${sentAt}`);
+
+          console.log(
+            `✅ Campaign ${campaign.id} marked as Sent with timestamp ${sentAt}`
+          );
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);
@@ -175,7 +187,9 @@ async function processCampaignBatch(
 ) {
   // Get all target contacts for this campaign
   const allContacts = await getCampaignTargetContacts(campaign);
-  console.log(`Campaign ${campaign.id}: Total contacts = ${allContacts.length}`);
+  console.log(
+    `Campaign ${campaign.id}: Total contacts = ${allContacts.length}`
+  );
 
   // Filter out contacts that have already been sent to (including pending)
   const unsentContactIds = await filterUnsentContacts(
@@ -188,17 +202,21 @@ async function processCampaignBatch(
   );
 
   console.log(
-    `Campaign ${campaign.id}: ${allContacts.length - unsentContacts.length} already sent/reserved, ${unsentContacts.length} remaining`
+    `Campaign ${campaign.id}: ${
+      allContacts.length - unsentContacts.length
+    } already sent/reserved, ${unsentContacts.length} remaining`
   );
 
   if (unsentContacts.length === 0) {
     console.log(`Campaign ${campaign.id} is complete!`);
-    
+
     // CRITICAL FIX: Get fresh stats from database, not stale batch stats
     const freshStats = await getCampaignSendStats(campaign.id);
-    
-    console.log(`📊 Fresh database stats - sent: ${freshStats.sent}, bounced: ${freshStats.bounced}, pending: ${freshStats.pending}, failed: ${freshStats.failed}`);
-    
+
+    console.log(
+      `📊 Fresh database stats - sent: ${freshStats.sent}, bounced: ${freshStats.bounced}, pending: ${freshStats.pending}, failed: ${freshStats.failed}`
+    );
+
     return {
       processed: 0,
       completed: true,
@@ -216,15 +234,19 @@ async function processCampaignBatch(
   }
 
   // ATOMIC RESERVATION: Reserve contacts before sending with unique slug constraint
-  console.log(`🔒 Reserving ${Math.min(BATCH_SIZE, unsentContacts.length)} contacts atomically...`);
-  const { reserved: reservedContacts, pendingRecordIds } = await reserveContactsForSending(
-    campaign.id,
-    unsentContacts,
-    BATCH_SIZE
+  console.log(
+    `🔒 Reserving ${Math.min(
+      BATCH_SIZE,
+      unsentContacts.length
+    )} contacts atomically...`
   );
+  const { reserved: reservedContacts, pendingRecordIds } =
+    await reserveContactsForSending(campaign.id, unsentContacts, BATCH_SIZE);
 
   if (reservedContacts.length === 0) {
-    console.log(`⚠️  No contacts could be reserved (all already reserved by another cron job)`);
+    console.log(
+      `⚠️  No contacts could be reserved (all already reserved by another cron job)`
+    );
     return {
       processed: 0,
       completed: false,
@@ -253,25 +275,33 @@ async function processCampaignBatch(
     if (rateLimitHit) break;
 
     const batch = reservedContacts.slice(i, i + BATCH_SIZE);
-    console.log(`Processing batch ${batchesProcessed + 1}: ${batch.length} reserved contacts`);
+    console.log(
+      `Processing batch ${batchesProcessed + 1}: ${
+        batch.length
+      } reserved contacts`
+    );
 
     // Process each reserved contact with proper rate limiting
     for (let contactIndex = 0; contactIndex < batch.length; contactIndex++) {
       if (rateLimitHit) break;
 
       const contact = batch[contactIndex];
-      
+
       // CRITICAL FIX: Add explicit undefined check to satisfy TypeScript
       if (!contact) {
         console.error(`Undefined contact at batch index ${contactIndex}`);
         continue;
       }
-      
+
       const startTime = Date.now();
       const pendingRecordId = pendingRecordIds.get(contact.id);
 
-      console.log(`📧 DEBUG: Processing contact ${contact.id} (${contact.metadata.email})`);
-      console.log(`📧 DEBUG: Pending record ID for this contact: ${pendingRecordId}`);
+      console.log(
+        `📧 DEBUG: Processing contact ${contact.id} (${contact.metadata.email})`
+      );
+      console.log(
+        `📧 DEBUG: Pending record ID for this contact: ${pendingRecordId}`
+      );
 
       try {
         // Get campaign content
@@ -332,7 +362,8 @@ async function processCampaignBatch(
           to: contact.metadata.email,
           subject: personalizedSubject,
           html: personalizedContent,
-          reply_to: settings.metadata.reply_to_email || settings.metadata.from_email,
+          reply_to:
+            settings.metadata.reply_to_email || settings.metadata.from_email,
           campaignId: campaign.id,
           contactId: contact.id,
           headers: {
@@ -347,8 +378,10 @@ async function processCampaignBatch(
         console.log(`📧 DEBUG: Resend message ID: ${result.id}`);
 
         // Update the pending record to "sent" status
-        console.log(`📧 DEBUG: Updating pending record ${pendingRecordId} to "sent" status...`);
-        
+        console.log(
+          `📧 DEBUG: Updating pending record ${pendingRecordId} to "sent" status...`
+        );
+
         const updatedRecord = await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
@@ -384,7 +417,9 @@ async function processCampaignBatch(
           error.statusCode === 429
         ) {
           const retryAfter = error.retryAfter || 3600;
-          console.log(`⚠️  Rate limit hit! Pausing campaign. Retry after ${retryAfter}s`);
+          console.log(
+            `⚠️  Rate limit hit! Pausing campaign. Retry after ${retryAfter}s`
+          );
 
           // Save rate limit state
           await updateEmailCampaign(campaign.id, {
@@ -397,8 +432,13 @@ async function processCampaignBatch(
         }
 
         // Regular error - update pending record to "failed"
-        console.error(`❌ Failed to send to ${contact.metadata.email}:`, error.message);
-        console.log(`📧 DEBUG: Updating pending record ${pendingRecordId} to "failed" status...`);
+        console.error(
+          `❌ Failed to send to ${contact.metadata.email}:`,
+          error.message
+        );
+        console.log(
+          `📧 DEBUG: Updating pending record ${pendingRecordId} to "failed" status...`
+        );
 
         await createCampaignSend({
           campaignId: campaign.id,
@@ -421,10 +461,12 @@ async function processCampaignBatch(
     batchesProcessed++;
 
     // CRITICAL FIX: Update campaign progress after each batch using fresh database stats
-    console.log(`📊 DEBUG: Fetching fresh stats from database after batch ${batchesProcessed}...`);
-    
+    console.log(
+      `📊 DEBUG: Fetching fresh stats from database after batch ${batchesProcessed}...`
+    );
+
     const freshStats = await getCampaignSendStats(campaign.id);
-    
+
     console.log(`📊 DEBUG: Fresh stats breakdown:`, {
       total: freshStats.total,
       sent: freshStats.sent,
@@ -432,11 +474,15 @@ async function processCampaignBatch(
       failed: freshStats.failed,
       bounced: freshStats.bounced,
     });
-    
-    const progressPercentage = Math.round((freshStats.sent / allContacts.length) * 100);
-    
-    console.log(`💾 Updating campaign progress: ${freshStats.sent}/${allContacts.length} sent (${progressPercentage}%)`);
-    
+
+    const progressPercentage = Math.round(
+      (freshStats.sent / allContacts.length) * 100
+    );
+
+    console.log(
+      `💾 Updating campaign progress: ${freshStats.sent}/${allContacts.length} sent (${progressPercentage}%)`
+    );
+
     await updateCampaignProgress(campaign.id, {
       sent: freshStats.sent,
       failed: freshStats.failed + freshStats.bounced,
@@ -455,36 +501,32 @@ async function processCampaignBatch(
     }
   }
 
-  // CRITICAL FIX: Check if campaign is fully complete using fresh database stats
+  // SIMPLE FIX: Check if campaign is complete by comparing stats to total contacts
   if (!rateLimitHit) {
-    const remainingAfterRun = await filterUnsentContacts(
-      campaign.id,
-      allContacts.map((c) => c.id)
+    console.log(`📊 Checking if campaign is complete...`);
+
+    const finalFreshStats = await getCampaignSendStats(campaign.id);
+
+    console.log(
+      `📊 Final stats: sent=${finalFreshStats.sent}, failed=${finalFreshStats.failed}, bounced=${finalFreshStats.bounced}, pending=${finalFreshStats.pending}, total_contacts=${allContacts.length}`
     );
 
-    console.log(`📊 DEBUG: After batch processing - ${remainingAfterRun.length} contacts remaining`);
+    // Calculate total processed (sent + failed + bounced)
+    const totalProcessed =
+      finalFreshStats.sent + finalFreshStats.failed + finalFreshStats.bounced;
 
-    if (remainingAfterRun.length === 0) {
-      console.log(`✅ Campaign ${campaign.id} fully completed!`);
-      
-      // CRITICAL FIX: Get fresh final stats from database
-      console.log(`📊 DEBUG: Fetching final fresh stats from database...`);
-      const finalFreshStats = await getCampaignSendStats(campaign.id);
-      
-      console.log(`📊 Final fresh database stats:`, {
-        total: finalFreshStats.total,
-        sent: finalFreshStats.sent,
-        pending: finalFreshStats.pending,
-        failed: finalFreshStats.failed,
-        bounced: finalFreshStats.bounced,
-      });
-      
+    // Campaign is complete if all contacts have been processed and no pending
+    if (totalProcessed >= allContacts.length && finalFreshStats.pending === 0) {
+      console.log(
+        `✅ Campaign ${campaign.id} fully completed! ${totalProcessed}/${allContacts.length} contacts processed`
+      );
+
       return {
         processed: emailsProcessed,
         completed: true,
         finalStats: {
           sent: finalFreshStats.sent,
-          delivered: finalFreshStats.sent, // Delivered = sent (webhooks will update later)
+          delivered: finalFreshStats.sent,
           opened: 0,
           clicked: 0,
           bounced: finalFreshStats.bounced,
@@ -493,6 +535,10 @@ async function processCampaignBatch(
           click_rate: "0%",
         },
       };
+    } else {
+      console.log(
+        `⏳ Campaign ${campaign.id} still in progress: ${totalProcessed}/${allContacts.length} processed, ${finalFreshStats.pending} pending`
+      );
     }
   }
 
