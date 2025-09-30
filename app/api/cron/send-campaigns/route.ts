@@ -101,8 +101,8 @@ export async function GET(request: NextRequest) {
           // Clear rate limit flag since we can retry now
           console.log(`Clearing rate limit flag for campaign ${campaign.id}`);
           await updateEmailCampaign(campaign.id, {
-            rate_limit_hit_at: null,
-            retry_after: null,
+            rate_limit_hit_at: "",
+            retry_after: "",
           } as any);
         }
 
