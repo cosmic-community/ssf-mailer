@@ -113,20 +113,17 @@ export async function GET(request: NextRequest) {
         const result = await processCampaignBatch(campaign, settings);
         totalProcessed += result.processed;
 
-        // If campaign is completed, update status, stats, and save sent_at timestamp
+        // CRITICAL FIX: Check completion status using fresh database stats
         if (result.completed) {
           const sentAt = new Date().toISOString();
           
-          console.log(`✅ Campaign ${campaign.id} completed! Updating status to Sent...`);
-          console.log(`📊 Final stats:`, result.finalStats);
+          console.log(`✅ Campaign ${campaign.id} completed! Marking as Sent...`);
+          console.log(`📊 Final stats from database:`, result.finalStats);
           
-          // CRITICAL FIX: Update campaign with ALL three things:
-          // 1. Status -> "Sent"
-          // 2. Stats -> final stats with sent/delivered counts
-          // 3. sent_at -> timestamp when campaign completed
+          // Update campaign with Sent status, final stats, AND sent_at timestamp
           await updateCampaignStatus(campaign.id, "Sent", result.finalStats);
           
-          // Also update the sent_at field using the cosmic library
+          // Also update the sent_at field separately using direct Cosmic update
           const { cosmic } = await import("@/lib/cosmic");
           await cosmic.objects.updateOne(campaign.id, {
             metadata: {
@@ -134,7 +131,7 @@ export async function GET(request: NextRequest) {
             },
           });
           
-          console.log(`✅ Campaign ${campaign.id} marked as Sent at ${sentAt} with stats:`, result.finalStats);
+          console.log(`✅ Campaign ${campaign.id} marked as Sent at ${sentAt}`);
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);
@@ -192,16 +189,21 @@ async function processCampaignBatch(
 
   if (unsentContacts.length === 0) {
     console.log(`Campaign ${campaign.id} is complete!`);
-    const stats = await getCampaignSendStats(campaign.id);
+    
+    // CRITICAL FIX: Get fresh stats from database, not stale batch stats
+    const freshStats = await getCampaignSendStats(campaign.id);
+    
+    console.log(`📊 Fresh database stats - sent: ${freshStats.sent}, bounced: ${freshStats.bounced}, pending: ${freshStats.pending}, failed: ${freshStats.failed}`);
+    
     return {
       processed: 0,
       completed: true,
       finalStats: {
-        sent: stats.sent,
-        delivered: stats.sent,
+        sent: freshStats.sent,
+        delivered: freshStats.sent, // Delivered = sent initially (webhooks will update later)
         opened: 0,
         clicked: 0,
-        bounced: stats.bounced,
+        bounced: freshStats.bounced,
         unsubscribed: 0,
         open_rate: "0%",
         click_rate: "0%",
@@ -228,14 +230,6 @@ async function processCampaignBatch(
 
   console.log(`✅ Successfully reserved ${reservedContacts.length} contacts`);
 
-  // CRITICAL FIX: Initialize batch stats properly
-  const batchStats = {
-    sent: 0,
-    pending: 0,
-    failed: 0,
-    bounced: 0,
-  };
-
   // Send emails with proper rate limiting
   let batchesProcessed = 0;
   let rateLimitHit = false;
@@ -245,8 +239,6 @@ async function processCampaignBatch(
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     "http://localhost:3000";
-
-  console.log(`📊 Starting batch processing. Initial stats:`, batchStats);
 
   // Process reserved contacts in smaller batches
   for (
@@ -344,9 +336,7 @@ async function processCampaignBatch(
           },
         });
 
-        // CRITICAL FIX: Increment batch stats IMMEDIATELY after successful send
-        batchStats.sent++;
-        console.log(`  ✅ Email sent to ${contact.metadata.email} (${batchStats.sent} total sent)`);
+        console.log(`  ✅ Email sent to ${contact.metadata.email}`);
 
         // Update the pending record to "sent" status
         await createCampaignSend({
@@ -366,11 +356,6 @@ async function processCampaignBatch(
 
         if (delay > 0) {
           await new Promise((resolve) => setTimeout(resolve, delay));
-        }
-
-        // Log progress every 10 emails
-        if (batchStats.sent % 10 === 0) {
-          console.log(`  📊 Progress: ${batchStats.sent} sent, ${batchStats.failed} failed`);
         }
       } catch (error: any) {
         // Check if it's a rate limit error
@@ -396,9 +381,6 @@ async function processCampaignBatch(
         // Regular error - update pending record to "failed"
         console.error(`  ❌ Failed to send to ${contact.metadata.email}:`, error.message);
 
-        // CRITICAL FIX: Increment failed counter
-        batchStats.failed++;
-
         await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
@@ -419,24 +401,22 @@ async function processCampaignBatch(
 
     batchesProcessed++;
 
-    console.log(`📊 Batch ${batchesProcessed} stats:`, batchStats);
-
-    // CRITICAL FIX: Update campaign progress after each batch using fresh stats from database
-    const stats = await getCampaignSendStats(campaign.id);
-    const progressPercentage = Math.round((stats.sent / allContacts.length) * 100);
+    // CRITICAL FIX: Update campaign progress after each batch using fresh database stats
+    const freshStats = await getCampaignSendStats(campaign.id);
+    const progressPercentage = Math.round((freshStats.sent / allContacts.length) * 100);
     
-    console.log(`💾 Updating campaign progress: ${stats.sent}/${allContacts.length} sent (${progressPercentage}%)`);
+    console.log(`💾 Updating campaign progress: ${freshStats.sent}/${allContacts.length} sent (${progressPercentage}%)`);
     
     await updateCampaignProgress(campaign.id, {
-      sent: stats.sent,
-      failed: stats.failed + stats.bounced,
+      sent: freshStats.sent,
+      failed: freshStats.failed + freshStats.bounced,
       total: allContacts.length,
       progress_percentage: progressPercentage,
       last_batch_completed: new Date().toISOString(),
     });
 
     console.log(
-      `Batch ${batchesProcessed} complete. Database stats: ${stats.sent} sent, ${stats.pending} pending, ${stats.failed} failed, ${stats.bounced} bounced`
+      `Batch ${batchesProcessed} complete. Database stats: ${freshStats.sent} sent, ${freshStats.pending} pending, ${freshStats.failed} failed, ${freshStats.bounced} bounced`
     );
 
     // Delay between batches (1 second)
@@ -445,7 +425,7 @@ async function processCampaignBatch(
     }
   }
 
-  // CRITICAL FIX: Check if campaign is fully complete using database stats
+  // CRITICAL FIX: Check if campaign is fully complete using fresh database stats
   if (!rateLimitHit) {
     const remainingAfterRun = await filterUnsentContacts(
       campaign.id,
@@ -454,18 +434,21 @@ async function processCampaignBatch(
 
     if (remainingAfterRun.length === 0) {
       console.log(`✅ Campaign ${campaign.id} fully completed!`);
-      const finalStats = await getCampaignSendStats(campaign.id);
       
-      // CRITICAL FIX: Return proper final stats with sent count from database
+      // CRITICAL FIX: Get fresh final stats from database
+      const finalFreshStats = await getCampaignSendStats(campaign.id);
+      
+      console.log(`📊 Final fresh database stats - sent: ${finalFreshStats.sent}, bounced: ${finalFreshStats.bounced}`);
+      
       return {
         processed: emailsProcessed,
         completed: true,
         finalStats: {
-          sent: finalStats.sent,
-          delivered: finalStats.sent, // Delivered = sent (we'll update this with webhooks later)
+          sent: finalFreshStats.sent,
+          delivered: finalFreshStats.sent, // Delivered = sent (webhooks will update later)
           opened: 0,
           clicked: 0,
-          bounced: finalStats.bounced,
+          bounced: finalFreshStats.bounced,
           unsubscribed: 0,
           open_rate: "0%",
           click_rate: "0%",
