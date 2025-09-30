@@ -14,9 +14,11 @@ import { sendEmail, ResendRateLimitError } from "@/lib/resend";
 import { createUnsubscribeUrl, addTrackingToEmail } from "@/lib/email-tracking";
 import { MarketingCampaign, EmailContact } from "@/types";
 
-const BATCH_SIZE = 100; // Reduced from 1000 for better reliability
+// Rate limiting configuration for Resend API
+const EMAILS_PER_SECOND = 8; // Stay safely under 10/sec limit with 20% buffer
+const MIN_DELAY_MS = Math.ceil(1000 / EMAILS_PER_SECOND); // ~125ms per email
+const BATCH_SIZE = 100; // Process 100 emails at a time
 const MAX_BATCHES_PER_RUN = 10; // Process max 10 batches per cron run (1,000 emails)
-const BATCH_DELAY = 100; // Small delay between individual sends
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +33,7 @@ export async function GET(request: NextRequest) {
 
     const now = new Date();
     console.log(`Cron job started: Processing sending campaigns at ${now.toISOString()} (UTC)`);
+    console.log(`Rate limit: ${EMAILS_PER_SECOND} emails/sec (min ${MIN_DELAY_MS}ms between sends)`);
 
     // Get all campaigns that are in "Sending" status
     const campaigns = await getMarketingCampaigns();
@@ -95,6 +98,7 @@ export async function GET(request: NextRequest) {
           }
           
           // Clear rate limit flag since we can retry now
+          console.log(`Clearing rate limit flag for campaign ${campaign.id}`);
           await updateEmailCampaign(campaign.id, {
             rate_limit_hit_at: null,
             retry_after: null,
@@ -198,10 +202,12 @@ async function processCampaignBatch(
     };
   }
 
-  // Send emails with rate limit detection
+  // Send emails with proper rate limiting
   let batchesProcessed = 0;
   let rateLimitHit = false;
   let emailsProcessed = 0;
+  let successCount = 0;
+  let failureCount = 0;
 
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -218,8 +224,12 @@ async function processCampaignBatch(
     const batch = unsentContacts.slice(i, i + BATCH_SIZE);
     console.log(`Processing batch ${batchesProcessed + 1}: ${batch.length} contacts`);
 
-    for (const contact of batch) {
+    // Process each contact with proper rate limiting
+    for (let contactIndex = 0; contactIndex < batch.length; contactIndex++) {
       if (rateLimitHit) break;
+
+      const contact = batch[contactIndex];
+      const startTime = Date.now();
 
       try {
         // Get campaign content
@@ -300,23 +310,38 @@ async function processCampaignBatch(
           resendMessageId: result.id,
         });
 
+        successCount++;
         emailsProcessed++;
 
-        // Small delay between emails
-        await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY));
+        // Calculate dynamic delay to maintain rate limit
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, MIN_DELAY_MS - elapsed);
+
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
+
+        // Log progress every 10 emails
+        if (successCount % 10 === 0) {
+          console.log(`  Progress: ${successCount} sent successfully, ${failureCount} failed`);
+        }
       } catch (error: any) {
+        failureCount++;
+
         // Check if it's a rate limit error
         if (
           error instanceof ResendRateLimitError ||
           error.message?.toLowerCase().includes("rate limit") ||
+          error.message?.toLowerCase().includes("too many requests") ||
           error.statusCode === 429
         ) {
-          console.log(`Rate limit hit! Pausing campaign.`);
+          const retryAfter = error.retryAfter || 3600;
+          console.log(`⚠️  Rate limit hit! Pausing campaign. Retry after ${retryAfter}s`);
 
           // Save rate limit state
           await updateEmailCampaign(campaign.id, {
             rate_limit_hit_at: new Date().toISOString(),
-            retry_after: error.retryAfter || 3600,
+            retry_after: retryAfter,
           } as any);
 
           rateLimitHit = true;
@@ -324,7 +349,7 @@ async function processCampaignBatch(
         }
 
         // Regular error - record failed send
-        console.error(`Failed to send to ${contact.metadata.email}:`, error);
+        console.error(`  ❌ Failed to send to ${contact.metadata.email}:`, error.message);
 
         await createCampaignSend({
           campaignId: campaign.id,
@@ -333,6 +358,13 @@ async function processCampaignBatch(
           status: "failed",
           errorMessage: error.message,
         });
+
+        // Still apply rate limiting even on errors
+        const elapsed = Date.now() - startTime;
+        const delay = Math.max(0, MIN_DELAY_MS - elapsed);
+        if (delay > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        }
       }
     }
 
@@ -349,10 +381,10 @@ async function processCampaignBatch(
     });
 
     console.log(
-      `Batch complete. Stats: ${stats.sent} sent, ${stats.failed} failed, ${stats.bounced} bounced`
+      `Batch ${batchesProcessed} complete. Stats: ${stats.sent} sent, ${stats.failed} failed, ${stats.bounced} bounced`
     );
 
-    // Delay between batches
+    // Delay between batches (1 second)
     if (batchesProcessed < MAX_BATCHES_PER_RUN && !rateLimitHit) {
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
@@ -366,7 +398,7 @@ async function processCampaignBatch(
     );
 
     if (remainingAfterRun.length === 0) {
-      console.log(`Campaign ${campaign.id} fully completed!`);
+      console.log(`✅ Campaign ${campaign.id} fully completed!`);
       const stats = await getCampaignSendStats(campaign.id);
       
       return {

@@ -92,19 +92,22 @@ export async function sendEmail(
     // The Resend SDK returns { data: { id: string }, error: null } on success
     // or { data: null, error: ErrorObject } on failure
     if (result.error) {
-      // Check if this is a rate limit error
+      // Check if this is a rate limit error (429 or rate limit message)
       const errorMessage = result.error.message || "";
-      if (
+      const isRateLimit = 
         errorMessage.toLowerCase().includes("rate limit") ||
-        errorMessage.toLowerCase().includes("too many requests")
-      ) {
+        errorMessage.toLowerCase().includes("too many requests") ||
+        errorMessage.includes("429");
+
+      if (isRateLimit) {
         // Try to extract retry-after from error message if available
         const retryMatch = errorMessage.match(/retry after (\d+)/i);
-        // CRITICAL FIX: Use nullish coalescing to handle undefined capture group
-        // retryMatch[1] can be undefined, so we provide "3600" as a string fallback
         const retryAfter = retryMatch ? parseInt(retryMatch[1] ?? "3600") : 3600;
+        
+        console.error("Resend rate limit error:", errorMessage);
         throw new ResendRateLimitError("Resend API rate limit exceeded", retryAfter);
       }
+      
       throw new Error(result.error.message || "Failed to send email");
     }
 
@@ -114,18 +117,27 @@ export async function sendEmail(
 
     return { id: result.data.id };
   } catch (error: any) {
-    // Re-throw rate limit errors as-is
+    // Re-throw ResendRateLimitError as-is
     if (error instanceof ResendRateLimitError) {
       throw error;
     }
     
-    // Check for rate limit in generic errors
-    if (
-      error.message?.toLowerCase().includes("rate limit") ||
-      error.message?.toLowerCase().includes("too many requests") ||
-      error.statusCode === 429
-    ) {
-      throw new ResendRateLimitError("Resend API rate limit exceeded", 3600);
+    // Check for rate limit in generic errors (catch-all for any 429 responses)
+    const errorMessage = error.message || "";
+    const isRateLimit = 
+      errorMessage.toLowerCase().includes("rate limit") ||
+      errorMessage.toLowerCase().includes("too many requests") ||
+      error.statusCode === 429 ||
+      error.status === 429;
+
+    if (isRateLimit) {
+      // Try to extract retry-after from headers if available
+      const retryAfter = error.headers?.['retry-after'] 
+        ? parseInt(error.headers['retry-after']) 
+        : 3600;
+      
+      console.error("Resend rate limit error (caught):", errorMessage);
+      throw new ResendRateLimitError("Resend API rate limit exceeded", retryAfter);
     }
     
     console.error("Resend API error:", error);
