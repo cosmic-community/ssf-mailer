@@ -113,11 +113,17 @@ export async function GET(request: NextRequest) {
         const result = await processCampaignBatch(campaign, settings);
         totalProcessed += result.processed;
 
-        // If campaign is completed, update status and save sent_at timestamp
+        // If campaign is completed, update status, stats, and save sent_at timestamp
         if (result.completed) {
           const sentAt = new Date().toISOString();
           
-          // Update campaign with Sent status and sent_at timestamp
+          console.log(`✅ Campaign ${campaign.id} completed! Updating status to Sent...`);
+          console.log(`📊 Final stats:`, result.finalStats);
+          
+          // CRITICAL FIX: Update campaign with ALL three things:
+          // 1. Status -> "Sent"
+          // 2. Stats -> final stats with sent/delivered counts
+          // 3. sent_at -> timestamp when campaign completed
           await updateCampaignStatus(campaign.id, "Sent", result.finalStats);
           
           // Also update the sent_at field using the cosmic library
@@ -128,7 +134,7 @@ export async function GET(request: NextRequest) {
             },
           });
           
-          console.log(`Campaign ${campaign.id} completed and marked as Sent at ${sentAt}`);
+          console.log(`✅ Campaign ${campaign.id} marked as Sent at ${sentAt} with stats:`, result.finalStats);
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);
@@ -222,17 +228,25 @@ async function processCampaignBatch(
 
   console.log(`✅ Successfully reserved ${reservedContacts.length} contacts`);
 
+  // CRITICAL FIX: Initialize batch stats properly
+  const batchStats = {
+    sent: 0,
+    pending: 0,
+    failed: 0,
+    bounced: 0,
+  };
+
   // Send emails with proper rate limiting
   let batchesProcessed = 0;
   let rateLimitHit = false;
   let emailsProcessed = 0;
-  let successCount = 0;
-  let failureCount = 0;
 
   const baseUrl =
     process.env.NEXT_PUBLIC_APP_URL ||
     process.env.NEXT_PUBLIC_SITE_URL ||
     "http://localhost:3000";
+
+  console.log(`📊 Starting batch processing. Initial stats:`, batchStats);
 
   // Process reserved contacts in smaller batches
   for (
@@ -330,6 +344,10 @@ async function processCampaignBatch(
           },
         });
 
+        // CRITICAL FIX: Increment batch stats IMMEDIATELY after successful send
+        batchStats.sent++;
+        console.log(`  ✅ Email sent to ${contact.metadata.email} (${batchStats.sent} total sent)`);
+
         // Update the pending record to "sent" status
         await createCampaignSend({
           campaignId: campaign.id,
@@ -340,7 +358,6 @@ async function processCampaignBatch(
           pendingRecordId: pendingRecordId, // Update existing pending record
         });
 
-        successCount++;
         emailsProcessed++;
 
         // Calculate dynamic delay to maintain rate limit
@@ -352,12 +369,10 @@ async function processCampaignBatch(
         }
 
         // Log progress every 10 emails
-        if (successCount % 10 === 0) {
-          console.log(`  Progress: ${successCount} sent successfully, ${failureCount} failed`);
+        if (batchStats.sent % 10 === 0) {
+          console.log(`  📊 Progress: ${batchStats.sent} sent, ${batchStats.failed} failed`);
         }
       } catch (error: any) {
-        failureCount++;
-
         // Check if it's a rate limit error
         if (
           error instanceof ResendRateLimitError ||
@@ -381,6 +396,9 @@ async function processCampaignBatch(
         // Regular error - update pending record to "failed"
         console.error(`  ❌ Failed to send to ${contact.metadata.email}:`, error.message);
 
+        // CRITICAL FIX: Increment failed counter
+        batchStats.failed++;
+
         await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
@@ -401,18 +419,24 @@ async function processCampaignBatch(
 
     batchesProcessed++;
 
-    // Update campaign progress after each batch
+    console.log(`📊 Batch ${batchesProcessed} stats:`, batchStats);
+
+    // CRITICAL FIX: Update campaign progress after each batch using fresh stats from database
     const stats = await getCampaignSendStats(campaign.id);
+    const progressPercentage = Math.round((stats.sent / allContacts.length) * 100);
+    
+    console.log(`💾 Updating campaign progress: ${stats.sent}/${allContacts.length} sent (${progressPercentage}%)`);
+    
     await updateCampaignProgress(campaign.id, {
       sent: stats.sent,
       failed: stats.failed + stats.bounced,
       total: allContacts.length,
-      progress_percentage: Math.round((stats.sent / allContacts.length) * 100),
+      progress_percentage: progressPercentage,
       last_batch_completed: new Date().toISOString(),
     });
 
     console.log(
-      `Batch ${batchesProcessed} complete. Stats: ${stats.sent} sent, ${stats.pending} pending, ${stats.failed} failed, ${stats.bounced} bounced`
+      `Batch ${batchesProcessed} complete. Database stats: ${stats.sent} sent, ${stats.pending} pending, ${stats.failed} failed, ${stats.bounced} bounced`
     );
 
     // Delay between batches (1 second)
@@ -421,7 +445,7 @@ async function processCampaignBatch(
     }
   }
 
-  // Check if campaign is fully complete
+  // CRITICAL FIX: Check if campaign is fully complete using database stats
   if (!rateLimitHit) {
     const remainingAfterRun = await filterUnsentContacts(
       campaign.id,
@@ -430,17 +454,18 @@ async function processCampaignBatch(
 
     if (remainingAfterRun.length === 0) {
       console.log(`✅ Campaign ${campaign.id} fully completed!`);
-      const stats = await getCampaignSendStats(campaign.id);
+      const finalStats = await getCampaignSendStats(campaign.id);
       
+      // CRITICAL FIX: Return proper final stats with sent count from database
       return {
         processed: emailsProcessed,
         completed: true,
         finalStats: {
-          sent: stats.sent,
-          delivered: stats.sent,
+          sent: finalStats.sent,
+          delivered: finalStats.sent, // Delivered = sent (we'll update this with webhooks later)
           opened: 0,
           clicked: 0,
-          bounced: stats.bounced,
+          bounced: finalStats.bounced,
           unsubscribed: 0,
           open_rate: "0%",
           click_rate: "0%",
