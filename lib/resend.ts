@@ -53,16 +53,16 @@ export async function sendEmail(
     // Apply click tracking if this is a campaign email
     let finalHtmlContent = options.html;
     
-    // FIXED: Validate that all required values are defined before adding tracking
-    // Extract to local variables INSIDE the conditional to ensure type safety
+    // CRITICAL FIX: Validate that all required values are defined before adding tracking
+    // AND extract them to local const variables to ensure TypeScript type narrowing
     if (options.html && options.campaignId && options.contactId) {
-      // CRITICAL FIX: Extract values inside the conditional block
-      // This ensures TypeScript knows they are definitely strings
-      const htmlContent: string = options.html;
-      const campaignId: string = options.campaignId;
-      const contactId: string = options.contactId;
-      
+      // Extract values to local const variables INSIDE the conditional
       // TypeScript now knows these are definitely strings (not string | undefined)
+      const htmlContent = options.html;
+      const campaignId = options.campaignId;
+      const contactId = options.contactId;
+      
+      // Now we can safely pass these guaranteed-string values to addTrackingToEmail
       const { addTrackingToEmail } = await import("./email-tracking");
       finalHtmlContent = addTrackingToEmail(
         htmlContent,
