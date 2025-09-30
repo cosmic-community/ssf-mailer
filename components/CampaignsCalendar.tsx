@@ -94,13 +94,15 @@ export default function CampaignsCalendar({ campaigns }: CampaignsCalendarProps)
   const campaignsByDate = useMemo(() => {
     const grouped: Record<string, MarketingCampaign[]> = {}
     
-    campaigns.forEach(campaign => {
+    campaigns.forEach((campaign: MarketingCampaign) => {
       if (campaign.metadata.send_date) {
         const dateKey = new Date(campaign.metadata.send_date).toISOString().split('T')[0]
-        if (!grouped[dateKey]) {
-          grouped[dateKey] = []
+        if (dateKey) {
+          if (!grouped[dateKey]) {
+            grouped[dateKey] = []
+          }
+          grouped[dateKey]?.push(campaign)
         }
-        grouped[dateKey].push(campaign)
       }
     })
     
@@ -189,7 +191,7 @@ export default function CampaignsCalendar({ campaigns }: CampaignsCalendarProps)
           {/* Calendar days */}
           {calendarDays.map((day, index) => {
             const dateKey = day.date.toISOString().split('T')[0]
-            const dayCampaigns = campaignsByDate[dateKey] || []
+            const dayCampaigns = dateKey ? (campaignsByDate[dateKey] || []) : []
             const canAddCampaign = !day.isPast
 
             return (
@@ -218,7 +220,7 @@ export default function CampaignsCalendar({ campaigns }: CampaignsCalendarProps)
                 </div>
 
                 <div className="space-y-1">
-                  {dayCampaigns.slice(0, 3).map(campaign => (
+                  {dayCampaigns.slice(0, 3).map((campaign: MarketingCampaign) => (
                     <Link
                       key={campaign.id}
                       href={`/campaigns/${campaign.id}`}
