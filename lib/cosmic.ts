@@ -17,6 +17,7 @@ import {
   MediaItem,
   UploadJob,
   CreateUploadJobData,
+  CampaignSend,
 } from "@/types";
 
 if (
@@ -33,6 +34,202 @@ export const cosmic = createBucketClient({
   readKey: process.env.COSMIC_READ_KEY,
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
+
+// ==================== CAMPAIGN SENDS TRACKING ====================
+
+// Create a send record
+export async function createCampaignSend(data: {
+  campaignId: string;
+  contactId: string;
+  contactEmail: string;
+  status: "sent" | "failed" | "bounced";
+  sentAt?: string;
+  resendMessageId?: string;
+  errorMessage?: string;
+}): Promise<CampaignSend> {
+  try {
+    const { object } = await cosmic.objects.insertOne({
+      type: "campaign-sends",
+      title: `Send to ${data.contactEmail}`,
+      metadata: {
+        campaign_id: data.campaignId,
+        contact_id: data.contactId,
+        contact_email: data.contactEmail,
+        status: {
+          key: data.status,
+          value: data.status,
+        },
+        sent_at: data.sentAt || new Date().toISOString(),
+        resend_message_id: data.resendMessageId,
+        error_message: data.errorMessage,
+        retry_count: 0,
+      },
+    });
+
+    return object as CampaignSend;
+  } catch (error) {
+    console.error("Error creating campaign send record:", error);
+    throw new Error("Failed to create campaign send record");
+  }
+}
+
+// Check if contact has been sent to for a campaign
+export async function hasContactBeenSent(
+  campaignId: string,
+  contactId: string
+): Promise<boolean> {
+  try {
+    const { objects } = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+        "metadata.contact_id": contactId,
+      })
+      .props(["id"])
+      .limit(1);
+
+    return objects.length > 0;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return false;
+    }
+    console.error("Error checking send status:", error);
+    return false;
+  }
+}
+
+// Get all sent contact IDs for a campaign (paginated)
+export async function getSentContactIds(
+  campaignId: string,
+  options?: { limit?: number; skip?: number }
+): Promise<{ contactIds: string[]; total: number }> {
+  const limit = options?.limit || 1000;
+  const skip = options?.skip || 0;
+
+  try {
+    const { objects, total } = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+      })
+      .props(["metadata.contact_id"])
+      .limit(limit)
+      .skip(skip);
+
+    return {
+      contactIds: objects.map((obj: any) => obj.metadata.contact_id),
+      total: total || 0,
+    };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return { contactIds: [], total: 0 };
+    }
+    console.error("Error fetching sent contact IDs:", error);
+    return { contactIds: [], total: 0 };
+  }
+}
+
+// Get campaign send statistics
+export async function getCampaignSendStats(
+  campaignId: string
+): Promise<{
+  total: number;
+  sent: number;
+  failed: number;
+  bounced: number;
+}> {
+  try {
+    // Get total count
+    const allSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+      })
+      .props(["id"])
+      .limit(1);
+
+    const total = allSendsResponse.total || 0;
+
+    // Get sent count
+    const sentSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+        "metadata.status.value": "sent",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const sent = sentSendsResponse.total || 0;
+
+    // Get failed count
+    const failedSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+        "metadata.status.value": "failed",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const failed = failedSendsResponse.total || 0;
+
+    // Get bounced count
+    const bouncedSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign_id": campaignId,
+        "metadata.status.value": "bounced",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const bounced = bouncedSendsResponse.total || 0;
+
+    return { total, sent, failed, bounced };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return { total: 0, sent: 0, failed: 0, bounced: 0 };
+    }
+    console.error("Error fetching campaign stats:", error);
+    return { total: 0, sent: 0, failed: 0, bounced: 0 };
+  }
+}
+
+// Batch check which contacts have been sent to (efficient)
+export async function filterUnsentContacts(
+  campaignId: string,
+  contactIds: string[]
+): Promise<string[]> {
+  if (contactIds.length === 0) return [];
+
+  try {
+    // Get all sends for this campaign
+    const sentContactIds = new Set<string>();
+    let skip = 0;
+    const limit = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { contactIds: batch, total } = await getSentContactIds(
+        campaignId,
+        { limit, skip }
+      );
+
+      batch.forEach((id) => sentContactIds.add(id));
+      skip += limit;
+      hasMore = skip < total;
+    }
+
+    // Filter out contacts that have been sent to
+    return contactIds.filter((id) => !sentContactIds.has(id));
+  } catch (error) {
+    console.error("Error filtering unsent contacts:", error);
+    return contactIds; // Return all if error (safer than skipping)
+  }
+}
+
+// ==================== END CAMPAIGN SENDS TRACKING ====================
 
 // OPTIMIZED: Enhanced batch duplicate checking with sequential processing for better reliability
 export async function checkEmailsExist(emails: string[]): Promise<string[]> {
