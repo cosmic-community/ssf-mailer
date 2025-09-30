@@ -37,50 +37,69 @@ export const cosmic = createBucketClient({
 
 // ==================== CAMPAIGN SENDS TRACKING ====================
 
-// NEW: Atomic reservation function - reserves contacts before sending
+// UPDATED: Atomic reservation function with unique slug constraint
+// This prevents race conditions by using Cosmic's unique slug enforcement
 export async function reserveContactsForSending(
   campaignId: string,
   contacts: EmailContact[],
   batchSize: number
 ): Promise<{ reserved: EmailContact[]; pendingRecordIds: Map<string, string> }> {
   const reserved: EmailContact[] = [];
-  const pendingRecordIds = new Map<string, string>(); // Map contactId -> pendingRecordId
+  const pendingRecordIds = new Map<string, string>();
   
-  console.log(`Attempting to reserve ${Math.min(batchSize, contacts.length)} contacts for campaign ${campaignId}`);
+  const targetBatchSize = Math.min(batchSize, contacts.length);
+  console.log(`🔒 Attempting to reserve ${targetBatchSize} contacts for campaign ${campaignId}...`);
   
   for (const contact of contacts.slice(0, batchSize)) {
     try {
-      // Atomically create a "pending" send record
-      // This acts as a reservation - if another cron job tries to create
-      // a duplicate record, it will either fail or create a separate record
-      // Either way, we can detect and handle it
+      // CRITICAL: Create deterministic unique slug
+      // Format: send-{campaignId}-{contactId}
+      // This enforces uniqueness at the database level
+      const uniqueSlug = `send-${campaignId}-${contact.id}`;
+      
+      // Try to atomically create the record with unique slug
+      // Cosmic will reject if slug already exists (= another process reserved it)
       const { object } = await cosmic.objects.insertOne({
         type: "campaign-sends",
-        title: `Send to ${contact.metadata.email}`,
+        title: `Send: Campaign ${campaignId} to ${contact.metadata.email}`,
+        slug: uniqueSlug, // THIS IS THE KEY! Database-level uniqueness enforcement
         metadata: {
           campaign: campaignId,
           contact: contact.id,
           contact_email: contact.metadata.email,
           status: {
             key: "pending",
-            value: "pending",
+            value: "Pending",
           },
           reserved_at: new Date().toISOString(),
           retry_count: 0,
         },
       });
       
+      // If we got here, we successfully reserved this contact
       reserved.push(contact);
       pendingRecordIds.set(contact.id, object.id);
       
-    } catch (error) {
-      // If insert fails (e.g., duplicate key error or other conflict),
-      // this contact is already reserved by another process
-      console.log(`Contact ${contact.metadata.email} already reserved or error occurred:`, error);
+    } catch (error: any) {
+      // Slug conflict means another process already reserved/sent this contact
+      // This is EXPECTED behavior in concurrent processing - not an error!
+      const errorMessage = error.message?.toLowerCase() || "";
+      
+      if (errorMessage.includes('slug') || 
+          errorMessage.includes('unique') || 
+          errorMessage.includes('duplicate')) {
+        // Silent skip - contact is already being handled by another process
+        console.log(`⊗ Contact ${contact.id} (${contact.metadata.email}) already reserved/sent by another process`);
+        continue;
+      }
+      
+      // Other errors should be logged but not stop the batch
+      console.error(`✗ Error reserving contact ${contact.id}:`, error.message);
+      continue;
     }
   }
   
-  console.log(`Successfully reserved ${reserved.length} contacts out of ${Math.min(batchSize, contacts.length)} attempted`);
+  console.log(`✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts (${targetBatchSize - reserved.length} already reserved/sent)`);
   
   return { reserved, pendingRecordIds };
 }
@@ -103,7 +122,7 @@ export async function createCampaignSend(data: {
         metadata: {
           status: {
             key: data.status,
-            value: data.status,
+            value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
           },
           sent_at: data.sentAt || new Date().toISOString(),
           resend_message_id: data.resendMessageId,
@@ -124,7 +143,7 @@ export async function createCampaignSend(data: {
         contact_email: data.contactEmail,
         status: {
           key: data.status,
-          value: data.status,
+          value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
         },
         sent_at: data.sentAt || new Date().toISOString(),
         resend_message_id: data.resendMessageId,

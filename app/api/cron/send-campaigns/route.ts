@@ -203,7 +203,7 @@ async function processCampaignBatch(
     };
   }
 
-  // ATOMIC RESERVATION: Reserve contacts before sending
+  // ATOMIC RESERVATION: Reserve contacts before sending with unique slug constraint
   console.log(`🔒 Reserving ${Math.min(BATCH_SIZE, unsentContacts.length)} contacts atomically...`);
   const { reserved: reservedContacts, pendingRecordIds } = await reserveContactsForSending(
     campaign.id,
@@ -212,7 +212,7 @@ async function processCampaignBatch(
   );
 
   if (reservedContacts.length === 0) {
-    console.log(`⚠️  No contacts could be reserved (possibly reserved by another cron job)`);
+    console.log(`⚠️  No contacts could be reserved (all already reserved by another cron job)`);
     return {
       processed: 0,
       completed: false,
