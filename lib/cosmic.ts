@@ -67,10 +67,7 @@ export async function reserveContactsForSending(
           campaign: campaignId,
           contact: contact.id,
           contact_email: contact.metadata.email,
-          status: {
-            key: "pending",
-            value: "Pending",
-          },
+          status: "pending", // FIXED: Use lowercase status value directly
           reserved_at: new Date().toISOString(),
           retry_count: 0,
         },
@@ -120,10 +117,7 @@ export async function createCampaignSend(data: {
     if (data.pendingRecordId) {
       const { object } = await cosmic.objects.updateOne(data.pendingRecordId, {
         metadata: {
-          status: {
-            key: data.status,
-            value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
-          },
+          status: data.status, // FIXED: Use lowercase status value directly
           sent_at: data.sentAt || new Date().toISOString(),
           resend_message_id: data.resendMessageId,
           error_message: data.errorMessage,
@@ -141,10 +135,7 @@ export async function createCampaignSend(data: {
         campaign: data.campaignId,
         contact: data.contactId,
         contact_email: data.contactEmail,
-        status: {
-          key: data.status,
-          value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
-        },
+        status: data.status, // FIXED: Use lowercase status value directly
         sent_at: data.sentAt || new Date().toISOString(),
         resend_message_id: data.resendMessageId,
         error_message: data.errorMessage,
