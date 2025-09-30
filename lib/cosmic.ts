@@ -57,6 +57,8 @@ export async function reserveContactsForSending(
       // This enforces uniqueness at the database level
       const uniqueSlug = `send-${campaignId}-${contact.id}`;
       
+      console.log(`🔒 DEBUG: Creating pending record with slug: ${uniqueSlug}`);
+      
       // Try to atomically create the record with unique slug
       // Cosmic will reject if slug already exists (= another process reserved it)
       const { object } = await cosmic.objects.insertOne({
@@ -67,10 +69,17 @@ export async function reserveContactsForSending(
           campaign: campaignId,
           contact: contact.id,
           contact_email: contact.metadata.email,
-          status: "pending", // FIXED: Use lowercase status value directly
+          status: "pending",
           reserved_at: new Date().toISOString(),
           retry_count: 0,
         },
+      });
+      
+      console.log(`🔒 DEBUG: Created pending record:`, {
+        id: object.id,
+        slug: object.slug,
+        status: object.metadata.status,
+        contact_email: object.metadata.contact_email,
       });
       
       // If we got here, we successfully reserved this contact
@@ -113,21 +122,45 @@ export async function createCampaignSend(data: {
   pendingRecordId?: string; // NEW: Optional ID of pending record to update
 }): Promise<CampaignSend> {
   try {
+    console.log(`📧 DEBUG createCampaignSend: Called with:`, {
+      campaignId: data.campaignId,
+      contactId: data.contactId,
+      contactEmail: data.contactEmail,
+      status: data.status,
+      pendingRecordId: data.pendingRecordId,
+      hasResendMessageId: !!data.resendMessageId,
+    });
+    
     // If we have a pending record ID, update it instead of creating new
     if (data.pendingRecordId) {
-      const { object } = await cosmic.objects.updateOne(data.pendingRecordId, {
+      console.log(`📧 DEBUG: Updating existing pending record ${data.pendingRecordId} to status: ${data.status}`);
+      
+      const updatePayload = {
         metadata: {
-          status: data.status, // FIXED: Use lowercase status value directly
+          status: data.status,
           sent_at: data.sentAt || new Date().toISOString(),
           resend_message_id: data.resendMessageId,
           error_message: data.errorMessage,
         },
+      };
+      
+      console.log(`📧 DEBUG: Update payload:`, updatePayload);
+      
+      const { object } = await cosmic.objects.updateOne(data.pendingRecordId, updatePayload);
+      
+      console.log(`📧 DEBUG: Record updated successfully:`, {
+        id: object.id,
+        status: object.metadata.status,
+        sent_at: object.metadata.sent_at,
+        resend_message_id: object.metadata.resend_message_id,
       });
       
       return object as CampaignSend;
     }
     
     // Fallback: Create new record if no pending record ID provided
+    console.log(`📧 DEBUG: Creating new campaign-send record (no pending record ID provided)`);
+    
     const { object } = await cosmic.objects.insertOne({
       type: "campaign-sends",
       title: `Send to ${data.contactEmail}`,
@@ -135,7 +168,7 @@ export async function createCampaignSend(data: {
         campaign: data.campaignId,
         contact: data.contactId,
         contact_email: data.contactEmail,
-        status: data.status, // FIXED: Use lowercase status value directly
+        status: data.status,
         sent_at: data.sentAt || new Date().toISOString(),
         resend_message_id: data.resendMessageId,
         error_message: data.errorMessage,
@@ -143,9 +176,14 @@ export async function createCampaignSend(data: {
       },
     });
 
+    console.log(`📧 DEBUG: New record created:`, {
+      id: object.id,
+      status: object.metadata.status,
+    });
+
     return object as CampaignSend;
   } catch (error) {
-    console.error("Error creating/updating campaign send record:", error);
+    console.error("❌ ERROR in createCampaignSend:", error);
     throw new Error("Failed to create/update campaign send record");
   }
 }
@@ -217,42 +255,62 @@ export async function getCampaignSendStats(
   bounced: number;
 }> {
   try {
+    console.log(`📊 DEBUG getCampaignSendStats: Fetching stats for campaign ${campaignId}`);
+    
     // Get total count
+    console.log(`📊 DEBUG: Querying total campaign-sends...`);
     const allSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
       })
-      .props(["id"])
+      .props(["id", "metadata.status"])
       .limit(1);
 
     const total = allSendsResponse.total || 0;
+    console.log(`📊 DEBUG: Total campaign-sends found: ${total}`);
 
     // Get sent count
+    console.log(`📊 DEBUG: Querying sent campaign-sends...`);
     const sentSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
         "metadata.status": "sent",
       })
-      .props(["id"])
-      .limit(1);
+      .props(["id", "metadata"])
+      .limit(1000); // Get more to see actual records
 
     const sent = sentSendsResponse.total || 0;
+    console.log(`📊 DEBUG: Sent campaign-sends found: ${sent}`);
+    console.log(`📊 DEBUG: Sample sent records (first 3):`, sentSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+      id: obj.id,
+      status: obj.metadata.status,
+      contact_email: obj.metadata.contact_email,
+      sent_at: obj.metadata.sent_at,
+    })));
 
     // Get pending count (NEW)
+    console.log(`📊 DEBUG: Querying pending campaign-sends...`);
     const pendingSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
         "metadata.status": "pending",
       })
-      .props(["id"])
-      .limit(1);
+      .props(["id", "metadata"])
+      .limit(1000);
 
     const pending = pendingSendsResponse.total || 0;
+    console.log(`📊 DEBUG: Pending campaign-sends found: ${pending}`);
+    console.log(`📊 DEBUG: Sample pending records (first 3):`, pendingSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+      id: obj.id,
+      status: obj.metadata.status,
+      contact_email: obj.metadata.contact_email,
+    })));
 
     // Get failed count
+    console.log(`📊 DEBUG: Querying failed campaign-sends...`);
     const failedSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
@@ -263,8 +321,10 @@ export async function getCampaignSendStats(
       .limit(1);
 
     const failed = failedSendsResponse.total || 0;
+    console.log(`📊 DEBUG: Failed campaign-sends found: ${failed}`);
 
     // Get bounced count
+    console.log(`📊 DEBUG: Querying bounced campaign-sends...`);
     const bouncedSendsResponse = await cosmic.objects
       .find({
         type: "campaign-sends",
@@ -275,12 +335,20 @@ export async function getCampaignSendStats(
       .limit(1);
 
     const bounced = bouncedSendsResponse.total || 0;
+    console.log(`📊 DEBUG: Bounced campaign-sends found: ${bounced}`);
 
-    return { total, sent, pending, failed, bounced };
+    const stats = { total, sent, pending, failed, bounced };
+    console.log(`📊 DEBUG: Final calculated stats:`, stats);
+
+    return stats;
   } catch (error) {
+    console.error("❌ ERROR in getCampaignSendStats:", error);
+    
     if (hasStatus(error) && error.status === 404) {
+      console.log(`📊 DEBUG: No campaign-sends found (404), returning zeros`);
       return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
     }
+    
     console.error("Error fetching campaign stats:", error);
     return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
   }

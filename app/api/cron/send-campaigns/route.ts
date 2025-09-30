@@ -266,6 +266,9 @@ async function processCampaignBatch(
       const startTime = Date.now();
       const pendingRecordId = pendingRecordIds.get(contact.id);
 
+      console.log(`📧 DEBUG: Processing contact ${contact.id} (${contact.metadata.email})`);
+      console.log(`📧 DEBUG: Pending record ID for this contact: ${pendingRecordId}`);
+
       try {
         // Get campaign content
         const emailContent = campaign.metadata.campaign_content?.content || "";
@@ -336,16 +339,27 @@ async function processCampaignBatch(
           },
         });
 
-        console.log(`  ✅ Email sent to ${contact.metadata.email}`);
+        console.log(`✅ Email sent to ${contact.metadata.email}`);
+        console.log(`📧 DEBUG: Resend message ID: ${result.id}`);
 
         // Update the pending record to "sent" status
-        await createCampaignSend({
+        console.log(`📧 DEBUG: Updating pending record ${pendingRecordId} to "sent" status...`);
+        
+        const updatedRecord = await createCampaignSend({
           campaignId: campaign.id,
           contactId: contact.id,
           contactEmail: contact.metadata.email,
           status: "sent",
           resendMessageId: result.id,
-          pendingRecordId: pendingRecordId, // Update existing pending record
+          pendingRecordId: pendingRecordId,
+        });
+
+        console.log(`📧 DEBUG: Updated campaign-send record:`, {
+          id: updatedRecord.id,
+          status: updatedRecord.metadata.status,
+          contact_email: updatedRecord.metadata.contact_email,
+          sent_at: updatedRecord.metadata.sent_at,
+          resend_message_id: updatedRecord.metadata.resend_message_id,
         });
 
         emailsProcessed++;
@@ -379,7 +393,8 @@ async function processCampaignBatch(
         }
 
         // Regular error - update pending record to "failed"
-        console.error(`  ❌ Failed to send to ${contact.metadata.email}:`, error.message);
+        console.error(`❌ Failed to send to ${contact.metadata.email}:`, error.message);
+        console.log(`📧 DEBUG: Updating pending record ${pendingRecordId} to "failed" status...`);
 
         await createCampaignSend({
           campaignId: campaign.id,
@@ -387,7 +402,7 @@ async function processCampaignBatch(
           contactEmail: contact.metadata.email,
           status: "failed",
           errorMessage: error.message,
-          pendingRecordId: pendingRecordId, // Update existing pending record
+          pendingRecordId: pendingRecordId,
         });
 
         // Still apply rate limiting even on errors
@@ -402,7 +417,18 @@ async function processCampaignBatch(
     batchesProcessed++;
 
     // CRITICAL FIX: Update campaign progress after each batch using fresh database stats
+    console.log(`📊 DEBUG: Fetching fresh stats from database after batch ${batchesProcessed}...`);
+    
     const freshStats = await getCampaignSendStats(campaign.id);
+    
+    console.log(`📊 DEBUG: Fresh stats breakdown:`, {
+      total: freshStats.total,
+      sent: freshStats.sent,
+      pending: freshStats.pending,
+      failed: freshStats.failed,
+      bounced: freshStats.bounced,
+    });
+    
     const progressPercentage = Math.round((freshStats.sent / allContacts.length) * 100);
     
     console.log(`💾 Updating campaign progress: ${freshStats.sent}/${allContacts.length} sent (${progressPercentage}%)`);
@@ -432,13 +458,22 @@ async function processCampaignBatch(
       allContacts.map((c) => c.id)
     );
 
+    console.log(`📊 DEBUG: After batch processing - ${remainingAfterRun.length} contacts remaining`);
+
     if (remainingAfterRun.length === 0) {
       console.log(`✅ Campaign ${campaign.id} fully completed!`);
       
       // CRITICAL FIX: Get fresh final stats from database
+      console.log(`📊 DEBUG: Fetching final fresh stats from database...`);
       const finalFreshStats = await getCampaignSendStats(campaign.id);
       
-      console.log(`📊 Final fresh database stats - sent: ${finalFreshStats.sent}, bounced: ${finalFreshStats.bounced}`);
+      console.log(`📊 Final fresh database stats:`, {
+        total: finalFreshStats.total,
+        sent: finalFreshStats.sent,
+        pending: finalFreshStats.pending,
+        failed: finalFreshStats.failed,
+        bounced: finalFreshStats.bounced,
+      });
       
       return {
         processed: emailsProcessed,
