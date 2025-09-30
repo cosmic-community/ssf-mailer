@@ -245,6 +245,7 @@ export async function getSentContactIds(
 }
 
 // UPDATED: Get campaign send statistics (now includes pending status)
+// CRITICAL FIX: Handle 404 errors for individual status queries without resetting all stats
 export async function getCampaignSendStats(
   campaignId: string
 ): Promise<{
@@ -257,99 +258,147 @@ export async function getCampaignSendStats(
   try {
     console.log(`📊 DEBUG getCampaignSendStats: Fetching stats for campaign ${campaignId}`);
     
+    // CRITICAL FIX: Initialize stats object that we'll build up
+    const stats = {
+      total: 0,
+      sent: 0,
+      pending: 0,
+      failed: 0,
+      bounced: 0
+    };
+    
     // Get total count
     console.log(`📊 DEBUG: Querying total campaign-sends...`);
-    const allSendsResponse = await cosmic.objects
-      .find({
-        type: "campaign-sends",
-        "metadata.campaign": campaignId,
-      })
-      .props(["id", "metadata.status"])
-      .limit(1);
+    try {
+      const allSendsResponse = await cosmic.objects
+        .find({
+          type: "campaign-sends",
+          "metadata.campaign": campaignId,
+        })
+        .props(["id", "metadata.status"])
+        .limit(1);
 
-    const total = allSendsResponse.total || 0;
-    console.log(`📊 DEBUG: Total campaign-sends found: ${total}`);
+      stats.total = allSendsResponse.total || 0;
+      console.log(`📊 DEBUG: Total campaign-sends found: ${stats.total}`);
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        console.log(`📊 DEBUG: No total campaign-sends found (404)`);
+        stats.total = 0;
+      } else {
+        throw error;
+      }
+    }
 
     // Get sent count
     console.log(`📊 DEBUG: Querying sent campaign-sends...`);
-    const sentSendsResponse = await cosmic.objects
-      .find({
-        type: "campaign-sends",
-        "metadata.campaign": campaignId,
-        "metadata.status": "sent",
-      })
-      .props(["id", "metadata"])
-      .limit(1000); // Get more to see actual records
+    try {
+      const sentSendsResponse = await cosmic.objects
+        .find({
+          type: "campaign-sends",
+          "metadata.campaign": campaignId,
+          "metadata.status": "sent",
+        })
+        .props(["id", "metadata"])
+        .limit(1000);
 
-    const sent = sentSendsResponse.total || 0;
-    console.log(`📊 DEBUG: Sent campaign-sends found: ${sent}`);
-    console.log(`📊 DEBUG: Sample sent records (first 3):`, sentSendsResponse.objects.slice(0, 3).map((obj: any) => ({
-      id: obj.id,
-      status: obj.metadata.status,
-      contact_email: obj.metadata.contact_email,
-      sent_at: obj.metadata.sent_at,
-    })));
+      stats.sent = sentSendsResponse.total || 0;
+      console.log(`📊 DEBUG: Sent campaign-sends found: ${stats.sent}`);
+      console.log(`📊 DEBUG: Sample sent records (first 3):`, sentSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+        id: obj.id,
+        status: obj.metadata.status,
+        contact_email: obj.metadata.contact_email,
+        sent_at: obj.metadata.sent_at,
+      })));
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        console.log(`📊 DEBUG: No sent campaign-sends found (404)`);
+        stats.sent = 0;
+      } else {
+        throw error;
+      }
+    }
 
     // Get pending count (NEW)
     console.log(`📊 DEBUG: Querying pending campaign-sends...`);
-    const pendingSendsResponse = await cosmic.objects
-      .find({
-        type: "campaign-sends",
-        "metadata.campaign": campaignId,
-        "metadata.status": "pending",
-      })
-      .props(["id", "metadata"])
-      .limit(1000);
+    try {
+      const pendingSendsResponse = await cosmic.objects
+        .find({
+          type: "campaign-sends",
+          "metadata.campaign": campaignId,
+          "metadata.status": "pending",
+        })
+        .props(["id", "metadata"])
+        .limit(1000);
 
-    const pending = pendingSendsResponse.total || 0;
-    console.log(`📊 DEBUG: Pending campaign-sends found: ${pending}`);
-    console.log(`📊 DEBUG: Sample pending records (first 3):`, pendingSendsResponse.objects.slice(0, 3).map((obj: any) => ({
-      id: obj.id,
-      status: obj.metadata.status,
-      contact_email: obj.metadata.contact_email,
-    })));
+      stats.pending = pendingSendsResponse.total || 0;
+      console.log(`📊 DEBUG: Pending campaign-sends found: ${stats.pending}`);
+      console.log(`📊 DEBUG: Sample pending records (first 3):`, pendingSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+        id: obj.id,
+        status: obj.metadata.status,
+        contact_email: obj.metadata.contact_email,
+      })));
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        console.log(`📊 DEBUG: No pending campaign-sends found (404) - this is normal when all emails are sent`);
+        stats.pending = 0;
+      } else {
+        throw error;
+      }
+    }
 
     // Get failed count
     console.log(`📊 DEBUG: Querying failed campaign-sends...`);
-    const failedSendsResponse = await cosmic.objects
-      .find({
-        type: "campaign-sends",
-        "metadata.campaign": campaignId,
-        "metadata.status": "failed",
-      })
-      .props(["id"])
-      .limit(1);
+    try {
+      const failedSendsResponse = await cosmic.objects
+        .find({
+          type: "campaign-sends",
+          "metadata.campaign": campaignId,
+          "metadata.status": "failed",
+        })
+        .props(["id"])
+        .limit(1);
 
-    const failed = failedSendsResponse.total || 0;
-    console.log(`📊 DEBUG: Failed campaign-sends found: ${failed}`);
+      stats.failed = failedSendsResponse.total || 0;
+      console.log(`📊 DEBUG: Failed campaign-sends found: ${stats.failed}`);
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        console.log(`📊 DEBUG: No failed campaign-sends found (404)`);
+        stats.failed = 0;
+      } else {
+        throw error;
+      }
+    }
 
     // Get bounced count
     console.log(`📊 DEBUG: Querying bounced campaign-sends...`);
-    const bouncedSendsResponse = await cosmic.objects
-      .find({
-        type: "campaign-sends",
-        "metadata.campaign": campaignId,
-        "metadata.status": "bounced",
-      })
-      .props(["id"])
-      .limit(1);
+    try {
+      const bouncedSendsResponse = await cosmic.objects
+        .find({
+          type: "campaign-sends",
+          "metadata.campaign": campaignId,
+          "metadata.status": "bounced",
+        })
+        .props(["id"])
+        .limit(1);
 
-    const bounced = bouncedSendsResponse.total || 0;
-    console.log(`📊 DEBUG: Bounced campaign-sends found: ${bounced}`);
+      stats.bounced = bouncedSendsResponse.total || 0;
+      console.log(`📊 DEBUG: Bounced campaign-sends found: ${stats.bounced}`);
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        console.log(`📊 DEBUG: No bounced campaign-sends found (404)`);
+        stats.bounced = 0;
+      } else {
+        throw error;
+      }
+    }
 
-    const stats = { total, sent, pending, failed, bounced };
     console.log(`📊 DEBUG: Final calculated stats:`, stats);
-
     return stats;
   } catch (error) {
     console.error("❌ ERROR in getCampaignSendStats:", error);
     
-    if (hasStatus(error) && error.status === 404) {
-      console.log(`📊 DEBUG: No campaign-sends found (404), returning zeros`);
-      return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
-    }
-    
-    console.error("Error fetching campaign stats:", error);
+    // CRITICAL FIX: Only return zeros if there's a genuine error, not just 404s
+    console.log(`📊 DEBUG: Returning zeros due to unexpected error`);
     return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
   }
 }
