@@ -17,6 +17,7 @@ import {
   MediaItem,
   UploadJob,
   CreateUploadJobData,
+  CampaignSend,
 } from "@/types";
 
 if (
@@ -33,6 +34,301 @@ export const cosmic = createBucketClient({
   readKey: process.env.COSMIC_READ_KEY,
   writeKey: process.env.COSMIC_WRITE_KEY,
 });
+
+// ==================== CAMPAIGN SENDS TRACKING ====================
+
+// UPDATED: Atomic reservation function with unique slug constraint
+// This prevents race conditions by using Cosmic's unique slug enforcement
+export async function reserveContactsForSending(
+  campaignId: string,
+  contacts: EmailContact[],
+  batchSize: number
+): Promise<{ reserved: EmailContact[]; pendingRecordIds: Map<string, string> }> {
+  const reserved: EmailContact[] = [];
+  const pendingRecordIds = new Map<string, string>();
+  
+  const targetBatchSize = Math.min(batchSize, contacts.length);
+  console.log(`🔒 Attempting to reserve ${targetBatchSize} contacts for campaign ${campaignId}...`);
+  
+  for (const contact of contacts.slice(0, batchSize)) {
+    try {
+      // CRITICAL: Create deterministic unique slug
+      // Format: send-{campaignId}-{contactId}
+      // This enforces uniqueness at the database level
+      const uniqueSlug = `send-${campaignId}-${contact.id}`;
+      
+      // Try to atomically create the record with unique slug
+      // Cosmic will reject if slug already exists (= another process reserved it)
+      const { object } = await cosmic.objects.insertOne({
+        type: "campaign-sends",
+        title: `Send: Campaign ${campaignId} to ${contact.metadata.email}`,
+        slug: uniqueSlug, // THIS IS THE KEY! Database-level uniqueness enforcement
+        metadata: {
+          campaign: campaignId,
+          contact: contact.id,
+          contact_email: contact.metadata.email,
+          status: {
+            key: "pending",
+            value: "Pending",
+          },
+          reserved_at: new Date().toISOString(),
+          retry_count: 0,
+        },
+      });
+      
+      // If we got here, we successfully reserved this contact
+      reserved.push(contact);
+      pendingRecordIds.set(contact.id, object.id);
+      
+    } catch (error: any) {
+      // Slug conflict means another process already reserved/sent this contact
+      // This is EXPECTED behavior in concurrent processing - not an error!
+      const errorMessage = error.message?.toLowerCase() || "";
+      
+      if (errorMessage.includes('slug') || 
+          errorMessage.includes('unique') || 
+          errorMessage.includes('duplicate')) {
+        // Silent skip - contact is already being handled by another process
+        console.log(`⊗ Contact ${contact.id} (${contact.metadata.email}) already reserved/sent by another process`);
+        continue;
+      }
+      
+      // Other errors should be logged but not stop the batch
+      console.error(`✗ Error reserving contact ${contact.id}:`, error.message);
+      continue;
+    }
+  }
+  
+  console.log(`✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts (${targetBatchSize - reserved.length} already reserved/sent)`);
+  
+  return { reserved, pendingRecordIds };
+}
+
+// UPDATED: Create a send record (now supports updating pending records)
+export async function createCampaignSend(data: {
+  campaignId: string;
+  contactId: string;
+  contactEmail: string;
+  status: "sent" | "failed" | "bounced";
+  sentAt?: string;
+  resendMessageId?: string;
+  errorMessage?: string;
+  pendingRecordId?: string; // NEW: Optional ID of pending record to update
+}): Promise<CampaignSend> {
+  try {
+    // If we have a pending record ID, update it instead of creating new
+    if (data.pendingRecordId) {
+      const { object } = await cosmic.objects.updateOne(data.pendingRecordId, {
+        metadata: {
+          status: {
+            key: data.status,
+            value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+          },
+          sent_at: data.sentAt || new Date().toISOString(),
+          resend_message_id: data.resendMessageId,
+          error_message: data.errorMessage,
+        },
+      });
+      
+      return object as CampaignSend;
+    }
+    
+    // Fallback: Create new record if no pending record ID provided
+    const { object } = await cosmic.objects.insertOne({
+      type: "campaign-sends",
+      title: `Send to ${data.contactEmail}`,
+      metadata: {
+        campaign: data.campaignId,
+        contact: data.contactId,
+        contact_email: data.contactEmail,
+        status: {
+          key: data.status,
+          value: data.status.charAt(0).toUpperCase() + data.status.slice(1),
+        },
+        sent_at: data.sentAt || new Date().toISOString(),
+        resend_message_id: data.resendMessageId,
+        error_message: data.errorMessage,
+        retry_count: 0,
+      },
+    });
+
+    return object as CampaignSend;
+  } catch (error) {
+    console.error("Error creating/updating campaign send record:", error);
+    throw new Error("Failed to create/update campaign send record");
+  }
+}
+
+// Check if contact has been sent to for a campaign
+export async function hasContactBeenSent(
+  campaignId: string,
+  contactId: string
+): Promise<boolean> {
+  try {
+    const { objects } = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.contact": contactId,
+      })
+      .props(["id"])
+      .limit(1);
+
+    return objects.length > 0;
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return false;
+    }
+    console.error("Error checking send status:", error);
+    return false;
+  }
+}
+
+// Get all sent contact IDs for a campaign (paginated)
+export async function getSentContactIds(
+  campaignId: string,
+  options?: { limit?: number; skip?: number }
+): Promise<{ contactIds: string[]; total: number }> {
+  const limit = options?.limit || 1000;
+  const skip = options?.skip || 0;
+
+  try {
+    const { objects, total } = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+      })
+      .props(["metadata.contact"])
+      .limit(limit)
+      .skip(skip);
+
+    return {
+      contactIds: objects.map((obj: any) => obj.metadata.contact),
+      total: total || 0,
+    };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return { contactIds: [], total: 0 };
+    }
+    console.error("Error fetching sent contact IDs:", error);
+    return { contactIds: [], total: 0 };
+  }
+}
+
+// UPDATED: Get campaign send statistics (now includes pending status)
+export async function getCampaignSendStats(
+  campaignId: string
+): Promise<{
+  total: number;
+  sent: number;
+  pending: number;
+  failed: number;
+  bounced: number;
+}> {
+  try {
+    // Get total count
+    const allSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+      })
+      .props(["id"])
+      .limit(1);
+
+    const total = allSendsResponse.total || 0;
+
+    // Get sent count
+    const sentSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.status": "sent",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const sent = sentSendsResponse.total || 0;
+
+    // Get pending count (NEW)
+    const pendingSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.status": "pending",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const pending = pendingSendsResponse.total || 0;
+
+    // Get failed count
+    const failedSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.status": "failed",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const failed = failedSendsResponse.total || 0;
+
+    // Get bounced count
+    const bouncedSendsResponse = await cosmic.objects
+      .find({
+        type: "campaign-sends",
+        "metadata.campaign": campaignId,
+        "metadata.status": "bounced",
+      })
+      .props(["id"])
+      .limit(1);
+
+    const bounced = bouncedSendsResponse.total || 0;
+
+    return { total, sent, pending, failed, bounced };
+  } catch (error) {
+    if (hasStatus(error) && error.status === 404) {
+      return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
+    }
+    console.error("Error fetching campaign stats:", error);
+    return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
+  }
+}
+
+// Batch check which contacts have been sent to (efficient)
+export async function filterUnsentContacts(
+  campaignId: string,
+  contactIds: string[]
+): Promise<string[]> {
+  if (contactIds.length === 0) return [];
+
+  try {
+    // Get all sends for this campaign (including pending)
+    const sentContactIds = new Set<string>();
+    let skip = 0;
+    const limit = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      const { contactIds: batch, total } = await getSentContactIds(
+        campaignId,
+        { limit, skip }
+      );
+
+      batch.forEach((id) => sentContactIds.add(id));
+      skip += limit;
+      hasMore = skip < total;
+    }
+
+    // Filter out contacts that have any send record (pending, sent, failed, bounced)
+    return contactIds.filter((id) => !sentContactIds.has(id));
+  } catch (error) {
+    console.error("Error filtering unsent contacts:", error);
+    return contactIds; // Return all if error (safer than skipping)
+  }
+}
+
+// ==================== END CAMPAIGN SENDS TRACKING ====================
 
 // OPTIMIZED: Enhanced batch duplicate checking with sequential processing for better reliability
 export async function checkEmailsExist(emails: string[]): Promise<string[]> {
@@ -137,9 +433,9 @@ export async function getUploadJobs(options?: {
     if (status && status !== "all") {
       if (Array.isArray(status)) {
         // Handle multiple status values
-        query["metadata.status.value"] = { $in: status };
+        query["metadata.status"] = { $in: status };
       } else {
-        query["metadata.status.value"] = status;
+        query["metadata.status"] = status;
       }
     }
 
@@ -903,7 +1199,7 @@ export async function getEmailContacts(options?: {
 
     // Add status filter if provided
     if (status && status !== "all") {
-      query["metadata.status.value"] = status;
+      query["metadata.status"] = status;
     }
 
     // Add list filter if provided

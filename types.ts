@@ -82,6 +82,26 @@ export interface UploadJob extends CosmicObject {
   };
 }
 
+// NEW: Campaign Send Record - tracks individual email sends
+// UPDATED: Added "pending" status for atomic reservation
+export interface CampaignSend extends CosmicObject {
+  type: "campaign-sends";
+  metadata: {
+    campaign: string; // Reference to campaign (changed from campaign_id for consistency)
+    contact: string; // Reference to contact (changed from contact_id for consistency)
+    contact_email: string; // For quick lookups
+    status: {
+      key: string;
+      value: "pending" | "sent" | "failed" | "bounced"; // Added "pending" status
+    };
+    sent_at?: string; // ISO timestamp (optional now since pending records won't have this yet)
+    reserved_at?: string; // NEW: Timestamp when contact was reserved
+    resend_message_id?: string; // Resend's message ID
+    error_message?: string; // If failed
+    retry_count?: number; // Number of retries
+  };
+}
+
 // Email List interface
 export interface EmailList extends CosmicObject {
   type: "email-lists";
@@ -172,7 +192,7 @@ export interface CampaignContent {
   original_template_id?: string; // Track which template was used originally
 }
 
-// Marketing Campaign interface - Updated to include lists, campaign_content, sent_at, and public_sharing_enabled
+// Marketing Campaign interface - Updated with rate limiting fields
 export interface MarketingCampaign extends CosmicObject {
   type: "marketing-campaigns";
   metadata: {
@@ -191,6 +211,11 @@ export interface MarketingCampaign extends CosmicObject {
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
     public_sharing_enabled?: boolean; // NEW: controls public link sharing
+    
+    // NEW: Rate limiting fields
+    rate_limit_hit_at?: string; // Timestamp when rate limit was hit
+    retry_after?: number; // Seconds to wait before retrying
+    
     // Backward compatibility fields
     subject?: string; // DEPRECATED: use campaign_content.subject
     content?: string; // DEPRECATED: use campaign_content.content
@@ -216,6 +241,11 @@ export interface EmailCampaign extends CosmicObject {
     stats?: CampaignStats;
     sending_progress?: CampaignProgress;
     public_sharing_enabled?: boolean; // NEW: controls public link sharing
+    
+    // NEW: Rate limiting fields
+    rate_limit_hit_at?: string;
+    retry_after?: number;
+    
     // Backward compatibility fields
     subject?: string; // DEPRECATED: use campaign_content.subject
     content?: string; // DEPRECATED: use campaign_content.content
@@ -371,6 +401,10 @@ export function isUploadJob(obj: CosmicObject): obj is UploadJob {
 
 export function isMediaItem(obj: any): obj is MediaItem {
   return obj && typeof obj.id === "string" && typeof obj.url === "string";
+}
+
+export function isCampaignSend(obj: CosmicObject): obj is CampaignSend {
+  return obj.type === "campaign-sends";
 }
 
 // Utility types
