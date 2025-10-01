@@ -64,6 +64,7 @@ export async function POST(
           value: "Draft",
         },
         send_date: "", // Clear the send date for the duplicate
+        public_sharing_enabled: true, // Enable public sharing for duplicated campaigns
         // Note: stats and sending_progress are excluded for fresh start
       },
     });
