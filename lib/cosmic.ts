@@ -1366,20 +1366,34 @@ export async function deleteEmailList(id: string): Promise<void> {
 
 // OPTIMIZED: Get actual contact count for a list using efficient minimal query
 export async function getListContactCountEfficient(
-  listId: string
+  listId: string,
+  options?: {
+    statusFilter?: string; // Optional status filter (e.g., "Active")
+    maxCount?: number; // Optional maximum count to prevent long queries
+  }
 ): Promise<number> {
   try {
+    // Build query with optional status filter
+    const query: any = {
+      type: "email-contacts",
+      "metadata.lists": listId,
+    };
+
+    if (options?.statusFilter) {
+      query["metadata.status"] = options.statusFilter;
+    }
+
     // Use minimal query with limit 1 and minimal props to get just the total count
     const result = await cosmic.objects
-      .find({
-        type: "email-contacts",
-        "metadata.lists": listId,
-      })
-      .props(["title"]) // Minimal props - just need one field
+      .find(query)
+      .props(["id"]) // Minimal props - just need one field
       .limit(1); // Minimal limit since we only care about the total
 
-    // The total property contains the actual count
-    return result.total || 0;
+    // Apply max count limit if specified
+    const actualCount = result.total || 0;
+    const maxCount = options?.maxCount || Number.MAX_SAFE_INTEGER;
+
+    return Math.min(actualCount, maxCount);
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return 0;
@@ -1390,6 +1404,35 @@ export async function getListContactCountEfficient(
     );
     return 0;
   }
+}
+
+// New function: Get contact count for multiple lists efficiently
+export async function getMultipleListContactCounts(
+  listIds: string[],
+  options?: {
+    statusFilter?: string;
+    maxCountPerList?: number;
+  }
+): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+
+  // Process lists sequentially to avoid overwhelming the API
+  for (const listId of listIds) {
+    try {
+      counts[listId] = await getListContactCountEfficient(listId, {
+        statusFilter: options?.statusFilter,
+        maxCount: options?.maxCountPerList,
+      });
+
+      // Add throttling between requests
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    } catch (error) {
+      console.error(`Error getting count for list ${listId}:`, error);
+      counts[listId] = 0;
+    }
+  }
+
+  return counts;
 }
 
 // Get actual contact count for a list (keep legacy method for backward compatibility)
@@ -1852,14 +1895,24 @@ export async function bulkUpdateContactLists(
 
 // Enhanced pagination function for getting contacts by list ID
 export async function getContactsByListId(
-  listId: string
+  listId: string,
+  options?: {
+    limit?: number;
+    skip?: number;
+    maxContacts?: number; // Maximum number of contacts to fetch (prevents memory issues)
+  }
 ): Promise<EmailContact[]> {
   const allContacts: EmailContact[] = [];
-  let skip = 0;
-  const limit = 1000; // Use the Cosmic API limit per request
+  let skip = options?.skip || 0;
+  const limit = Math.min(options?.limit || 500, 1000); // Default to 500, max 1000 per request
+  const maxContacts = options?.maxContacts || 10000; // Default max 10k contacts to prevent memory issues
   let hasMore = true;
 
-  while (hasMore) {
+  console.log(
+    `Fetching contacts for list ${listId} with pagination: limit=${limit}, maxContacts=${maxContacts}`
+  );
+
+  while (hasMore && allContacts.length < maxContacts) {
     try {
       const { contacts, total } = await getEmailContacts({
         limit,
@@ -1869,11 +1922,24 @@ export async function getContactsByListId(
 
       allContacts.push(...contacts);
       skip += limit;
-      hasMore = allContacts.length < total;
+      hasMore = allContacts.length < total && contacts.length === limit;
 
       console.log(
-        `Fetched ${allContacts.length}/${total} contacts for list ${listId}`
+        `Fetched ${allContacts.length}/${total} contacts for list ${listId} (batch: ${contacts.length})`
       );
+
+      // Add throttling to prevent API overload
+      if (hasMore && allContacts.length < maxContacts) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+
+      // Safety check: if we've reached maxContacts, stop fetching
+      if (allContacts.length >= maxContacts) {
+        console.log(
+          `Reached maxContacts limit (${maxContacts}) for list ${listId}. Total fetched: ${allContacts.length}`
+        );
+        break;
+      }
     } catch (error) {
       if (hasStatus(error) && error.status === 404) {
         break; // No more contacts
@@ -1887,6 +1953,68 @@ export async function getContactsByListId(
   }
 
   return allContacts;
+}
+
+// New paginated version that yields contacts in batches (memory efficient)
+export async function* getContactsByListIdPaginated(
+  listId: string,
+  options?: {
+    batchSize?: number;
+    maxContacts?: number;
+  }
+): AsyncGenerator<EmailContact[], void, unknown> {
+  let skip = 0;
+  const batchSize = Math.min(options?.batchSize || 500, 1000);
+  const maxContacts = options?.maxContacts || 50000; // Higher limit for generator
+  let totalFetched = 0;
+  let hasMore = true;
+
+  console.log(
+    `Starting paginated fetch for list ${listId}: batchSize=${batchSize}, maxContacts=${maxContacts}`
+  );
+
+  while (hasMore && totalFetched < maxContacts) {
+    try {
+      const { contacts, total } = await getEmailContacts({
+        limit: batchSize,
+        skip,
+        list_id: listId,
+      });
+
+      if (contacts.length === 0) {
+        break;
+      }
+
+      // Yield this batch
+      yield contacts;
+
+      totalFetched += contacts.length;
+      skip += batchSize;
+      hasMore = totalFetched < total && contacts.length === batchSize;
+
+      console.log(
+        `Yielded batch of ${contacts.length} contacts for list ${listId}. Total: ${totalFetched}/${total}`
+      );
+
+      // Add throttling between batches
+      if (hasMore && totalFetched < maxContacts) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+    } catch (error) {
+      if (hasStatus(error) && error.status === 404) {
+        break;
+      }
+      console.error(
+        `Error in paginated fetch for list ${listId} at skip ${skip}:`,
+        error
+      );
+      throw new Error("Failed to fetch contacts for list");
+    }
+  }
+
+  console.log(
+    `Completed paginated fetch for list ${listId}. Total fetched: ${totalFetched}`
+  );
 }
 
 // Unsubscribe function
@@ -2410,40 +2538,121 @@ export async function deleteEmailCampaign(id: string): Promise<void> {
   return deleteMarketingCampaign(id);
 }
 
-// OPTIMIZED: Get all contacts that would be targeted by a campaign with sequential processing for better reliability
+// OPTIMIZED: Get all contacts that would be targeted by a campaign with memory-efficient pagination
 export async function getCampaignTargetContacts(
-  campaign: MarketingCampaign
+  campaign: MarketingCampaign,
+  options?: {
+    maxContactsPerList?: number; // Limit contacts per list to prevent memory issues
+    totalMaxContacts?: number; // Overall limit across all lists
+  }
 ): Promise<EmailContact[]> {
   try {
     const allContacts: EmailContact[] = [];
     const addedContactIds = new Set<string>();
+    const maxContactsPerList = options?.maxContactsPerList || 5000; // Reasonable default
+    const totalMaxContacts = options?.totalMaxContacts || 25000; // Overall safety limit
 
-    // Sequential processing for lists, contacts, and tags for better reliability
+    console.log(
+      `Getting campaign target contacts with limits: ${maxContactsPerList} per list, ${totalMaxContacts} total`
+    );
 
-    // Add contacts from target lists using sequential processing
+    // Add contacts from target lists using memory-efficient pagination
     if (
       campaign.metadata.target_lists &&
       campaign.metadata.target_lists.length > 0
     ) {
       for (const listRef of campaign.metadata.target_lists) {
         const listId = typeof listRef === "string" ? listRef : listRef.id;
+
+        // Check if we've reached the total limit
+        if (allContacts.length >= totalMaxContacts) {
+          console.log(
+            `Reached total contact limit (${totalMaxContacts}). Stopping list processing.`
+          );
+          break;
+        }
+
         try {
-          const listContacts = await getContactsByListId(listId);
-          const activeListContacts = listContacts.filter(
-            (contact) => contact.metadata.status.value === "Active"
+          console.log(
+            `Processing list ${listId} with pagination and timeout protection...`
           );
 
-          for (const contact of activeListContacts) {
-            if (!addedContactIds.has(contact.id)) {
-              allContacts.push(contact);
-              addedContactIds.add(contact.id);
-            }
-          }
+          // Use timeout-protected operation
+          const result = await withTimeout(
+            async () => {
+              const contacts: EmailContact[] = [];
+
+              // Use the paginated generator for memory efficiency
+              for await (const contactBatch of getContactsByListIdPaginated(
+                listId,
+                {
+                  batchSize: 500,
+                  maxContacts: maxContactsPerList,
+                }
+              )) {
+                const activeListContacts = contactBatch.filter(
+                  (contact) => contact.metadata.status.value === "Active"
+                );
+
+                for (const contact of activeListContacts) {
+                  if (!addedContactIds.has(contact.id)) {
+                    contacts.push(contact);
+                    addedContactIds.add(contact.id);
+
+                    // Check total limit after each contact
+                    if (
+                      allContacts.length + contacts.length >=
+                      totalMaxContacts
+                    ) {
+                      console.log(
+                        `Reached total contact limit (${totalMaxContacts}) while processing list ${listId}`
+                      );
+                      return contacts; // Return what we have so far
+                    }
+                  }
+                }
+
+                // Break out of batch loop if we've hit the total limit
+                if (allContacts.length + contacts.length >= totalMaxContacts) {
+                  break;
+                }
+
+                // Small delay between batches to prevent API overload
+                await new Promise((resolve) => setTimeout(resolve, 100));
+              }
+
+              return contacts;
+            },
+            60000, // 60 second timeout for list processing
+            `processing list ${listId}`
+          );
+
+          // Add the fetched contacts to our main array
+          allContacts.push(...result);
+
+          console.log(
+            `Completed list ${listId}. Added ${result.length} contacts. Total contacts so far: ${allContacts.length}`
+          );
 
           // Small delay between list processing to prevent API overload
           await new Promise((resolve) => setTimeout(resolve, 200));
         } catch (error) {
-          console.error(`Error fetching contacts for list ${listId}:`, error);
+          const errorMessage =
+            error instanceof Error ? error.message : "Unknown error";
+          const timedOut = errorMessage.includes("timed out");
+
+          console.error(
+            `Error fetching contacts for list ${listId}:`,
+            errorMessage
+          );
+
+          if (timedOut) {
+            console.warn(
+              `List ${listId} timed out - this list may be too large. Consider splitting it into smaller lists or increasing limits.`
+            );
+          }
+
+          // Continue with other lists instead of failing completely
         }
       }
     }
@@ -2509,33 +2718,88 @@ export async function getCampaignTargetContacts(
   }
 }
 
-// OPTIMIZED: Get campaign target count with sequential processing for better reliability
+// OPTIMIZED: Get campaign target count with efficient pagination and limits
 export async function getCampaignTargetCount(
-  campaign: MarketingCampaign
+  campaign: MarketingCampaign,
+  options?: {
+    maxContactsPerList?: number;
+    totalMaxContacts?: number;
+  }
 ): Promise<number> {
   try {
     const countedContactIds = new Set<string>();
+    const maxContactsPerList = options?.maxContactsPerList || 5000;
+    const totalMaxContacts = options?.totalMaxContacts || 25000;
 
-    // Count contacts from target lists with sequential processing for better reliability
+    console.log(
+      `Counting campaign target contacts with limits: ${maxContactsPerList} per list, ${totalMaxContacts} total`
+    );
+
+    // Count contacts from target lists with efficient pagination
     if (
       campaign.metadata.target_lists &&
       campaign.metadata.target_lists.length > 0
     ) {
       for (const listRef of campaign.metadata.target_lists) {
         const listId = typeof listRef === "string" ? listRef : listRef.id;
-        try {
-          // Get contacts for this list but only fetch IDs to avoid duplicates
-          const { objects: listContacts } = await cosmic.objects
-            .find({
-              type: "email-contacts",
-              "metadata.lists": listId,
-              "metadata.status": "Active",
-            })
-            .props(["id"]);
 
-          for (const contact of listContacts) {
-            countedContactIds.add(contact.id);
+        // Check if we've reached the total limit
+        if (countedContactIds.size >= totalMaxContacts) {
+          console.log(
+            `Reached total contact limit (${totalMaxContacts}) during counting. Stopping.`
+          );
+          break;
+        }
+
+        try {
+          console.log(`Counting contacts for list ${listId}...`);
+
+          // Use efficient pagination to count contacts
+          let skip = 0;
+          const limit = 1000;
+          let listContactCount = 0;
+          let hasMore = true;
+
+          while (
+            hasMore &&
+            listContactCount < maxContactsPerList &&
+            countedContactIds.size < totalMaxContacts
+          ) {
+            const { objects: listContacts, total } = await cosmic.objects
+              .find({
+                type: "email-contacts",
+                "metadata.lists": listId,
+                "metadata.status": "Active",
+              })
+              .props(["id"])
+              .limit(limit)
+              .skip(skip);
+
+            for (const contact of listContacts) {
+              countedContactIds.add(contact.id);
+              listContactCount++;
+
+              // Check limits
+              if (
+                listContactCount >= maxContactsPerList ||
+                countedContactIds.size >= totalMaxContacts
+              ) {
+                break;
+              }
+            }
+
+            skip += limit;
+            hasMore = listContacts.length === limit && skip < total;
+
+            // Add throttling
+            if (hasMore) {
+              await new Promise((resolve) => setTimeout(resolve, 100));
+            }
           }
+
+          console.log(
+            `Counted ${listContactCount} contacts for list ${listId}. Total unique: ${countedContactIds.size}`
+          );
 
           // Small delay between list counting to prevent API overload
           await new Promise((resolve) => setTimeout(resolve, 200));
@@ -2733,4 +2997,65 @@ export async function createOrUpdateSettings(
 // Helper function to check if an error has a status property
 function hasStatus(error: any): error is { status: number } {
   return typeof error === "object" && error !== null && "status" in error;
+}
+
+// Timeout wrapper for long-running operations
+export async function withTimeout<T>(
+  operation: () => Promise<T>,
+  timeoutMs: number = 30000, // 30 second default timeout
+  operationName: string = "operation"
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`${operationName} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    operation()
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+// Safe wrapper for getContactsByListId with timeout and error handling
+export async function getContactsByListIdSafe(
+  listId: string,
+  options?: {
+    limit?: number;
+    skip?: number;
+    maxContacts?: number;
+    timeoutMs?: number;
+  }
+): Promise<{ contacts: EmailContact[]; error?: string; timedOut?: boolean }> {
+  try {
+    const timeoutMs = options?.timeoutMs || 45000; // 45 second timeout
+
+    const contacts = await withTimeout(
+      () => getContactsByListId(listId, options),
+      timeoutMs,
+      `getContactsByListId for list ${listId}`
+    );
+
+    return { contacts };
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const timedOut = errorMessage.includes("timed out");
+
+    console.error(
+      `Error in getContactsByListIdSafe for list ${listId}:`,
+      errorMessage
+    );
+
+    return {
+      contacts: [],
+      error: errorMessage,
+      timedOut,
+    };
+  }
 }
