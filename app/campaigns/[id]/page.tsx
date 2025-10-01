@@ -3,14 +3,16 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 // Force dynamic rendering to ensure fresh data
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import {
   getMarketingCampaign,
   getEmailTemplates,
   getEmailLists,
   getUnsubscribedContactsByCampaign,
+  getCampaignTrackingStats,
+  getCampaignSendStats,
 } from "@/lib/cosmic";
 import CampaignPageClient from "@/components/CampaignPageClient";
 import { EmailContact } from "@/types";
@@ -53,6 +55,41 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
       }
     }
 
+    // Get real-time tracking stats from email-tracking-events
+    let realTimeStats = campaign.metadata.stats;
+    if (
+      campaign.metadata.status?.value === "Sent" ||
+      campaign.metadata.status?.value === "Sending"
+    ) {
+      try {
+        console.log(
+          `📊 Fetching real-time tracking stats for campaign ${id}...`
+        );
+        const trackingStats = await getCampaignTrackingStats(id);
+        const sendStats = await getCampaignSendStats(id);
+
+        // Merge with existing stats to get the most accurate data
+        realTimeStats = {
+          ...campaign.metadata.stats,
+          sent: sendStats.sent || campaign.metadata.stats?.sent || 0,
+          delivered: sendStats.sent || campaign.metadata.stats?.delivered || 0,
+          opened: trackingStats.unique_opens,
+          clicked: trackingStats.unique_clicks,
+          bounced: sendStats.bounced || campaign.metadata.stats?.bounced || 0,
+          open_rate: trackingStats.open_rate,
+          click_rate: trackingStats.click_rate,
+        };
+
+        console.log(
+          `✅ Real-time stats fetched:`,
+          JSON.stringify(realTimeStats, null, 2)
+        );
+      } catch (error) {
+        console.error("Error fetching real-time tracking stats:", error);
+        // Continue with campaign stats
+      }
+    }
+
     return (
       <div className="min-h-screen bg-gray-50 pb-16">
         {/* Page Header */}
@@ -65,7 +102,9 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                     Campaigns
                   </Link>
                   <span>/</span>
-                  <span className="text-gray-900">{campaign.metadata.name}</span>
+                  <span className="text-gray-900">
+                    {campaign.metadata.name}
+                  </span>
                 </nav>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
                   {campaign.metadata.name}
@@ -102,7 +141,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             templates={templates}
             contacts={[]} // Pass empty array - contacts are loaded via search in the components
             lists={lists}
-            stats={campaign.metadata.stats}
+            stats={realTimeStats}
             unsubscribedContacts={unsubscribedContacts}
           />
         </main>
@@ -130,14 +169,15 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             </div>
           </div>
         </div>
-        
+
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Error Loading Campaign
             </h2>
             <p className="text-gray-600 mb-6">
-              Unable to load the campaign details. The campaign may not exist or there was a server error.
+              Unable to load the campaign details. The campaign may not exist or
+              there was a server error.
             </p>
             <Link
               href="/campaigns"

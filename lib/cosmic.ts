@@ -590,6 +590,165 @@ export async function filterUnsentContacts(
   }
 }
 
+// ==================== CAMPAIGN TRACKING EVENTS STATS ====================
+
+// Get real-time campaign statistics from email-tracking-events
+export async function getCampaignTrackingStats(campaignId: string): Promise<{
+  opened: number;
+  clicked: number;
+  open_rate: string;
+  click_rate: string;
+  unique_opens: number;
+  unique_clicks: number;
+}> {
+  try {
+    console.log(`📊 Getting tracking stats for campaign ${campaignId}...`);
+
+    // Get all tracking events for this campaign
+    const uniqueOpens = new Set<string>();
+    const uniqueClicks = new Set<string>();
+    let totalOpens = 0;
+    let totalClicks = 0;
+
+    let skip = 0;
+    const limit = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+      try {
+        const { objects, total } = await cosmic.objects
+          .find({
+            type: "email-tracking-events",
+            "metadata.campaign": campaignId,
+          })
+          .props([
+            "metadata.event_type",
+            "metadata.contact",
+            "metadata.contact_email",
+          ])
+          .limit(limit)
+          .skip(skip);
+
+        for (const event of objects) {
+          const eventType =
+            event.metadata?.event_type?.key || event.metadata?.event_type;
+          const contactId = event.metadata?.contact;
+          const contactEmail = event.metadata?.contact_email;
+          const contactIdentifier = contactId || contactEmail;
+
+          if (eventType === "open" && contactIdentifier) {
+            totalOpens++;
+            uniqueOpens.add(contactIdentifier);
+          } else if (eventType === "click" && contactIdentifier) {
+            totalClicks++;
+            uniqueClicks.add(contactIdentifier);
+          }
+        }
+
+        console.log(
+          `📊 Processed ${objects.length} events at skip ${skip}, total: ${
+            total || 0
+          }`
+        );
+
+        skip += limit;
+        hasMore = objects.length === limit && skip < (total || 0);
+      } catch (batchError) {
+        if (hasStatus(batchError) && batchError.status === 404) {
+          console.log(`No more tracking events found at skip ${skip}`);
+          break;
+        }
+        throw batchError;
+      }
+    }
+
+    // Get sent count from campaign-sends for rate calculation
+    const sendStats = await getCampaignSendStats(campaignId);
+    const sentCount = sendStats.sent || 0;
+
+    // Calculate rates
+    const open_rate =
+      sentCount > 0
+        ? `${Math.round((uniqueOpens.size / sentCount) * 100)}%`
+        : "0%";
+    const click_rate =
+      sentCount > 0
+        ? `${Math.round((uniqueClicks.size / sentCount) * 100)}%`
+        : "0%";
+
+    const stats = {
+      opened: totalOpens,
+      clicked: totalClicks,
+      unique_opens: uniqueOpens.size,
+      unique_clicks: uniqueClicks.size,
+      open_rate,
+      click_rate,
+    };
+
+    console.log(`✅ Campaign ${campaignId} tracking stats:`, stats);
+    return stats;
+  } catch (error) {
+    console.error(
+      `❌ ERROR getting tracking stats for campaign ${campaignId}:`,
+      error
+    );
+    return {
+      opened: 0,
+      clicked: 0,
+      unique_opens: 0,
+      unique_clicks: 0,
+      open_rate: "0%",
+      click_rate: "0%",
+    };
+  }
+}
+
+// Update campaign stats with real-time tracking data
+export async function syncCampaignTrackingStats(
+  campaignId: string
+): Promise<void> {
+  try {
+    console.log(`🔄 Syncing tracking stats for campaign ${campaignId}...`);
+
+    const campaign = await getMarketingCampaign(campaignId);
+    if (!campaign) {
+      throw new Error("Campaign not found");
+    }
+
+    // Get tracking stats
+    const trackingStats = await getCampaignTrackingStats(campaignId);
+
+    // Get send stats for delivered/bounced
+    const sendStats = await getCampaignSendStats(campaignId);
+
+    // Update campaign with merged stats
+    await cosmic.objects.updateOne(campaignId, {
+      metadata: {
+        stats: {
+          sent: sendStats.sent,
+          delivered: sendStats.sent, // Can be updated by webhooks later
+          opened: trackingStats.unique_opens,
+          clicked: trackingStats.unique_clicks,
+          bounced: sendStats.bounced,
+          unsubscribed: 0, // Can be updated separately
+          open_rate: trackingStats.open_rate,
+          click_rate: trackingStats.click_rate,
+        },
+      },
+    });
+
+    console.log(`✅ Campaign ${campaignId} stats synced successfully`);
+  } catch (error) {
+    console.error(
+      `❌ ERROR syncing tracking stats for campaign ${campaignId}:`,
+      error
+    );
+    throw new Error("Failed to sync campaign tracking stats");
+  }
+}
+
+// ==================== END CAMPAIGN TRACKING EVENTS STATS ====================
+
 // ==================== END CAMPAIGN SENDS TRACKING ====================
 
 // OPTIMIZED: Enhanced batch duplicate checking with sequential processing for better reliability
