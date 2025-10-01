@@ -212,10 +212,13 @@ async function processCampaignBatch(
     totalMaxContacts: 10000, // Overall safety limit to prevent timeouts
   });
   console.log(
-    `Campaign ${campaign.id}: Total contacts = ${allContacts.length} (with pagination limits applied)`
+    `📊 Campaign ${campaign.id}: Fetched ${allContacts.length} total target contacts (with pagination limits applied)`
   );
 
-  // Filter out contacts that have already been sent to (including pending)
+  // CRITICAL: Filter out contacts that have already been sent to (including pending)
+  console.log(
+    `🔍 Filtering unsent contacts from ${allContacts.length} total contacts...`
+  );
   const unsentContactIds = await filterUnsentContacts(
     campaign.id,
     allContacts.map((c) => c.id)
@@ -225,11 +228,20 @@ async function processCampaignBatch(
     unsentContactIds.includes(c.id)
   );
 
+  const alreadySentCount = allContacts.length - unsentContacts.length;
   console.log(
-    `Campaign ${campaign.id}: ${
-      allContacts.length - unsentContacts.length
-    } already sent/reserved, ${unsentContacts.length} remaining`
+    `✅ Filter complete: ${alreadySentCount} already sent/reserved, ${unsentContacts.length} remaining to send`
   );
+
+  // Log first few emails for debugging
+  if (unsentContacts.length > 0) {
+    console.log(
+      `📧 First 3 unsent emails: ${unsentContacts
+        .slice(0, 3)
+        .map((c) => c.metadata.email)
+        .join(", ")}`
+    );
+  }
 
   if (unsentContacts.length === 0) {
     console.log(`Campaign ${campaign.id} is complete!`);
