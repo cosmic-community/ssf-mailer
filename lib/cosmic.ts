@@ -61,7 +61,9 @@ async function checkContactsAlreadySent(
       .limit(contactEmails.length);
 
     const sentEmails = new Set<string>(
-      objects.map((obj: any) => obj.metadata.contact_email).filter((email): email is string => typeof email === 'string')
+      objects
+        .map((obj: any) => obj.metadata.contact_email)
+        .filter((email: any): email is string => typeof email === "string")
     );
 
     console.log(
