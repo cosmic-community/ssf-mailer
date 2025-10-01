@@ -212,6 +212,13 @@ async function processContactsOptimized(
         const contact = batch[j];
         const globalContactIndex = i + j;
 
+        // TypeScript safety check
+        if (!contact) {
+          console.error(`❌ Contact at index ${j} is undefined, skipping...`);
+          progress.processedContacts++;
+          continue;
+        }
+
         try {
           const result = await processContact(
             contact,
