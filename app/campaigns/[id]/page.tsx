@@ -11,8 +11,6 @@ import {
   getEmailTemplates,
   getEmailLists,
   getUnsubscribedContactsByCampaign,
-  getCampaignTrackingStats,
-  getCampaignSendStats,
 } from "@/lib/cosmic";
 import CampaignPageClient from "@/components/CampaignPageClient";
 import { EmailContact } from "@/types";
@@ -55,40 +53,10 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
       }
     }
 
-    // Get real-time tracking stats from email-tracking-events
-    let realTimeStats = campaign.metadata.stats;
-    if (
-      campaign.metadata.status?.value === "Sent" ||
-      campaign.metadata.status?.value === "Sending"
-    ) {
-      try {
-        console.log(
-          `📊 Fetching real-time tracking stats for campaign ${id}...`
-        );
-        const trackingStats = await getCampaignTrackingStats(id);
-        const sendStats = await getCampaignSendStats(id);
-
-        // Merge with existing stats to get the most accurate data
-        realTimeStats = {
-          ...campaign.metadata.stats,
-          sent: sendStats.sent || campaign.metadata.stats?.sent || 0,
-          delivered: sendStats.sent || campaign.metadata.stats?.delivered || 0,
-          opened: trackingStats.unique_opens,
-          clicked: trackingStats.unique_clicks,
-          bounced: sendStats.bounced || campaign.metadata.stats?.bounced || 0,
-          open_rate: trackingStats.open_rate,
-          click_rate: trackingStats.click_rate,
-        };
-
-        console.log(
-          `✅ Real-time stats fetched:`,
-          JSON.stringify(realTimeStats, null, 2)
-        );
-      } catch (error) {
-        console.error("Error fetching real-time tracking stats:", error);
-        // Continue with campaign stats
-      }
-    }
+    // Use pre-synced stats from campaign metadata
+    // Stats are updated periodically by the cron job at /api/cron/sync-campaign-stats
+    // and can be manually refreshed via the sync button in the UI
+    const stats = campaign.metadata.stats;
 
     return (
       <div className="min-h-screen bg-gray-50 pb-16">
@@ -141,7 +109,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             templates={templates}
             contacts={[]} // Pass empty array - contacts are loaded via search in the components
             lists={lists}
-            stats={realTimeStats}
+            stats={stats}
             unsubscribedContacts={unsubscribedContacts}
           />
         </main>
