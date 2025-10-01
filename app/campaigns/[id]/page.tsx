@@ -3,8 +3,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 
 // Force dynamic rendering to ensure fresh data
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 import {
   getMarketingCampaign,
@@ -53,6 +53,11 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
       }
     }
 
+    // Use pre-synced stats from campaign metadata
+    // Stats are updated periodically by the cron job at /api/cron/sync-campaign-stats
+    // and can be manually refreshed via the sync button in the UI
+    const stats = campaign.metadata.stats;
+
     return (
       <div className="min-h-screen bg-gray-50 pb-16">
         {/* Page Header */}
@@ -65,7 +70,9 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
                     Campaigns
                   </Link>
                   <span>/</span>
-                  <span className="text-gray-900">{campaign.metadata.name}</span>
+                  <span className="text-gray-900">
+                    {campaign.metadata.name}
+                  </span>
                 </nav>
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">
                   {campaign.metadata.name}
@@ -102,7 +109,7 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             templates={templates}
             contacts={[]} // Pass empty array - contacts are loaded via search in the components
             lists={lists}
-            stats={campaign.metadata.stats}
+            stats={stats}
             unsubscribedContacts={unsubscribedContacts}
           />
         </main>
@@ -130,14 +137,15 @@ export default async function CampaignPage({ params }: CampaignPageProps) {
             </div>
           </div>
         </div>
-        
+
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="text-center py-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Error Loading Campaign
             </h2>
             <p className="text-gray-600 mb-6">
-              Unable to load the campaign details. The campaign may not exist or there was a server error.
+              Unable to load the campaign details. The campaign may not exist or
+              there was a server error.
             </p>
             <Link
               href="/campaigns"

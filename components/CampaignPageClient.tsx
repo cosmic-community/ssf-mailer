@@ -12,7 +12,9 @@ import EditCampaignContentForm from "@/components/EditCampaignContentForm";
 import CampaignActions from "@/components/CampaignActions";
 import TimeAgo from "@/components/TimeAgo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Clock, UserMinus, Mail } from "lucide-react";
+import { TrendingUp, Clock, UserMinus, Mail, RefreshCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 
 interface CampaignPageClientProps {
   campaign: MarketingCampaign;
@@ -31,11 +33,13 @@ export default function CampaignPageClient({
   stats,
   unsubscribedContacts = [],
 }: CampaignPageClientProps) {
+  const router = useRouter();
   const [formData, setFormData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [handleSubmit, setHandleSubmit] = useState<
     (() => Promise<void>) | null
   >(null);
+  const [isRefreshingStats, setIsRefreshingStats] = useState(false);
 
   const handleFormDataChange = useCallback(
     (
@@ -49,6 +53,27 @@ export default function CampaignPageClient({
     },
     []
   );
+
+  const handleRefreshStats = async () => {
+    setIsRefreshingStats(true);
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}/sync-stats`, {
+        method: "POST",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to refresh stats");
+      }
+
+      // Refresh the page to show updated stats
+      router.refresh();
+    } catch (error) {
+      console.error("Error refreshing stats:", error);
+      alert("Failed to refresh stats. Please try again.");
+    } finally {
+      setIsRefreshingStats(false);
+    }
+  };
 
   const status = campaign.metadata.status?.value || "Draft";
 
@@ -184,12 +209,28 @@ export default function CampaignPageClient({
         {(status === "Sent" || status === "Sending") && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <TrendingUp className="h-5 w-5" />
-                <span>Campaign Statistics</span>
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center space-x-2">
+                  <TrendingUp className="h-5 w-5" />
+                  <span>Campaign Statistics</span>
+                </CardTitle>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshStats}
+                  disabled={isRefreshingStats}
+                  className="flex items-center space-x-1"
+                >
+                  <RefreshCw
+                    className={`h-3.5 w-3.5 ${
+                      isRefreshingStats ? "animate-spin" : ""
+                    }`}
+                  />
+                  <span>{isRefreshingStats ? "Syncing..." : "Refresh"}</span>
+                </Button>
+              </div>
               {status === "Sent" && sentDate && (
-                <div className="flex items-center space-x-1 text-sm text-gray-600">
+                <div className="flex items-center space-x-1 text-sm text-gray-600 mt-2">
                   <Clock className="h-4 w-4" />
                   <span>
                     Sent <TimeAgo date={sentDate} />

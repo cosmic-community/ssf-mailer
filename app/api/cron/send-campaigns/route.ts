@@ -165,6 +165,25 @@ export async function GET(request: NextRequest) {
           console.log(
             `✅ Campaign ${campaign.id} marked as Sent with timestamp ${sentAt}`
           );
+
+          // IMPORTANT: Sync tracking stats immediately to capture any opens/clicks
+          // that happened during sending (tracking pixels in preview panes, etc.)
+          try {
+            console.log(
+              `📊 Syncing tracking stats for campaign ${campaign.id}...`
+            );
+            const { syncCampaignTrackingStats } = await import("@/lib/cosmic");
+            await syncCampaignTrackingStats(campaign.id);
+            console.log(
+              `✅ Campaign ${campaign.id} tracking stats synced successfully`
+            );
+          } catch (syncError) {
+            console.error(
+              `⚠️  Error syncing tracking stats for campaign ${campaign.id}:`,
+              syncError
+            );
+            // Don't fail the entire job if stats sync fails
+          }
         }
       } catch (error) {
         console.error(`Error processing campaign ${campaign.id}:`, error);
