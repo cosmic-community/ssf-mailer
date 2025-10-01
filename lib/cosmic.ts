@@ -487,7 +487,7 @@ export async function getCampaignSendStats(campaignId: string): Promise<{
   }
 }
 
-// Batch check which contacts have been sent to (efficient)
+// CRITICAL FIX: Use email-based filtering for consistency with reservation system
 export async function filterUnsentContacts(
   campaignId: string,
   contactIds: string[]
@@ -495,28 +495,98 @@ export async function filterUnsentContacts(
   if (contactIds.length === 0) return [];
 
   try {
-    // Get all sends for this campaign (including pending)
-    const sentContactIds = new Set<string>();
+    console.log(`🔍 Filtering unsent contacts for campaign ${campaignId}...`);
+
+    // Get all sent emails for this campaign (using same query as reservation check)
+    const sentEmails = new Set<string>();
     let skip = 0;
     const limit = 1000;
     let hasMore = true;
 
     while (hasMore) {
-      const { contactIds: batch, total } = await getSentContactIds(campaignId, {
-        limit,
-        skip,
-      });
+      try {
+        const { objects, total } = await cosmic.objects
+          .find({
+            type: "campaign-sends",
+            "metadata.campaign": campaignId,
+          })
+          .props(["metadata.contact_email"])
+          .limit(limit)
+          .skip(skip);
 
-      batch.forEach((id) => sentContactIds.add(id));
-      skip += limit;
-      hasMore = skip < total;
+        objects.forEach((obj: any) => {
+          if (obj.metadata?.contact_email) {
+            sentEmails.add(obj.metadata.contact_email.toLowerCase());
+          }
+        });
+
+        console.log(
+          `📊 Fetched ${
+            objects.length
+          } campaign-sends at skip ${skip}, total: ${total || 0}`
+        );
+
+        skip += limit;
+        hasMore = objects.length === limit && skip < (total || 0);
+      } catch (batchError) {
+        if (hasStatus(batchError) && batchError.status === 404) {
+          console.log(`No more campaign-sends found at skip ${skip}`);
+          break;
+        }
+        throw batchError;
+      }
     }
 
-    // Filter out contacts that have any send record (pending, sent, failed, bounced)
-    return contactIds.filter((id) => !sentContactIds.has(id));
+    console.log(
+      `✅ Found ${sentEmails.size} total sent emails for campaign ${campaignId}`
+    );
+
+    // Filter out contacts whose emails have send records
+    // Need to get emails for the contact IDs first
+    const contactIdToEmail = new Map<string, string>();
+
+    // Batch fetch contact emails
+    const CONTACT_BATCH_SIZE = 100;
+    for (let i = 0; i < contactIds.length; i += CONTACT_BATCH_SIZE) {
+      const batchIds = contactIds.slice(i, i + CONTACT_BATCH_SIZE);
+
+      try {
+        const { objects } = await cosmic.objects
+          .find({
+            type: "email-contacts",
+            id: { $in: batchIds },
+          })
+          .props(["id", "metadata.email"])
+          .limit(CONTACT_BATCH_SIZE);
+
+        objects.forEach((obj: any) => {
+          if (obj.id && obj.metadata?.email) {
+            contactIdToEmail.set(obj.id, obj.metadata.email.toLowerCase());
+          }
+        });
+      } catch (error) {
+        console.error(`Error fetching contact emails batch ${i}:`, error);
+      }
+    }
+
+    const unsentContactIds = contactIds.filter((id) => {
+      const email = contactIdToEmail.get(id);
+      return email && !sentEmails.has(email);
+    });
+
+    console.log(
+      `📊 Filter results: ${contactIds.length} total, ${
+        unsentContactIds.length
+      } unsent, ${
+        contactIds.length - unsentContactIds.length
+      } already sent/pending`
+    );
+
+    return unsentContactIds;
   } catch (error) {
     console.error("Error filtering unsent contacts:", error);
-    return contactIds; // Return all if error (safer than skipping)
+    // Return empty array on error to be safe (don't resend to everyone)
+    return [];
   }
 }
 
