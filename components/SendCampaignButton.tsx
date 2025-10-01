@@ -21,17 +21,25 @@ export default function SendCampaignButton({
   const [isLoading, setIsLoading] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [currentCampaign, setCurrentCampaign] = useState(campaign);
 
-  const status = campaign.metadata.status?.value || "Draft";
+  const status = currentCampaign.metadata.status?.value || "Draft";
+
+  // Sync local state when prop changes
+  useEffect(() => {
+    setCurrentCampaign(campaign);
+  }, [campaign]);
 
   // Check if campaign has targets
   const hasContacts =
-    campaign.metadata.target_contacts &&
-    campaign.metadata.target_contacts.length > 0;
+    currentCampaign.metadata.target_contacts &&
+    currentCampaign.metadata.target_contacts.length > 0;
   const hasTags =
-    campaign.metadata.target_tags && campaign.metadata.target_tags.length > 0;
+    currentCampaign.metadata.target_tags &&
+    currentCampaign.metadata.target_tags.length > 0;
   const hasLists =
-    campaign.metadata.target_lists && campaign.metadata.target_lists.length > 0;
+    currentCampaign.metadata.target_lists &&
+    currentCampaign.metadata.target_lists.length > 0;
   const hasTargets = hasContacts || hasTags || hasLists;
 
   // Real-time polling for campaign status updates
@@ -45,16 +53,17 @@ export default function SendCampaignButton({
           const response = await fetch(`/api/campaigns/${campaign.id}`);
           if (response.ok) {
             const data = await response.json();
+            console.log("Polling response:", JSON.stringify(data, null, 2));
             if (data.success && data.campaign) {
+              // Update local state with fresh campaign data
+              setCurrentCampaign(data.campaign);
+
               // If status changed from Sending, stop polling and refresh
               if (data.campaign.metadata.status?.value !== "Sending") {
                 router.refresh();
                 if (pollInterval) {
                   clearInterval(pollInterval);
                 }
-              } else {
-                // Status is still Sending, just refresh for progress updates
-                router.refresh();
               }
             }
           }
@@ -73,8 +82,8 @@ export default function SendCampaignButton({
 
   // Check if campaign is scheduled for future
   const isScheduledForFuture = () => {
-    if (!campaign.metadata.send_date) return false;
-    const scheduleDate = new Date(campaign.metadata.send_date);
+    if (!currentCampaign.metadata.send_date) return false;
+    const scheduleDate = new Date(currentCampaign.metadata.send_date);
     const now = new Date();
     return scheduleDate > now;
   };
@@ -126,7 +135,7 @@ export default function SendCampaignButton({
       return;
     }
 
-    if (!campaign.metadata.send_date) {
+    if (!currentCampaign.metadata.send_date) {
       addToast("No send date specified for scheduling", "error");
       return;
     }
@@ -134,7 +143,7 @@ export default function SendCampaignButton({
     setIsLoading(true);
 
     try {
-      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+      const response = await fetch(`/api/campaigns/${currentCampaign.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -163,9 +172,9 @@ export default function SendCampaignButton({
   };
 
   const getRecipientCount = () => {
-    const contactCount = campaign.metadata.target_contacts?.length || 0;
-    const tagCount = campaign.metadata.target_tags?.length || 0;
-    const listCount = campaign.metadata.target_lists?.length || 0;
+    const contactCount = currentCampaign.metadata.target_contacts?.length || 0;
+    const tagCount = currentCampaign.metadata.target_tags?.length || 0;
+    const listCount = currentCampaign.metadata.target_lists?.length || 0;
 
     if (contactCount > 0 && tagCount > 0 && listCount > 0) {
       return contactCount + tagCount + listCount; // Approximate, as there could be overlaps
@@ -184,7 +193,7 @@ export default function SendCampaignButton({
       // Show a placeholder that indicates list-based targeting
       return `List${
         listCount === 1 ? "" : "s"
-      }: ${campaign.metadata.target_lists
+      }: ${currentCampaign.metadata.target_lists
         ?.map((list) =>
           typeof list === "string" ? list : list.metadata?.name || "Unnamed"
         )
@@ -194,14 +203,14 @@ export default function SendCampaignButton({
       // Show a placeholder that indicates tag-based targeting
       return `Tag${
         tagCount === 1 ? "" : "s"
-      }: ${campaign.metadata.target_tags?.join(", ")}`;
+      }: ${currentCampaign.metadata.target_tags?.join(", ")}`;
     }
   };
 
   const getRecipientDisplay = () => {
-    const contactCount = campaign.metadata.target_contacts?.length || 0;
-    const tagCount = campaign.metadata.target_tags?.length || 0;
-    const listCount = campaign.metadata.target_lists?.length || 0;
+    const contactCount = currentCampaign.metadata.target_contacts?.length || 0;
+    const tagCount = currentCampaign.metadata.target_tags?.length || 0;
+    const listCount = currentCampaign.metadata.target_lists?.length || 0;
 
     const parts = [];
 
@@ -210,7 +219,7 @@ export default function SendCampaignButton({
     }
 
     if (listCount > 0) {
-      const listNames = campaign.metadata.target_lists
+      const listNames = currentCampaign.metadata.target_lists
         ?.map((list) =>
           typeof list === "string" ? list : list.metadata?.name || "Unnamed"
         )
@@ -222,9 +231,9 @@ export default function SendCampaignButton({
 
     if (tagCount > 0) {
       parts.push(
-        `tag${tagCount === 1 ? "" : "s"}: ${campaign.metadata.target_tags?.join(
-          ", "
-        )}`
+        `tag${
+          tagCount === 1 ? "" : "s"
+        }: ${currentCampaign.metadata.target_tags?.join(", ")}`
       );
     }
 
@@ -251,12 +260,14 @@ export default function SendCampaignButton({
           </span>
         </div>
 
-        {campaign.metadata.stats && (
+        {currentCampaign.metadata.stats && (
           <div className="text-sm text-gray-600 text-center">
-            <div>Sent to {campaign.metadata.stats.sent || 0} recipients</div>
-            {campaign.metadata.stats.delivered !== undefined &&
-              Number(campaign.metadata.stats.delivered) > 0 && (
-                <div>Delivered: {campaign.metadata.stats.delivered}</div>
+            <div>
+              Sent to {currentCampaign.metadata.stats.sent || 0} recipients
+            </div>
+            {currentCampaign.metadata.stats.delivered !== undefined &&
+              Number(currentCampaign.metadata.stats.delivered) > 0 && (
+                <div>Delivered: {currentCampaign.metadata.stats.delivered}</div>
               )}
           </div>
         )}
@@ -274,20 +285,20 @@ export default function SendCampaignButton({
           </span>
         </div>
 
-        {campaign.metadata.sending_progress && (
+        {currentCampaign.metadata.sending_progress && (
           <div className="text-sm text-gray-600 text-center">
             <div className="w-full bg-gray-200 rounded-full h-2 mb-2">
               <div
                 className="bg-yellow-600 h-2 rounded-full transition-all duration-300"
                 style={{
-                  width: `${campaign.metadata.sending_progress.progress_percentage}%`,
+                  width: `${currentCampaign.metadata.sending_progress.progress_percentage}%`,
                 }}
               ></div>
             </div>
             <div>
-              Progress: {campaign.metadata.sending_progress.sent} /{" "}
-              {campaign.metadata.sending_progress.total}(
-              {campaign.metadata.sending_progress.progress_percentage}%)
+              Progress: {currentCampaign.metadata.sending_progress.sent} /{" "}
+              {currentCampaign.metadata.sending_progress.total} (
+              {currentCampaign.metadata.sending_progress.progress_percentage}%)
             </div>
           </div>
         )}
@@ -314,11 +325,11 @@ export default function SendCampaignButton({
           <span className="text-blue-800 font-medium">Campaign Scheduled</span>
         </div>
 
-        {campaign.metadata.send_date && (
+        {currentCampaign.metadata.send_date && (
           <div className="text-sm text-gray-600 text-center">
             <div>
               Scheduled for:{" "}
-              {new Date(campaign.metadata.send_date).toLocaleString()}
+              {new Date(currentCampaign.metadata.send_date).toLocaleString()}
             </div>
             <div className="mt-1">{getRecipientDisplay()}</div>
           </div>
@@ -383,7 +394,7 @@ export default function SendCampaignButton({
       </Button>
 
       {/* Schedule Button (only show if send_date is set and in future) */}
-      {campaign.metadata.send_date && isScheduledForFuture() && (
+      {currentCampaign.metadata.send_date && isScheduledForFuture() && (
         <Button
           onClick={handleSchedule}
           disabled={isLoading || !hasTargets}
@@ -399,7 +410,9 @@ export default function SendCampaignButton({
             <>
               <Clock className="h-4 w-4 mr-2" />
               Schedule for{" "}
-              {new Date(campaign.metadata.send_date).toLocaleDateString()}
+              {new Date(
+                currentCampaign.metadata.send_date
+              ).toLocaleDateString()}
             </>
           )}
         </Button>
@@ -420,10 +433,10 @@ export default function SendCampaignButton({
         description={
           showSuccess
             ? `Your campaign "${
-                campaign.metadata.name
+                currentCampaign.metadata.name
               }" is now being sent to ${getRecipientDisplay()}!`
             : `Are you sure you want to send "${
-                campaign.metadata.name
+                currentCampaign.metadata.name
               }" to ${getRecipientDisplay()}? This action cannot be undone.`
         }
         confirmText={showSuccess ? "Got it!" : "Send Campaign"}
