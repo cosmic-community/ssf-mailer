@@ -15,11 +15,13 @@ import { sendEmail, ResendRateLimitError } from "@/lib/resend";
 import { createUnsubscribeUrl, addTrackingToEmail } from "@/lib/email-tracking";
 import { MarketingCampaign, EmailContact } from "@/types";
 
-// Rate limiting configuration for Resend API
+// Rate limiting configuration optimized for MongoDB/Lambda
 const EMAILS_PER_SECOND = 8; // Stay safely under 10/sec limit with 20% buffer
 const MIN_DELAY_MS = Math.ceil(1000 / EMAILS_PER_SECOND); // ~125ms per email
-const BATCH_SIZE = 100; // Process 100 emails at a time
-const MAX_BATCHES_PER_RUN = 10; // Process max 10 batches per cron run (1,000 emails)
+const BATCH_SIZE = 25; // Reduced from 100 to prevent MongoDB connection pool exhaustion
+const MAX_BATCHES_PER_RUN = 5; // Reduced from 10 to prevent Lambda concurrency issues
+const DELAY_BETWEEN_DB_OPERATIONS = 100; // Throttling between database calls
+const DELAY_BETWEEN_BATCHES = 500; // Throttling between batches
 
 export async function GET(request: NextRequest) {
   try {
@@ -38,6 +40,11 @@ export async function GET(request: NextRequest) {
     );
     console.log(
       `Rate limit: ${EMAILS_PER_SECOND} emails/sec (min ${MIN_DELAY_MS}ms between sends)`
+    );
+    console.log(
+      `MongoDB/Lambda optimized: ${BATCH_SIZE} emails/batch, ${MAX_BATCHES_PER_RUN} batches/run (max ${
+        BATCH_SIZE * MAX_BATCHES_PER_RUN
+      } emails/run)`
     );
 
     // Get all campaigns that are in "Sending" status
@@ -168,6 +175,9 @@ export async function GET(request: NextRequest) {
 
     console.log(
       `Cron job completed. Processed ${totalProcessed} emails across ${sendingCampaigns.length} campaigns`
+    );
+    console.log(
+      `MongoDB/Lambda optimized performance: ${BATCH_SIZE} emails/batch with ${DELAY_BETWEEN_DB_OPERATIONS}ms DB throttling`
     );
 
     return NextResponse.json({
@@ -380,6 +390,11 @@ async function processCampaignBatch(
           pendingRecordId: pendingRecordId,
         });
 
+        // Throttle database operations to prevent connection pool exhaustion
+        await new Promise((resolve) =>
+          setTimeout(resolve, DELAY_BETWEEN_DB_OPERATIONS)
+        );
+
         emailsProcessed++;
 
         // Calculate dynamic delay to maintain rate limit
@@ -427,6 +442,11 @@ async function processCampaignBatch(
           pendingRecordId: pendingRecordId,
         });
 
+        // Throttle database operations even on errors
+        await new Promise((resolve) =>
+          setTimeout(resolve, DELAY_BETWEEN_DB_OPERATIONS)
+        );
+
         // Still apply rate limiting even on errors
         const elapsed = Date.now() - startTime;
         const delay = Math.max(0, MIN_DELAY_MS - elapsed);
@@ -457,13 +477,23 @@ async function processCampaignBatch(
       last_batch_completed: new Date().toISOString(),
     });
 
+    // Throttle after progress update to prevent connection pool exhaustion
+    await new Promise((resolve) =>
+      setTimeout(resolve, DELAY_BETWEEN_DB_OPERATIONS)
+    );
+
     console.log(
       `Batch ${batchesProcessed} complete. Database stats: ${freshStats.sent} sent, ${freshStats.pending} pending, ${freshStats.failed} failed, ${freshStats.bounced} bounced`
     );
 
-    // Delay between batches (1 second)
+    // Optimized delay between batches for MongoDB/Lambda performance
     if (batchesProcessed < MAX_BATCHES_PER_RUN && !rateLimitHit) {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      console.log(
+        `⏸️  Waiting ${DELAY_BETWEEN_BATCHES}ms before next batch for MongoDB optimization...`
+      );
+      await new Promise((resolve) =>
+        setTimeout(resolve, DELAY_BETWEEN_BATCHES)
+      );
     }
   }
 

@@ -43,7 +43,9 @@ async function checkContactAlreadySent(
   contactEmail: string
 ): Promise<boolean> {
   try {
-    console.log(`🔍 Checking if ${contactEmail} already has a send record for campaign ${campaignId}...`);
+    console.log(
+      `🔍 Checking if ${contactEmail} already has a send record for campaign ${campaignId}...`
+    );
 
     const { objects } = await cosmic.objects
       .find({
@@ -57,7 +59,9 @@ async function checkContactAlreadySent(
     const alreadySent = objects.length > 0;
 
     if (alreadySent) {
-      console.log(`⊗ Email ${contactEmail} already has a campaign-send record (status: ${objects[0].metadata.status.value})`);
+      console.log(
+        `⊗ Email ${contactEmail} already has a campaign-send record (status: ${objects[0].metadata.status.value})`
+      );
     }
 
     return alreadySent;
@@ -71,24 +75,39 @@ async function checkContactAlreadySent(
 }
 
 // UPDATED: Atomic reservation with deterministic slugs (no UUID) + email-based duplicate check
+// OPTIMIZED: Added MongoDB/Lambda throttling to prevent connection pool exhaustion
 export async function reserveContactsForSending(
   campaignId: string,
   contacts: EmailContact[],
   batchSize: number
-): Promise<{ reserved: EmailContact[]; pendingRecordIds: Map<string, string> }> {
+): Promise<{
+  reserved: EmailContact[];
+  pendingRecordIds: Map<string, string>;
+}> {
   const reserved: EmailContact[] = [];
-  const pendingRecordIds = new Map < string, string> ();
+  const pendingRecordIds = new Map<string, string>();
 
   const targetBatchSize = Math.min(batchSize, contacts.length);
-  console.log(`🔒 Attempting to reserve ${targetBatchSize} contacts for campaign ${campaignId}...`);
+  console.log(
+    `🔒 Attempting to reserve ${targetBatchSize} contacts for campaign ${campaignId}...`
+  );
+
+  // MongoDB/Lambda optimization: Process contacts with throttling
+  const RESERVATION_DELAY = 50; // 50ms delay between reservation attempts
+  let processedCount = 0;
 
   for (const contact of contacts.slice(0, batchSize)) {
     try {
       // CRITICAL FIX: Email-based duplicate check BEFORE attempting reservation
-      const alreadySent = await checkContactAlreadySent(campaignId, contact.metadata.email);
+      const alreadySent = await checkContactAlreadySent(
+        campaignId,
+        contact.metadata.email
+      );
 
       if (alreadySent) {
-        console.log(`⊗ Skipping ${contact.metadata.email} - already has a send record for this campaign`);
+        console.log(
+          `⊗ Skipping ${contact.metadata.email} - already has a send record for this campaign`
+        );
         continue;
       }
 
@@ -125,17 +144,20 @@ export async function reserveContactsForSending(
       // If we got here, we successfully reserved this contact
       reserved.push(contact);
       pendingRecordIds.set(contact.id, object.id);
-
     } catch (error: any) {
       // Slug conflict means another process already reserved/sent this contact
       // This is EXPECTED behavior in concurrent processing - not an error!
       const errorMessage = error.message?.toLowerCase() || "";
 
-      if (errorMessage.includes('slug') ||
-        errorMessage.includes('unique') ||
-        errorMessage.includes('duplicate')) {
+      if (
+        errorMessage.includes("slug") ||
+        errorMessage.includes("unique") ||
+        errorMessage.includes("duplicate")
+      ) {
         // Silent skip - contact is already being handled by another process
-        console.log(`⊗ Contact ${contact.id} (${contact.metadata.email}) already reserved/sent by another process (slug conflict)`);
+        console.log(
+          `⊗ Contact ${contact.id} (${contact.metadata.email}) already reserved/sent by another process (slug conflict)`
+        );
         continue;
       }
 
@@ -143,9 +165,19 @@ export async function reserveContactsForSending(
       console.error(`✗ Error reserving contact ${contact.id}:`, error.message);
       continue;
     }
+
+    // MongoDB/Lambda throttling: Add delay between reservation attempts
+    processedCount++;
+    if (processedCount < targetBatchSize) {
+      await new Promise((resolve) => setTimeout(resolve, RESERVATION_DELAY));
+    }
   }
 
-  console.log(`✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts (${targetBatchSize - reserved.length} already reserved/sent)`);
+  console.log(
+    `✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts (${
+      targetBatchSize - reserved.length
+    } already reserved/sent)`
+  );
 
   return { reserved, pendingRecordIds };
 }
@@ -170,11 +202,13 @@ export async function createCampaignSend(data: {
       pendingRecordId: data.pendingRecordId,
       hasResendMessageId: !!data.resendMessageId,
     });
-    
+
     // If we have a pending record ID, update it instead of creating new
     if (data.pendingRecordId) {
-      console.log(`📧 DEBUG: Updating existing pending record ${data.pendingRecordId} to status: ${data.status}`);
-      
+      console.log(
+        `📧 DEBUG: Updating existing pending record ${data.pendingRecordId} to status: ${data.status}`
+      );
+
       const updatePayload = {
         metadata: {
           status: data.status,
@@ -183,24 +217,29 @@ export async function createCampaignSend(data: {
           error_message: data.errorMessage,
         },
       };
-      
+
       console.log(`📧 DEBUG: Update payload:`, updatePayload);
-      
-      const { object } = await cosmic.objects.updateOne(data.pendingRecordId, updatePayload);
-      
+
+      const { object } = await cosmic.objects.updateOne(
+        data.pendingRecordId,
+        updatePayload
+      );
+
       console.log(`📧 DEBUG: Record updated successfully:`, {
         id: object.id,
         status: object.metadata.status,
         sent_at: object.metadata.sent_at,
         resend_message_id: object.metadata.resend_message_id,
       });
-      
+
       return object as CampaignSend;
     }
-    
+
     // Fallback: Create new record if no pending record ID provided
-    console.log(`📧 DEBUG: Creating new campaign-send record (no pending record ID provided)`);
-    
+    console.log(
+      `📧 DEBUG: Creating new campaign-send record (no pending record ID provided)`
+    );
+
     const { object } = await cosmic.objects.insertOne({
       type: "campaign-sends",
       title: `Send to ${data.contactEmail}`,
@@ -286,9 +325,7 @@ export async function getSentContactIds(
 
 // UPDATED: Get campaign send statistics (now includes pending status)
 // CRITICAL FIX: Handle 404 errors for individual status queries without resetting all stats
-export async function getCampaignSendStats(
-  campaignId: string
-): Promise<{
+export async function getCampaignSendStats(campaignId: string): Promise<{
   total: number;
   sent: number;
   pending: number;
@@ -296,17 +333,19 @@ export async function getCampaignSendStats(
   bounced: number;
 }> {
   try {
-    console.log(`📊 DEBUG getCampaignSendStats: Fetching stats for campaign ${campaignId}`);
-    
+    console.log(
+      `📊 DEBUG getCampaignSendStats: Fetching stats for campaign ${campaignId}`
+    );
+
     // CRITICAL FIX: Initialize stats object that we'll build up
     const stats = {
       total: 0,
       sent: 0,
       pending: 0,
       failed: 0,
-      bounced: 0
+      bounced: 0,
     };
-    
+
     // Get total count
     console.log(`📊 DEBUG: Querying total campaign-sends...`);
     try {
@@ -343,12 +382,15 @@ export async function getCampaignSendStats(
 
       stats.sent = sentSendsResponse.total || 0;
       console.log(`📊 DEBUG: Sent campaign-sends found: ${stats.sent}`);
-      console.log(`📊 DEBUG: Sample sent records (first 3):`, sentSendsResponse.objects.slice(0, 3).map((obj: any) => ({
-        id: obj.id,
-        status: obj.metadata.status,
-        contact_email: obj.metadata.contact_email,
-        sent_at: obj.metadata.sent_at,
-      })));
+      console.log(
+        `📊 DEBUG: Sample sent records (first 3):`,
+        sentSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+          id: obj.id,
+          status: obj.metadata.status,
+          contact_email: obj.metadata.contact_email,
+          sent_at: obj.metadata.sent_at,
+        }))
+      );
     } catch (error) {
       if (hasStatus(error) && error.status === 404) {
         console.log(`📊 DEBUG: No sent campaign-sends found (404)`);
@@ -372,14 +414,19 @@ export async function getCampaignSendStats(
 
       stats.pending = pendingSendsResponse.total || 0;
       console.log(`📊 DEBUG: Pending campaign-sends found: ${stats.pending}`);
-      console.log(`📊 DEBUG: Sample pending records (first 3):`, pendingSendsResponse.objects.slice(0, 3).map((obj: any) => ({
-        id: obj.id,
-        status: obj.metadata.status,
-        contact_email: obj.metadata.contact_email,
-      })));
+      console.log(
+        `📊 DEBUG: Sample pending records (first 3):`,
+        pendingSendsResponse.objects.slice(0, 3).map((obj: any) => ({
+          id: obj.id,
+          status: obj.metadata.status,
+          contact_email: obj.metadata.contact_email,
+        }))
+      );
     } catch (error) {
       if (hasStatus(error) && error.status === 404) {
-        console.log(`📊 DEBUG: No pending campaign-sends found (404) - this is normal when all emails are sent`);
+        console.log(
+          `📊 DEBUG: No pending campaign-sends found (404) - this is normal when all emails are sent`
+        );
         stats.pending = 0;
       } else {
         throw error;
@@ -436,7 +483,7 @@ export async function getCampaignSendStats(
     return stats;
   } catch (error) {
     console.error("❌ ERROR in getCampaignSendStats:", error);
-    
+
     // CRITICAL FIX: Only return zeros if there's a genuine error, not just 404s
     console.log(`📊 DEBUG: Returning zeros due to unexpected error`);
     return { total: 0, sent: 0, pending: 0, failed: 0, bounced: 0 };
@@ -458,10 +505,10 @@ export async function filterUnsentContacts(
     let hasMore = true;
 
     while (hasMore) {
-      const { contactIds: batch, total } = await getSentContactIds(
-        campaignId,
-        { limit, skip }
-      );
+      const { contactIds: batch, total } = await getSentContactIds(campaignId, {
+        limit,
+        skip,
+      });
 
       batch.forEach((id) => sentContactIds.add(id));
       skip += limit;
@@ -491,37 +538,43 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
 
     // Process batches sequentially (not in parallel) for better API reliability
     const allBatches: string[][] = [];
-    
+
     // Split emails into smaller, more manageable batches
     for (let i = 0; i < emails.length; i += QUERY_BATCH_SIZE) {
       allBatches.push(emails.slice(i, i + QUERY_BATCH_SIZE));
     }
 
-    console.log(`Processing ${allBatches.length} email check batches sequentially for better reliability...`);
+    console.log(
+      `Processing ${allBatches.length} email check batches sequentially for better reliability...`
+    );
 
     // Process batches sequentially with retry logic
     for (let i = 0; i < allBatches.length; i++) {
       const emailBatch = allBatches[i];
-      
+
       // CRITICAL FIX: Add validation that emailBatch is defined and has items
       if (!emailBatch || emailBatch.length === 0) {
         console.log(`Skipping undefined or empty email batch ${i + 1}`);
         continue;
       }
-      
+
       let retryCount = 0;
       const maxRetries = 3;
       let success = false;
-      
+
       while (!success && retryCount < maxRetries) {
         try {
-          console.log(`Checking duplicates for batch ${i + 1}/${allBatches.length}: ${emailBatch.length} emails (attempt ${retryCount + 1})`);
-          
+          console.log(
+            `Checking duplicates for batch ${i + 1}/${allBatches.length}: ${
+              emailBatch.length
+            } emails (attempt ${retryCount + 1})`
+          );
+
           // Query only the emails in this batch
           const { objects } = await cosmic.objects
             .find({
               type: "email-contacts",
-              "metadata.email": { $in: emailBatch }
+              "metadata.email": { $in: emailBatch },
             })
             .props(["metadata.email"]) // Only fetch email field for efficiency
             .limit(emailBatch.length);
@@ -529,37 +582,46 @@ export async function checkEmailsExist(emails: string[]): Promise<string[]> {
           // Extract existing emails from results
           const batchResults = objects
             .map((obj: any) => obj.metadata?.email)
-            .filter((email: any): email is string => typeof email === "string" && email.length > 0)
+            .filter(
+              (email: any): email is string =>
+                typeof email === "string" && email.length > 0
+            )
             .map((email: string) => email.toLowerCase());
-            
+
           existingEmails.push(...batchResults);
           success = true;
-          
         } catch (batchError) {
           retryCount++;
-          console.error(`Error checking batch ${i + 1} (attempt ${retryCount}):`, batchError);
-          
+          console.error(
+            `Error checking batch ${i + 1} (attempt ${retryCount}):`,
+            batchError
+          );
+
           if (retryCount < maxRetries) {
             // Exponential backoff for retries
             const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 3000);
             console.log(`Retrying batch ${i + 1} after ${delay}ms delay...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+            await new Promise((resolve) => setTimeout(resolve, delay));
           } else {
-            console.error(`Failed to check batch ${i + 1} after ${maxRetries} attempts. Continuing...`);
+            console.error(
+              `Failed to check batch ${
+                i + 1
+              } after ${maxRetries} attempts. Continuing...`
+            );
             // Continue with next batch instead of breaking entire process
           }
         }
       }
-      
+
       // Longer delay between batches to prevent API rate limiting
       if (i + 1 < allBatches.length) {
-        await new Promise(resolve => setTimeout(resolve, 300)); // Increased from 100ms
+        await new Promise((resolve) => setTimeout(resolve, 300)); // Increased from 100ms
       }
     }
 
     return existingEmails;
   } catch (error) {
-    console.error('Error checking duplicate emails:', error);
+    console.error("Error checking duplicate emails:", error);
     // Return empty array instead of throwing - let the process continue
     return [];
   }
@@ -577,7 +639,7 @@ export async function getUploadJobs(options?: {
     const status = options?.status;
 
     let query: any = { type: "upload-jobs" };
-    
+
     if (status && status !== "all") {
       if (Array.isArray(status)) {
         // Handle multiple status values
@@ -621,11 +683,13 @@ export async function getUploadJob(id: string): Promise<UploadJob | null> {
   }
 }
 
-export async function createUploadJob(data: CreateUploadJobData): Promise<UploadJob> {
+export async function createUploadJob(
+  data: CreateUploadJobData
+): Promise<UploadJob> {
   try {
     // OPTIMIZED: Use smaller, more reliable chunk sizes
     const optimizedChunkSize = Math.min(data.processing_chunk_size || 150, 150); // Cap at 150
-    
+
     const { object } = await cosmic.objects.insertOne({
       title: `Upload Job - ${data.file_name}`,
       type: "upload-jobs",
@@ -702,48 +766,72 @@ export async function updateUploadJobProgress(
     const metadataUpdates: any = {};
 
     // Basic progress fields
-    if (progress.processed_contacts !== undefined) metadataUpdates.processed_contacts = progress.processed_contacts;
-    if (progress.successful_contacts !== undefined) metadataUpdates.successful_contacts = progress.successful_contacts;
-    if (progress.failed_contacts !== undefined) metadataUpdates.failed_contacts = progress.failed_contacts;
-    if (progress.duplicate_contacts !== undefined) metadataUpdates.duplicate_contacts = progress.duplicate_contacts;
-    if (progress.validation_errors !== undefined) metadataUpdates.validation_errors = progress.validation_errors;
-    
+    if (progress.processed_contacts !== undefined)
+      metadataUpdates.processed_contacts = progress.processed_contacts;
+    if (progress.successful_contacts !== undefined)
+      metadataUpdates.successful_contacts = progress.successful_contacts;
+    if (progress.failed_contacts !== undefined)
+      metadataUpdates.failed_contacts = progress.failed_contacts;
+    if (progress.duplicate_contacts !== undefined)
+      metadataUpdates.duplicate_contacts = progress.duplicate_contacts;
+    if (progress.validation_errors !== undefined)
+      metadataUpdates.validation_errors = progress.validation_errors;
+
     // CRITICAL FIX: Ensure progress percentage never exceeds 100%
     if (progress.progress_percentage !== undefined) {
-      metadataUpdates.progress_percentage = Math.max(0, Math.min(100, progress.progress_percentage));
+      metadataUpdates.progress_percentage = Math.max(
+        0,
+        Math.min(100, progress.progress_percentage)
+      );
     }
-    
-    if (progress.processing_rate !== undefined) metadataUpdates.processing_rate = progress.processing_rate;
-    if (progress.estimated_completion !== undefined) metadataUpdates.estimated_completion = progress.estimated_completion;
-    if (progress.completed_at !== undefined) metadataUpdates.completed_at = progress.completed_at;
-    if (progress.error_message !== undefined) metadataUpdates.error_message = progress.error_message;
+
+    if (progress.processing_rate !== undefined)
+      metadataUpdates.processing_rate = progress.processing_rate;
+    if (progress.estimated_completion !== undefined)
+      metadataUpdates.estimated_completion = progress.estimated_completion;
+    if (progress.completed_at !== undefined)
+      metadataUpdates.completed_at = progress.completed_at;
+    if (progress.error_message !== undefined)
+      metadataUpdates.error_message = progress.error_message;
     if (progress.errors !== undefined) metadataUpdates.errors = progress.errors;
-    if (progress.duplicates !== undefined) metadataUpdates.duplicates = progress.duplicates;
-    if (progress.message !== undefined) metadataUpdates.message = progress.message;
+    if (progress.duplicates !== undefined)
+      metadataUpdates.duplicates = progress.duplicates;
+    if (progress.message !== undefined)
+      metadataUpdates.message = progress.message;
 
     // Enhanced chunked processing fields
-    if (progress.current_batch_index !== undefined) metadataUpdates.current_batch_index = progress.current_batch_index;
-    if (progress.batch_size !== undefined) metadataUpdates.batch_size = progress.batch_size;
-    if (progress.total_batches !== undefined) metadataUpdates.total_batches = progress.total_batches;
-    if (progress.last_processed_row !== undefined) metadataUpdates.last_processed_row = progress.last_processed_row;
-    if (progress.processing_chunk_size !== undefined) metadataUpdates.processing_chunk_size = progress.processing_chunk_size;
-    if (progress.resume_from_contact !== undefined) metadataUpdates.resume_from_contact = progress.resume_from_contact;
-    if (progress.chunk_processing_history !== undefined) metadataUpdates.chunk_processing_history = progress.chunk_processing_history;
-    if (progress.auto_resume_enabled !== undefined) metadataUpdates.auto_resume_enabled = progress.auto_resume_enabled;
-    if (progress.max_processing_time_ms !== undefined) metadataUpdates.max_processing_time_ms = progress.max_processing_time_ms;
+    if (progress.current_batch_index !== undefined)
+      metadataUpdates.current_batch_index = progress.current_batch_index;
+    if (progress.batch_size !== undefined)
+      metadataUpdates.batch_size = progress.batch_size;
+    if (progress.total_batches !== undefined)
+      metadataUpdates.total_batches = progress.total_batches;
+    if (progress.last_processed_row !== undefined)
+      metadataUpdates.last_processed_row = progress.last_processed_row;
+    if (progress.processing_chunk_size !== undefined)
+      metadataUpdates.processing_chunk_size = progress.processing_chunk_size;
+    if (progress.resume_from_contact !== undefined)
+      metadataUpdates.resume_from_contact = progress.resume_from_contact;
+    if (progress.chunk_processing_history !== undefined)
+      metadataUpdates.chunk_processing_history =
+        progress.chunk_processing_history;
+    if (progress.auto_resume_enabled !== undefined)
+      metadataUpdates.auto_resume_enabled = progress.auto_resume_enabled;
+    if (progress.max_processing_time_ms !== undefined)
+      metadataUpdates.max_processing_time_ms = progress.max_processing_time_ms;
 
     if (progress.status !== undefined) {
       // Map internal status values to exact Cosmic select-dropdown values
       const statusMapping = {
-        "pending": "Pending",
-        "processing": "Processing", 
-        "completed": "Completed",
-        "failed": "Failed",
-        "cancelled": "Cancelled"
+        pending: "Pending",
+        processing: "Processing",
+        completed: "Completed",
+        failed: "Failed",
+        cancelled: "Cancelled",
       };
 
       const cosmicStatusValue = statusMapping[progress.status];
-      
+
       metadataUpdates.status = {
         key: progress.status,
         value: cosmicStatusValue,
@@ -1277,7 +1365,9 @@ export async function deleteEmailList(id: string): Promise<void> {
 }
 
 // OPTIMIZED: Get actual contact count for a list using efficient minimal query
-export async function getListContactCountEfficient(listId: string): Promise<number> {
+export async function getListContactCountEfficient(
+  listId: string
+): Promise<number> {
   try {
     // Use minimal query with limit 1 and minimal props to get just the total count
     const result = await cosmic.objects
@@ -1294,7 +1384,10 @@ export async function getListContactCountEfficient(listId: string): Promise<numb
     if (hasStatus(error) && error.status === 404) {
       return 0;
     }
-    console.error(`Error getting efficient contact count for list ${listId}:`, error);
+    console.error(
+      `Error getting efficient contact count for list ${listId}:`,
+      error
+    );
     return 0;
   }
 }
@@ -1553,9 +1646,12 @@ export async function createEmailContact(
         try {
           await updateListContactCount(listId);
           // Small delay between updates to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
-          console.error(`Error updating contact count for list ${listId}:`, error);
+          console.error(
+            `Error updating contact count for list ${listId}:`,
+            error
+          );
           // Continue with other lists instead of breaking
         }
       }
@@ -1641,9 +1737,12 @@ export async function updateEmailContact(
         try {
           await updateListContactCount(listId);
           // Small delay between updates to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
-          console.error(`Error updating contact count for list ${listId}:`, error);
+          console.error(
+            `Error updating contact count for list ${listId}:`,
+            error
+          );
           // Continue with other lists instead of breaking
         }
       }
@@ -1678,9 +1777,12 @@ export async function deleteEmailContact(id: string): Promise<void> {
         try {
           await updateListContactCount(listId);
           // Small delay between updates to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
-          console.error(`Error updating contact count for list ${listId}:`, error);
+          console.error(
+            `Error updating contact count for list ${listId}:`,
+            error
+          );
           // Continue with other lists instead of breaking
         }
       }
@@ -1769,12 +1871,17 @@ export async function getContactsByListId(
       skip += limit;
       hasMore = allContacts.length < total;
 
-      console.log(`Fetched ${allContacts.length}/${total} contacts for list ${listId}`);
+      console.log(
+        `Fetched ${allContacts.length}/${total} contacts for list ${listId}`
+      );
     } catch (error) {
       if (hasStatus(error) && error.status === 404) {
         break; // No more contacts
       }
-      console.error(`Error fetching contacts for list ${listId} at skip ${skip}:`, error);
+      console.error(
+        `Error fetching contacts for list ${listId} at skip ${skip}:`,
+        error
+      );
       throw new Error("Failed to fetch contacts for list");
     }
   }
@@ -2049,7 +2156,7 @@ export async function createMarketingCampaign(
             validListIds.push(id);
           }
           // Small delay between validations to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
           console.error(`Error validating list ${id}:`, error);
         }
@@ -2073,7 +2180,7 @@ export async function createMarketingCampaign(
             validContactIds.push(id);
           }
           // Small delay between validations to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
           console.error(`Error validating contact ${id}:`, error);
         }
@@ -2204,7 +2311,13 @@ export async function updateCampaignProgress(
 
 export async function updateMarketingCampaign(
   id: string,
-  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats; public_sharing_enabled?: boolean }>
+  data: Partial<
+    CreateCampaignData & {
+      status?: string;
+      stats?: CampaignStats;
+      public_sharing_enabled?: boolean;
+    }
+  >
 ): Promise<MarketingCampaign> {
   try {
     const updateData: any = {};
@@ -2226,7 +2339,8 @@ export async function updateMarketingCampaign(
     if (data.send_date !== undefined)
       metadataUpdates.send_date = data.send_date;
     if (data.stats !== undefined) metadataUpdates.stats = data.stats;
-    if (data.public_sharing_enabled !== undefined) metadataUpdates.public_sharing_enabled = data.public_sharing_enabled;
+    if (data.public_sharing_enabled !== undefined)
+      metadataUpdates.public_sharing_enabled = data.public_sharing_enabled;
 
     if (data.status !== undefined) {
       metadataUpdates.status = {
@@ -2247,7 +2361,7 @@ export async function updateMarketingCampaign(
               validContactIds.push(id);
             }
             // Small delay between validations to prevent API overload
-            await new Promise(resolve => setTimeout(resolve, 100));
+            await new Promise((resolve) => setTimeout(resolve, 100));
           } catch (error) {
             console.error(`Error validating contact ${id}:`, error);
           }
@@ -2271,7 +2385,13 @@ export async function updateMarketingCampaign(
 // Add alias function for updateEmailCampaign
 export async function updateEmailCampaign(
   id: string,
-  data: Partial<CreateCampaignData & { status?: string; stats?: CampaignStats; public_sharing_enabled?: boolean }>
+  data: Partial<
+    CreateCampaignData & {
+      status?: string;
+      stats?: CampaignStats;
+      public_sharing_enabled?: boolean;
+    }
+  >
 ): Promise<MarketingCampaign> {
   return updateMarketingCampaign(id, data);
 }
@@ -2299,7 +2419,7 @@ export async function getCampaignTargetContacts(
     const addedContactIds = new Set<string>();
 
     // Sequential processing for lists, contacts, and tags for better reliability
-    
+
     // Add contacts from target lists using sequential processing
     if (
       campaign.metadata.target_lists &&
@@ -2309,17 +2429,19 @@ export async function getCampaignTargetContacts(
         const listId = typeof listRef === "string" ? listRef : listRef.id;
         try {
           const listContacts = await getContactsByListId(listId);
-          const activeListContacts = listContacts.filter(contact => contact.metadata.status.value === "Active");
-          
+          const activeListContacts = listContacts.filter(
+            (contact) => contact.metadata.status.value === "Active"
+          );
+
           for (const contact of activeListContacts) {
             if (!addedContactIds.has(contact.id)) {
               allContacts.push(contact);
               addedContactIds.add(contact.id);
             }
           }
-          
+
           // Small delay between list processing to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         } catch (error) {
           console.error(`Error fetching contacts for list ${listId}:`, error);
         }
@@ -2334,15 +2456,17 @@ export async function getCampaignTargetContacts(
       for (const contactId of campaign.metadata.target_contacts) {
         try {
           const contact = await getEmailContact(contactId);
-          if (contact && 
-              contact.metadata.status.value === "Active" &&
-              !addedContactIds.has(contact.id)) {
+          if (
+            contact &&
+            contact.metadata.status.value === "Active" &&
+            !addedContactIds.has(contact.id)
+          ) {
             allContacts.push(contact);
             addedContactIds.add(contact.id);
           }
-          
+
           // Small delay between contact validation to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
           console.error(`Error fetching contact ${contactId}:`, error);
         }
@@ -2358,7 +2482,7 @@ export async function getCampaignTargetContacts(
         const { contacts: allContactsResult } = await getEmailContacts({
           limit: 1000,
         });
-        
+
         for (const contact of allContactsResult) {
           if (
             !addedContactIds.has(contact.id) &&
@@ -2405,16 +2529,16 @@ export async function getCampaignTargetCount(
             .find({
               type: "email-contacts",
               "metadata.lists": listId,
-              "metadata.status": "Active"
+              "metadata.status": "Active",
             })
             .props(["id"]);
-            
+
           for (const contact of listContacts) {
             countedContactIds.add(contact.id);
           }
-          
+
           // Small delay between list counting to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 200));
+          await new Promise((resolve) => setTimeout(resolve, 200));
         } catch (error) {
           console.error(`Error counting contacts for list ${listId}:`, error);
         }
@@ -2433,7 +2557,7 @@ export async function getCampaignTargetCount(
             .find({
               id: contactId,
               type: "email-contacts",
-              "metadata.status": "Active"
+              "metadata.status": "Active",
             })
             .props(["id"])
             .limit(1);
@@ -2441,9 +2565,9 @@ export async function getCampaignTargetCount(
           if (objects.length > 0) {
             countedContactIds.add(contactId);
           }
-          
+
           // Small delay between contact validation to prevent API overload
-          await new Promise(resolve => setTimeout(resolve, 100));
+          await new Promise((resolve) => setTimeout(resolve, 100));
         } catch (error) {
           console.error(`Error validating contact ${contactId}:`, error);
         }
@@ -2459,10 +2583,10 @@ export async function getCampaignTargetCount(
         const { objects: taggedContacts } = await cosmic.objects
           .find({
             type: "email-contacts",
-            "metadata.status": "Active"
+            "metadata.status": "Active",
           })
           .props(["id", "metadata.tags"]);
-          
+
         for (const contact of taggedContacts) {
           if (
             !countedContactIds.has(contact.id) &&
