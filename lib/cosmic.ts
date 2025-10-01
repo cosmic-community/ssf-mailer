@@ -38,44 +38,48 @@ export const cosmic = createBucketClient({
 // ==================== CAMPAIGN SENDS TRACKING ====================
 
 // CRITICAL FIX: Query existing campaign-sends by email to prevent duplicates
-async function checkContactAlreadySent(
+// OPTIMIZED: Batch check for already-sent contacts (reduces DB queries)
+async function checkContactsAlreadySent(
   campaignId: string,
-  contactEmail: string
-): Promise<boolean> {
+  contactEmails: string[]
+): Promise<Set<string>> {
+  if (contactEmails.length === 0) return new Set();
+
   try {
     console.log(
-      `🔍 Checking if ${contactEmail} already has a send record for campaign ${campaignId}...`
+      `🔍 Batch checking ${contactEmails.length} contacts for campaign ${campaignId}...`
     );
 
+    // Single query to check all emails at once using $in operator
     const { objects } = await cosmic.objects
       .find({
         type: "campaign-sends",
         "metadata.campaign": campaignId,
-        "metadata.contact_email": contactEmail,
+        "metadata.contact_email": { $in: contactEmails },
       })
-      .props(["id", "metadata.status"])
-      .limit(1);
+      .props(["metadata.contact_email"])
+      .limit(contactEmails.length);
 
-    const alreadySent = objects.length > 0;
+    const sentEmails = new Set<string>(
+      objects.map((obj: any) => obj.metadata.contact_email).filter((email): email is string => typeof email === 'string')
+    );
 
-    if (alreadySent) {
-      console.log(
-        `⊗ Email ${contactEmail} already has a campaign-send record (status: ${objects[0].metadata.status.value})`
-      );
-    }
+    console.log(
+      `✓ Found ${sentEmails.size}/${contactEmails.length} already sent`
+    );
 
-    return alreadySent;
+    return sentEmails;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
-      return false; // No existing record found
+      return new Set();
     }
-    console.error(`Error checking send status for ${contactEmail}:`, error);
-    return false; // On error, assume not sent to allow retry
+    console.error(`Error batch checking send status:`, error);
+    return new Set();
   }
 }
 
-// UPDATED: Atomic reservation with deterministic slugs (no UUID) + email-based duplicate check
-// OPTIMIZED: Added MongoDB/Lambda throttling to prevent connection pool exhaustion
+// UPDATED: Atomic reservation with BATCH pre-check and reduced concurrency
+// OPTIMIZED: Dramatically reduced MongoDB load
 export async function reserveContactsForSending(
   campaignId: string,
   contacts: EmailContact[],
@@ -89,41 +93,46 @@ export async function reserveContactsForSending(
 
   const targetBatchSize = Math.min(batchSize, contacts.length);
   console.log(
-    `🔒 Attempting to reserve ${targetBatchSize} contacts for campaign ${campaignId}...`
+    `🔒 Reserving ${targetBatchSize} contacts for campaign ${campaignId} (batch check + reduced concurrency)...`
   );
 
-  // MongoDB/Lambda optimization: Process contacts with throttling
-  const RESERVATION_DELAY = 50; // 50ms delay between reservation attempts
+  // OPTIMIZATION 1: Batch pre-check all contacts at once (1 query instead of 50)
+  const contactEmails = contacts
+    .slice(0, batchSize)
+    .map((c) => c.metadata.email);
+  const alreadySentEmails = await checkContactsAlreadySent(
+    campaignId,
+    contactEmails
+  );
+
+  // Filter out already-sent contacts BEFORE attempting reservations
+  const contactsToReserve = contacts
+    .slice(0, batchSize)
+    .filter((c) => !alreadySentEmails.has(c.metadata.email));
+
+  console.log(
+    `📋 After filtering: ${contactsToReserve.length}/${targetBatchSize} contacts need reservation`
+  );
+
+  if (contactsToReserve.length === 0) {
+    console.log(`⊗ All contacts already have send records`);
+    return { reserved, pendingRecordIds };
+  }
+
+  // OPTIMIZATION 2: Increased delay to reduce MongoDB CPU load
+  const RESERVATION_DELAY = 150; // Increased from 50ms to 150ms (3x slower = gentler on DB)
   let processedCount = 0;
 
-  for (const contact of contacts.slice(0, batchSize)) {
+  for (const contact of contactsToReserve) {
     try {
-      // CRITICAL FIX: Email-based duplicate check BEFORE attempting reservation
-      const alreadySent = await checkContactAlreadySent(
-        campaignId,
-        contact.metadata.email
-      );
-
-      if (alreadySent) {
-        console.log(
-          `⊗ Skipping ${contact.metadata.email} - already has a send record for this campaign`
-        );
-        continue;
-      }
-
-      // CRITICAL FIX: Deterministic slug WITHOUT random UUID
-      // Format: send-{campaignId}-{contactId}
-      // This enforces ONE send per campaign-contact pair at the database level
+      // Create deterministic slug for uniqueness constraint
       const uniqueSlug = `send-${campaignId}-${contact.id}`;
 
-      console.log(`🔒 DEBUG: Creating pending record with slug: ${uniqueSlug}`);
-
-      // Try to atomically create the record with unique slug
-      // Cosmic will reject if slug already exists (= another process reserved it)
+      // Try to atomically create the record
       const { object } = await cosmic.objects.insertOne({
         type: "campaign-sends",
         title: `Send: Campaign ${campaignId} to ${contact.metadata.email}`,
-        slug: uniqueSlug, // CRITICAL: No UUID - enforces uniqueness
+        slug: uniqueSlug,
         metadata: {
           campaign: campaignId,
           contact: contact.id,
@@ -134,19 +143,10 @@ export async function reserveContactsForSending(
         },
       });
 
-      console.log(`🔒 DEBUG: Created pending record:`, {
-        id: object.id,
-        slug: object.slug,
-        status: object.metadata.status,
-        contact_email: object.metadata.contact_email,
-      });
-
-      // If we got here, we successfully reserved this contact
+      // Successfully reserved
       reserved.push(contact);
       pendingRecordIds.set(contact.id, object.id);
     } catch (error: any) {
-      // Slug conflict means another process already reserved/sent this contact
-      // This is EXPECTED behavior in concurrent processing - not an error!
       const errorMessage = error.message?.toLowerCase() || "";
 
       if (
@@ -154,29 +154,24 @@ export async function reserveContactsForSending(
         errorMessage.includes("unique") ||
         errorMessage.includes("duplicate")
       ) {
-        // Silent skip - contact is already being handled by another process
-        console.log(
-          `⊗ Contact ${contact.id} (${contact.metadata.email}) already reserved/sent by another process (slug conflict)`
-        );
+        // Already reserved by another process - skip silently
         continue;
       }
 
-      // Other errors should be logged but not stop the batch
+      // Other errors - log but continue
       console.error(`✗ Error reserving contact ${contact.id}:`, error.message);
       continue;
     }
 
-    // MongoDB/Lambda throttling: Add delay between reservation attempts
+    // OPTIMIZATION 3: Longer delay between reservations (150ms vs 50ms)
     processedCount++;
-    if (processedCount < targetBatchSize) {
+    if (processedCount < contactsToReserve.length) {
       await new Promise((resolve) => setTimeout(resolve, RESERVATION_DELAY));
     }
   }
 
   console.log(
-    `✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts (${
-      targetBatchSize - reserved.length
-    } already reserved/sent)`
+    `✅ Successfully reserved ${reserved.length}/${targetBatchSize} contacts`
   );
 
   return { reserved, pendingRecordIds };
