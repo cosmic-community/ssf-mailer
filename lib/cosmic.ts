@@ -3167,7 +3167,7 @@ export async function updateSettings(
       
       // Handle brand logo
       if (data.brand_logo !== undefined) {
-        metadataUpdates.brand_logo = data.brand_logo;
+        metadataUpdates.brand_logo = data.brand_logo.split('/').pop();
       }
 
       if (data.ai_tone !== undefined) {
