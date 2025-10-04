@@ -15,7 +15,14 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Settings, UpdateSettingsData } from "@/types";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Settings, UpdateSettingsData, MediaItem } from "@/types";
 import {
   AlertCircle,
   CheckCircle,
@@ -26,7 +33,10 @@ import {
   Shield,
   BarChart3,
   TestTube,
+  Upload,
+  X,
 } from "lucide-react";
+import MediaLibrary from "@/components/MediaLibrary";
 
 interface SettingsFormProps {
   initialSettings: Settings | null;
@@ -37,6 +47,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [showMediaLibrary, setShowMediaLibrary] = useState(false);
 
   // Helper function to extract ai_tone value safely
   const getInitialAiTone = ():
@@ -90,6 +101,20 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     test_emails: initialSettings?.metadata.test_emails || "",
   });
 
+  // Brand logo state
+  const [selectedBrandLogo, setSelectedBrandLogo] = useState<MediaItem | null>(
+    initialSettings?.metadata.brand_logo ? {
+      id: '',
+      name: '',
+      original_name: 'Brand Logo',
+      size: 0,
+      type: 'image/*',
+      created_at: '',
+      url: initialSettings.metadata.brand_logo.url,
+      imgix_url: initialSettings.metadata.brand_logo.imgix_url,
+    } : null
+  );
+
   const handleInputChange = (field: keyof UpdateSettingsData, value: any) => {
     setFormData((prev) => ({
       ...prev,
@@ -97,6 +122,19 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
     }));
     setError("");
     setSuccess("");
+  };
+
+  const handleMediaSelect = (media: MediaItem) => {
+    if (!media.type.startsWith('image/')) {
+      setError('Please select an image file for the brand logo');
+      return;
+    }
+    setSelectedBrandLogo(media);
+    setShowMediaLibrary(false);
+  };
+
+  const handleRemoveBrandLogo = () => {
+    setSelectedBrandLogo(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -146,12 +184,21 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
 
     startTransition(async () => {
       try {
+        // Prepare data with brand logo
+        const submitData = {
+          ...formData,
+          brand_logo: selectedBrandLogo ? {
+            url: selectedBrandLogo.url,
+            imgix_url: selectedBrandLogo.imgix_url,
+          } : null,
+        };
+
         const response = await fetch("/api/settings", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify(submitData),
         });
 
         const result = await response.json();
@@ -495,6 +542,73 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Brand Logo Section */}
+                <div className="space-y-2">
+                  <Label>Brand Logo</Label>
+                  <div className="space-y-3">
+                    {selectedBrandLogo ? (
+                      <div className="flex items-center space-x-4 p-4 bg-gray-50 rounded-lg">
+                        <img 
+                          src={`${selectedBrandLogo.imgix_url}?w=120&h=120&fit=crop&auto=format,compress`}
+                          alt="Selected brand logo"
+                          className="w-16 h-16 object-contain bg-white rounded border"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-900">
+                            {selectedBrandLogo.original_name || 'Brand Logo'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Used in email headers and subscribe page
+                          </p>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleRemoveBrandLogo}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+                        <Upload className="h-8 w-8 text-gray-400 mx-auto mb-2" />
+                        <p className="text-sm text-gray-600 mb-2">
+                          No brand logo selected
+                        </p>
+                        <p className="text-xs text-gray-500 mb-4">
+                          Upload a logo to display in email headers and the subscribe page
+                        </p>
+                      </div>
+                    )}
+                    
+                    <Dialog open={showMediaLibrary} onOpenChange={setShowMediaLibrary}>
+                      <DialogTrigger asChild>
+                        <Button type="button" variant="outline" className="w-full">
+                          <Upload className="h-4 w-4 mr-2" />
+                          {selectedBrandLogo ? 'Change Brand Logo' : 'Select Brand Logo'}
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
+                        <DialogHeader>
+                          <DialogTitle>Select Brand Logo</DialogTitle>
+                        </DialogHeader>
+                        <div className="flex-1 overflow-hidden">
+                          <MediaLibrary
+                            selectionMode={true}
+                            onSelect={handleMediaSelect}
+                            selectedMedia={selectedBrandLogo}
+                          />
+                        </div>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Choose an image file to use as your brand logo. It will be automatically optimized and displayed in your emails and subscribe page.
+                  </p>
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="brand_guidelines">Brand Guidelines</Label>
                   <Textarea

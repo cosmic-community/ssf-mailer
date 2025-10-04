@@ -28,6 +28,7 @@ export async function GET() {
             google_analytics_id: "",
             email_signature: "",
             test_emails: "",
+            brand_logo: null,
           },
         },
       });
@@ -48,7 +49,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const data: UpdateSettingsData = await request.json();
+    const data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null } = await request.json();
 
     // Validate required fields
     if (!data.from_name || !data.from_email || !data.company_name) {

@@ -255,7 +255,7 @@ export interface EmailCampaign extends CosmicObject {
 // Add Campaign type alias for backward compatibility
 export type Campaign = MarketingCampaign;
 
-// Settings interface - Updated to use comma-separated string for test_emails
+// Settings interface - Updated to use comma-separated string for test_emails and added brand_logo
 export interface Settings extends CosmicObject {
   type: "settings";
   metadata: {
