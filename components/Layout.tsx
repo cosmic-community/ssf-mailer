@@ -20,9 +20,14 @@ import { LoadingSpinner } from "@/components/ui/loading-spinner";
 interface LayoutProps {
   children: React.ReactNode;
   companyName?: string;
+  brandLogoUrl?: string;
 }
 
-export default function Layout({ children, companyName = "Email Marketing" }: LayoutProps) {
+export default function Layout({ 
+  children, 
+  companyName = "Email Marketing",
+  brandLogoUrl 
+}: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const pathname = usePathname();
@@ -97,7 +102,15 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
           {/* Logo */}
           <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
             <div className="flex items-center min-w-0 flex-1">
-              <Mail className="h-8 w-8 text-blue-600 flex-shrink-0" />
+              {brandLogoUrl ? (
+                <img 
+                  src={`${brandLogoUrl}?w=64&h=64&fit=crop&auto=format,compress`}
+                  alt={`${companyName} logo`}
+                  className="w-8 h-8 object-contain flex-shrink-0"
+                />
+              ) : (
+                <Mail className="h-8 w-8 text-blue-600 flex-shrink-0" />
+              )}
               <div 
                 className="ml-2 text-xl font-semibold text-gray-900 truncate"
                 title={companyName}
@@ -159,7 +172,15 @@ export default function Layout({ children, companyName = "Email Marketing" }: La
             <Menu className="h-6 w-6" />
           </button>
           <div className="flex items-center min-w-0 flex-1 justify-center">
-            <Mail className="h-6 w-6 text-blue-600 flex-shrink-0" />
+            {brandLogoUrl ? (
+              <img 
+                src={`${brandLogoUrl}?w=48&h=48&fit=crop&auto=format,compress`}
+                alt={`${companyName} logo`}
+                className="w-6 h-6 object-contain flex-shrink-0"
+              />
+            ) : (
+              <Mail className="h-6 w-6 text-blue-600 flex-shrink-0" />
+            )}
             <div 
               className="ml-2 font-semibold text-gray-900 truncate"
               title={companyName}
