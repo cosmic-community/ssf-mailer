@@ -7,10 +7,12 @@ import { Settings } from "@/types";
 
 interface ClientLayoutRouterProps {
   children: React.ReactNode;
+  companyName: string;
 }
 
 export default function ClientLayoutRouter({
   children,
+  companyName: serverCompanyName,
 }: ClientLayoutRouterProps) {
   const pathname = usePathname();
   const [settings, setSettings] = useState<Settings | null>(null);
@@ -39,7 +41,8 @@ export default function ClientLayoutRouter({
     return <>{children}</>;
   }
 
-  const companyName = settings?.metadata.company_name || "Email Marketing";
+  // Use server-fetched company name as fallback while settings are loading
+  const companyName = settings?.metadata.company_name || serverCompanyName;
   const brandLogoUrl = settings?.metadata.brand_logo?.imgix_url;
 
   return (
