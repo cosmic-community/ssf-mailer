@@ -105,7 +105,7 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [selectedBrandLogo, setSelectedBrandLogo] = useState<MediaItem | null>(
     initialSettings?.metadata.brand_logo ? {
       id: '',
-      name: '',
+      name: initialSettings.metadata.brand_logo.imgix_url || '',
       original_name: 'Brand Logo',
       size: 0,
       type: 'image/*',
@@ -184,14 +184,18 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
 
     startTransition(async () => {
       try {
-        // Prepare data with brand logo
-        const submitData = {
+        // Prepare data with brand logo using the media file name
+        const submitData: any = {
           ...formData,
-          brand_logo: selectedBrandLogo ? {
-            url: selectedBrandLogo.url,
-            imgix_url: selectedBrandLogo.imgix_url,
-          } : null,
         };
+
+        // Add brand logo if selected - save the media file name
+        if (selectedBrandLogo) {
+          submitData.brand_logo_name = selectedBrandLogo.name;
+        } else {
+          // Explicitly set to null if removed
+          submitData.brand_logo_name = null;
+        }
 
         const response = await fetch("/api/settings", {
           method: "POST",
@@ -590,11 +594,11 @@ export default function SettingsForm({ initialSettings }: SettingsFormProps) {
                           {selectedBrandLogo ? 'Change Brand Logo' : 'Select Brand Logo'}
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-6xl max-h-[90vh] flex flex-col">
-                        <DialogHeader>
+                      <DialogContent className="max-w-6xl h-[85vh] flex flex-col">
+                        <DialogHeader className="flex-shrink-0">
                           <DialogTitle>Select Brand Logo</DialogTitle>
                         </DialogHeader>
-                        <div className="flex-1 overflow-hidden">
+                        <div className="flex-1 overflow-y-auto">
                           <MediaLibrary
                             selectionMode={true}
                             onSelect={handleMediaSelect}

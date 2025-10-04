@@ -3124,7 +3124,7 @@ export async function getSettings(): Promise<Settings | null> {
 }
 
 export async function updateSettings(
-  data: UpdateSettingsData
+  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
 ): Promise<Settings> {
   try {
     // First try to get existing settings
@@ -3164,6 +3164,11 @@ export async function updateSettings(
         metadataUpdates.email_signature = data.email_signature;
       if (data.test_emails !== undefined)
         metadataUpdates.test_emails = data.test_emails;
+      
+      // Handle brand logo
+      if (data.brand_logo !== undefined) {
+        metadataUpdates.brand_logo = data.brand_logo;
+      }
 
       if (data.ai_tone !== undefined) {
         metadataUpdates.ai_tone = {
@@ -3193,6 +3198,7 @@ export async function updateSettings(
           brand_guidelines: data.brand_guidelines || "",
           primary_brand_color: data.primary_brand_color || "#007bff",
           secondary_brand_color: data.secondary_brand_color || "#6c757d",
+          brand_logo: data.brand_logo || null,
           ai_tone: {
             key: (data.ai_tone || "professional").toLowerCase(),
             value: data.ai_tone || "Professional",
@@ -3215,7 +3221,7 @@ export async function updateSettings(
 
 // Add alias function for createOrUpdateSettings
 export async function createOrUpdateSettings(
-  data: UpdateSettingsData
+  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
 ): Promise<Settings> {
   return updateSettings(data);
 }
