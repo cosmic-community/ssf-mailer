@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSettings, createOrUpdateSettings } from "@/lib/cosmic";
+import { getSettings, createOrUpdateSettings, cosmic } from "@/lib/cosmic";
 import { UpdateSettingsData } from "@/types";
 
 export async function GET() {
@@ -28,6 +28,7 @@ export async function GET() {
             google_analytics_id: "",
             email_signature: "",
             test_emails: "",
+            brand_logo: null,
           },
         },
       });
@@ -48,7 +49,7 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const data: UpdateSettingsData = await request.json();
+    const data: UpdateSettingsData & { brand_logo_name?: string | null } = await request.json();
 
     // Validate required fields
     if (!data.from_name || !data.from_email || !data.company_name) {
@@ -169,9 +170,43 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Handle brand logo - fetch media details if provided
+    let brandLogoData = null;
+    if (data.brand_logo_name) {
+      try {
+        // Find the media file by name
+        const mediaResult = await cosmic.media.find({ name: data.brand_logo_name }).props(['name', 'url', 'imgix_url']);
+        
+        if (mediaResult.media && mediaResult.media.length > 0) {
+          const mediaFile = mediaResult.media[0];
+          brandLogoData = {
+            url: mediaFile.url,
+            imgix_url: mediaFile.imgix_url,
+          };
+        }
+      } catch (error) {
+        console.error("Error fetching brand logo media:", error);
+        // Continue without logo if fetch fails
+      }
+    }
+
+    // Prepare settings data with brand logo
+    const settingsData: any = { ...data };
+    
+    // Add brand logo to metadata if available
+    if (brandLogoData) {
+      settingsData.brand_logo = brandLogoData;
+    } else if (data.brand_logo_name === null) {
+      // Explicitly remove brand logo if set to null
+      settingsData.brand_logo = null;
+    }
+
+    // Remove the brand_logo_name field as it's not part of the settings metadata
+    delete settingsData.brand_logo_name;
+
     // Create or update settings - pass data directly
     // The createOrUpdateSettings function will handle converting ai_tone to Cosmic's format
-    const settings = await createOrUpdateSettings(data);
+    const settings = await createOrUpdateSettings(settingsData);
 
     return NextResponse.json({
       success: true,
