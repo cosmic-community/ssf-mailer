@@ -19,8 +19,8 @@ export async function GET(request: NextRequest) {
     );
 
     // Get all campaigns that are Sent (and might have tracking data)
-    const campaigns = await getMarketingCampaigns();
-    const sentCampaigns = campaigns.filter(
+    const result = await getMarketingCampaigns();
+    const sentCampaigns = result.campaigns.filter(
       (campaign) => campaign.metadata.status?.value === "Sent"
     );
 

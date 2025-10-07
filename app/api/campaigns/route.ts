@@ -2,13 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { createMarketingCampaign, getMarketingCampaigns } from "@/lib/cosmic";
 import { CreateCampaignData } from "@/types";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const campaigns = await getMarketingCampaigns();
+    const { searchParams } = new URL(request.url);
+    const limit = searchParams.get("limit")
+      ? parseInt(searchParams.get("limit")!)
+      : undefined;
+    const skip = searchParams.get("skip")
+      ? parseInt(searchParams.get("skip")!)
+      : undefined;
+
+    const result = await getMarketingCampaigns({ limit, skip });
 
     return NextResponse.json({
       success: true,
-      data: campaigns,
+      data: result.campaigns,
+      total: result.total,
+      limit: limit || result.total,
+      skip: skip || 0,
     });
   } catch (error) {
     console.error("Campaigns fetch error:", error);
@@ -21,14 +32,20 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, template_id, list_ids, subject, content, public_sharing_enabled } =
-      await request.json();
+    const {
+      name,
+      template_id,
+      list_ids,
+      subject,
+      content,
+      public_sharing_enabled,
+    } = await request.json();
 
     console.log("Creating campaign with data:", {
       name,
       template_id,
       list_ids,
-      public_sharing_enabled
+      public_sharing_enabled,
     });
 
     // Validate required fields
@@ -60,7 +77,7 @@ export async function POST(request: NextRequest) {
       list_ids,
       subject,
       content,
-      public_sharing_enabled: public_sharing_enabled ?? true // Default to true if not specified
+      public_sharing_enabled: public_sharing_enabled ?? true, // Default to true if not specified
     });
 
     console.log("Campaign created successfully:", campaign.id);

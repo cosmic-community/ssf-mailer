@@ -1462,23 +1462,11 @@ export async function getEmailLists(): Promise<EmailList[]> {
     const { objects } = await cosmic.objects
       .find({ type: "email-lists" })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0); // Use depth(0) for better performance
 
-    // Update contact counts for all lists using efficient method
-    const listsWithUpdatedCounts = await Promise.all(
-      objects.map(async (list: EmailList) => {
-        const contactCount = await getListContactCountEfficient(list.id);
-        return {
-          ...list,
-          metadata: {
-            ...list.metadata,
-            total_contacts: contactCount,
-          },
-        } as EmailList;
-      })
-    );
-
-    return listsWithUpdatedCounts;
+    // Return lists with contact counts from metadata
+    // Contact counts are updated when contacts are added/removed from lists
+    return objects as EmailList[];
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return [];
@@ -1493,20 +1481,13 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
     const { object } = await cosmic.objects
       .findOne({ id })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0); // Use depth(0) for better performance
 
     if (!object) return null;
 
-    // Update the contact count for this list using efficient method
-    const contactCount = await getListContactCountEfficient(id);
-
-    return {
-      ...object,
-      metadata: {
-        ...object.metadata,
-        total_contacts: contactCount,
-      },
-    } as EmailList;
+    // Return list with contact count from metadata
+    // Contact count is updated when contacts are added/removed from lists
+    return object as EmailList;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return null;
@@ -1735,60 +1716,12 @@ export async function getEmailContacts(options?: {
     const result = await cosmic.objects
       .find(query)
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1)
+      .depth(1) // Keep depth(1) to load list information for display
       .limit(limit)
       .skip(skip);
 
     let contacts = result.objects as EmailContact[];
     let total = result.total || 0;
-
-    // If we have a search term and didn't find results with the primary search,
-    // or if we want to search across multiple fields, do client-side filtering
-    if (search && (!contacts.length || !search.includes("@"))) {
-      // Fetch more data for comprehensive search
-      const broadResult = await cosmic.objects
-        .find({ type: "email-contacts" })
-        .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-        .depth(1)
-        .limit(1000); // Get more records for comprehensive search
-
-      const allContacts = broadResult.objects as EmailContact[];
-
-      // Filter contacts that match search across multiple fields
-      const filteredContacts = allContacts.filter((contact) => {
-        const searchLower = search.toLowerCase();
-        const firstName = contact.metadata.first_name?.toLowerCase() || "";
-        const lastName = contact.metadata.last_name?.toLowerCase() || "";
-        const email = contact.metadata.email?.toLowerCase() || "";
-
-        const matchesSearch =
-          firstName.includes(searchLower) ||
-          lastName.includes(searchLower) ||
-          email.includes(searchLower);
-
-        const matchesStatus =
-          !status ||
-          status === "all" ||
-          contact.metadata.status?.value === status;
-
-        const matchesList =
-          !list_id ||
-          (contact.metadata.lists &&
-            (Array.isArray(contact.metadata.lists)
-              ? contact.metadata.lists.some((list: any) =>
-                  typeof list === "string"
-                    ? list === list_id
-                    : list.id === list_id
-                )
-              : false));
-
-        return matchesSearch && matchesStatus && matchesList;
-      });
-
-      // Apply pagination to filtered results
-      total = filteredContacts.length;
-      contacts = filteredContacts.slice(skip, skip + limit);
-    }
 
     return {
       contacts,
@@ -2428,26 +2361,40 @@ export async function duplicateEmailTemplate(
 }
 
 // Marketing Campaigns
-export async function getMarketingCampaigns(): Promise<MarketingCampaign[]> {
+export async function getMarketingCampaigns(options?: {
+  limit?: number;
+  skip?: number;
+}): Promise<{ campaigns: MarketingCampaign[]; total: number }> {
+  const limit = options?.limit || 1000; // Default to all
+  const skip = options?.skip || 0;
+
   try {
-    const { objects } = await cosmic.objects
+    const { objects, total } = await cosmic.objects
       .find({ type: "marketing-campaigns" })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0) // Use depth(0) for better performance - don't load related objects
+      .limit(limit)
+      .skip(skip);
 
-    return objects as MarketingCampaign[];
+    return {
+      campaigns: objects as MarketingCampaign[],
+      total: total || 0,
+    };
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
-      return [];
+      return { campaigns: [], total: 0 };
     }
     console.error("Error fetching marketing campaigns:", error);
     throw new Error("Failed to fetch marketing campaigns");
   }
 }
 
-export async function getEmailCampaigns(): Promise<MarketingCampaign[]> {
+export async function getEmailCampaigns(options?: {
+  limit?: number;
+  skip?: number;
+}): Promise<{ campaigns: MarketingCampaign[]; total: number }> {
   // Alias for backward compatibility
-  return getMarketingCampaigns();
+  return getMarketingCampaigns(options);
 }
 
 export async function getMarketingCampaign(
@@ -3124,7 +3071,9 @@ export async function getSettings(): Promise<Settings | null> {
 }
 
 export async function updateSettings(
-  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
+  data: UpdateSettingsData & {
+    brand_logo?: { url: string; imgix_url: string } | null;
+  }
 ): Promise<Settings> {
   try {
     // First try to get existing settings
@@ -3164,10 +3113,10 @@ export async function updateSettings(
         metadataUpdates.email_signature = data.email_signature;
       if (data.test_emails !== undefined)
         metadataUpdates.test_emails = data.test_emails;
-      
+
       // Handle brand logo
       if (data.brand_logo !== undefined) {
-        metadataUpdates.brand_logo = data.brand_logo?.url?.split('/').pop();
+        metadataUpdates.brand_logo = data.brand_logo?.url?.split("/").pop();
       }
 
       if (data.ai_tone !== undefined) {
@@ -3221,7 +3170,9 @@ export async function updateSettings(
 
 // Add alias function for createOrUpdateSettings
 export async function createOrUpdateSettings(
-  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
+  data: UpdateSettingsData & {
+    brand_logo?: { url: string; imgix_url: string } | null;
+  }
 ): Promise<Settings> {
   return updateSettings(data);
 }

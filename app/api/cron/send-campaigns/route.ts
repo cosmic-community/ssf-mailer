@@ -58,8 +58,8 @@ export async function GET(request: NextRequest) {
     );
 
     // Get all campaigns that are in "Sending" status
-    const campaigns = await getMarketingCampaigns();
-    const sendingCampaigns = campaigns.filter(
+    const result = await getMarketingCampaigns();
+    const sendingCampaigns = result.campaigns.filter(
       (campaign) => campaign.metadata.status?.value === "Sending"
     );
 
