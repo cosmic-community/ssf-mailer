@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { getEmailContacts } from "@/lib/cosmic";
 import ContactsList from "@/components/ContactsList";
 import { Button } from "@/components/ui/button";
@@ -11,24 +12,76 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 interface ContactsPageProps {
-  searchParams: {
+  searchParams: Promise<{
     page?: string;
     limit?: string;
     search?: string;
     status?: string;
     list_id?: string;
-  };
+  }>;
 }
 
-export default async function ContactsPage({
-  searchParams,
-}: ContactsPageProps) {
-  const page = parseInt(searchParams.page || "1");
-  const limit = parseInt(searchParams.limit || "25");
+// Loading skeleton for contacts list
+function ContactsLoadingSkeleton() {
+  return (
+    <div className="space-y-4">
+      {/* Search and filters skeleton */}
+      <div className="bg-white rounded-lg shadow-sm p-4 space-y-4">
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="w-40">
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+          <div className="w-40">
+            <div className="h-10 bg-gray-200 rounded animate-pulse"></div>
+          </div>
+        </div>
+      </div>
+
+      {/* Table skeleton */}
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="p-4 border-b border-gray-200">
+          <div className="h-6 bg-gray-200 rounded w-48 animate-pulse"></div>
+        </div>
+        {[...Array(10)].map((_, i) => (
+          <div
+            key={i}
+            className="p-4 border-b border-gray-100 flex items-center gap-4"
+          >
+            <div className="h-4 w-4 bg-gray-200 rounded animate-pulse"></div>
+            <div className="flex-1 space-y-2">
+              <div className="h-5 bg-gray-200 rounded w-1/3 animate-pulse"></div>
+              <div className="h-4 bg-gray-200 rounded w-1/4 animate-pulse"></div>
+            </div>
+            <div className="w-24">
+              <div className="h-6 bg-gray-200 rounded-full animate-pulse"></div>
+            </div>
+            <div className="w-32">
+              <div className="h-4 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+async function ContactsContent({
+  page,
+  limit,
+  search,
+  status,
+  listId,
+}: {
+  page: number;
+  limit: number;
+  search: string;
+  status: string;
+  listId: string;
+}) {
   const skip = (page - 1) * limit;
-  const search = searchParams.search || "";
-  const status = searchParams.status || "all";
-  const listId = searchParams.list_id || "";
 
   const { contacts, total } = await getEmailContacts({
     limit,
@@ -39,8 +92,41 @@ export default async function ContactsPage({
   });
 
   return (
+    <>
+      {/* Total count header */}
+      <div className="mb-6">
+        <p className="text-gray-600">
+          Showing {contacts.length} of {total.toLocaleString()} total contacts
+        </p>
+      </div>
+
+      {/* Contacts List */}
+      <ContactsList
+        contacts={contacts}
+        total={total}
+        currentPage={page}
+        itemsPerPage={limit}
+        searchTerm={search}
+        statusFilter={status}
+        listFilter={listId}
+      />
+    </>
+  );
+}
+
+export default async function ContactsPage({
+  searchParams,
+}: ContactsPageProps) {
+  const params = await searchParams;
+  const page = parseInt(params.page || "1");
+  const limit = parseInt(params.limit || "25");
+  const search = params.search || "";
+  const status = params.status || "all";
+  const listId = params.list_id || "";
+
+  return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header with action buttons */}
+      {/* Header with action buttons - Shows instantly */}
       <header className="bg-white shadow-sm border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
@@ -48,9 +134,7 @@ export default async function ContactsPage({
               <h1 className="text-3xl font-bold text-gray-900">
                 Email Contacts
               </h1>
-              <p className="text-gray-600 mt-1">
-                Manage your subscriber list ({total.toLocaleString()} total)
-              </p>
+              <p className="text-gray-600 mt-1">Manage your subscriber list</p>
             </div>
             <div className="flex space-x-3">
               <Link href="/contacts/upload">
@@ -78,20 +162,17 @@ export default async function ContactsPage({
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content with Suspense for streaming */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="space-y-6">
-          {/* Contacts List */}
-          <ContactsList
-            contacts={contacts}
-            total={total}
-            currentPage={page}
-            itemsPerPage={limit}
-            searchTerm={search}
-            statusFilter={status}
-            listFilter={listId}
+        <Suspense fallback={<ContactsLoadingSkeleton />}>
+          <ContactsContent
+            page={page}
+            limit={limit}
+            search={search}
+            status={status}
+            listId={listId}
           />
-        </div>
+        </Suspense>
       </main>
     </div>
   );

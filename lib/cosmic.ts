@@ -1716,60 +1716,12 @@ export async function getEmailContacts(options?: {
     const result = await cosmic.objects
       .find(query)
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1)
+      .depth(1) // Keep depth(1) to load list information for display
       .limit(limit)
       .skip(skip);
 
     let contacts = result.objects as EmailContact[];
     let total = result.total || 0;
-
-    // If we have a search term and didn't find results with the primary search,
-    // or if we want to search across multiple fields, do client-side filtering
-    if (search && (!contacts.length || !search.includes("@"))) {
-      // Fetch more data for comprehensive search
-      const broadResult = await cosmic.objects
-        .find({ type: "email-contacts" })
-        .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-        .depth(1)
-        .limit(1000); // Get more records for comprehensive search
-
-      const allContacts = broadResult.objects as EmailContact[];
-
-      // Filter contacts that match search across multiple fields
-      const filteredContacts = allContacts.filter((contact) => {
-        const searchLower = search.toLowerCase();
-        const firstName = contact.metadata.first_name?.toLowerCase() || "";
-        const lastName = contact.metadata.last_name?.toLowerCase() || "";
-        const email = contact.metadata.email?.toLowerCase() || "";
-
-        const matchesSearch =
-          firstName.includes(searchLower) ||
-          lastName.includes(searchLower) ||
-          email.includes(searchLower);
-
-        const matchesStatus =
-          !status ||
-          status === "all" ||
-          contact.metadata.status?.value === status;
-
-        const matchesList =
-          !list_id ||
-          (contact.metadata.lists &&
-            (Array.isArray(contact.metadata.lists)
-              ? contact.metadata.lists.some((list: any) =>
-                  typeof list === "string"
-                    ? list === list_id
-                    : list.id === list_id
-                )
-              : false));
-
-        return matchesSearch && matchesStatus && matchesList;
-      });
-
-      // Apply pagination to filtered results
-      total = filteredContacts.length;
-      contacts = filteredContacts.slice(skip, skip + limit);
-    }
 
     return {
       contacts,
