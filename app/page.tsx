@@ -14,13 +14,14 @@ export const revalidate = 0;
 
 export default async function HomePage() {
   // Fetch data from Cosmic
-  const [contactsResult, templates, campaigns] = await Promise.all([
+  const [contactsResult, templates, campaignsResult] = await Promise.all([
     getEmailContacts({ limit: 10 }), // Only fetch first 10 contacts for dashboard
     getEmailTemplates(),
-    getMarketingCampaigns(),
+    getMarketingCampaigns({ limit: 10 }), // Only fetch first 10 campaigns for dashboard
   ]);
 
   const contacts = contactsResult.contacts;
+  const campaigns = campaignsResult.campaigns;
 
   return (
     <div className="min-h-screen bg-slate-50 pb-16">

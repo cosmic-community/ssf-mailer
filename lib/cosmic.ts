@@ -1462,23 +1462,11 @@ export async function getEmailLists(): Promise<EmailList[]> {
     const { objects } = await cosmic.objects
       .find({ type: "email-lists" })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0); // Use depth(0) for better performance
 
-    // Update contact counts for all lists using efficient method
-    const listsWithUpdatedCounts = await Promise.all(
-      objects.map(async (list: EmailList) => {
-        const contactCount = await getListContactCountEfficient(list.id);
-        return {
-          ...list,
-          metadata: {
-            ...list.metadata,
-            total_contacts: contactCount,
-          },
-        } as EmailList;
-      })
-    );
-
-    return listsWithUpdatedCounts;
+    // Return lists with contact counts from metadata
+    // Contact counts are updated when contacts are added/removed from lists
+    return objects as EmailList[];
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return [];
@@ -1493,20 +1481,13 @@ export async function getEmailList(id: string): Promise<EmailList | null> {
     const { object } = await cosmic.objects
       .findOne({ id })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0); // Use depth(0) for better performance
 
     if (!object) return null;
 
-    // Update the contact count for this list using efficient method
-    const contactCount = await getListContactCountEfficient(id);
-
-    return {
-      ...object,
-      metadata: {
-        ...object.metadata,
-        total_contacts: contactCount,
-      },
-    } as EmailList;
+    // Return list with contact count from metadata
+    // Contact count is updated when contacts are added/removed from lists
+    return object as EmailList;
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
       return null;
@@ -2428,26 +2409,40 @@ export async function duplicateEmailTemplate(
 }
 
 // Marketing Campaigns
-export async function getMarketingCampaigns(): Promise<MarketingCampaign[]> {
+export async function getMarketingCampaigns(options?: {
+  limit?: number;
+  skip?: number;
+}): Promise<{ campaigns: MarketingCampaign[]; total: number }> {
+  const limit = options?.limit || 1000; // Default to all
+  const skip = options?.skip || 0;
+
   try {
-    const { objects } = await cosmic.objects
+    const { objects, total } = await cosmic.objects
       .find({ type: "marketing-campaigns" })
       .props(["id", "title", "slug", "metadata", "created_at", "modified_at"])
-      .depth(1);
+      .depth(0) // Use depth(0) for better performance - don't load related objects
+      .limit(limit)
+      .skip(skip);
 
-    return objects as MarketingCampaign[];
+    return {
+      campaigns: objects as MarketingCampaign[],
+      total: total || 0,
+    };
   } catch (error) {
     if (hasStatus(error) && error.status === 404) {
-      return [];
+      return { campaigns: [], total: 0 };
     }
     console.error("Error fetching marketing campaigns:", error);
     throw new Error("Failed to fetch marketing campaigns");
   }
 }
 
-export async function getEmailCampaigns(): Promise<MarketingCampaign[]> {
+export async function getEmailCampaigns(options?: {
+  limit?: number;
+  skip?: number;
+}): Promise<{ campaigns: MarketingCampaign[]; total: number }> {
   // Alias for backward compatibility
-  return getMarketingCampaigns();
+  return getMarketingCampaigns(options);
 }
 
 export async function getMarketingCampaign(
@@ -3124,7 +3119,9 @@ export async function getSettings(): Promise<Settings | null> {
 }
 
 export async function updateSettings(
-  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
+  data: UpdateSettingsData & {
+    brand_logo?: { url: string; imgix_url: string } | null;
+  }
 ): Promise<Settings> {
   try {
     // First try to get existing settings
@@ -3164,10 +3161,10 @@ export async function updateSettings(
         metadataUpdates.email_signature = data.email_signature;
       if (data.test_emails !== undefined)
         metadataUpdates.test_emails = data.test_emails;
-      
+
       // Handle brand logo
       if (data.brand_logo !== undefined) {
-        metadataUpdates.brand_logo = data.brand_logo?.url?.split('/').pop();
+        metadataUpdates.brand_logo = data.brand_logo?.url?.split("/").pop();
       }
 
       if (data.ai_tone !== undefined) {
@@ -3221,7 +3218,9 @@ export async function updateSettings(
 
 // Add alias function for createOrUpdateSettings
 export async function createOrUpdateSettings(
-  data: UpdateSettingsData & { brand_logo?: { url: string; imgix_url: string } | null }
+  data: UpdateSettingsData & {
+    brand_logo?: { url: string; imgix_url: string } | null;
+  }
 ): Promise<Settings> {
   return updateSettings(data);
 }

@@ -3,8 +3,8 @@ import CreateCampaignForm from "@/components/CreateCampaignForm";
 import Link from "next/link";
 
 // Force dynamic rendering to ensure fresh data
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export const metadata = {
   title: "Create New Campaign | Email Marketing",
@@ -12,14 +12,14 @@ export const metadata = {
 };
 
 interface PageProps {
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
 export default async function NewCampaignPage({ searchParams }: PageProps) {
   try {
     // Await searchParams in Next.js 15+
     const params = await searchParams;
-    
+
     // Only fetch templates and lists - contacts are handled via search in the form
     const [templates, lists] = await Promise.all([
       getEmailTemplates(),
@@ -27,8 +27,10 @@ export default async function NewCampaignPage({ searchParams }: PageProps) {
     ]);
 
     // Extract URL parameters for pre-population
-    const templateId = typeof params.template_id === 'string' ? params.template_id : undefined;
-    const sendDate = typeof params.send_date === 'string' ? params.send_date : undefined;
+    const templateId =
+      typeof params.template_id === "string" ? params.template_id : undefined;
+    const sendDate =
+      typeof params.send_date === "string" ? params.send_date : undefined;
 
     return (
       <div className="min-h-screen bg-gray-50 pb-16">
