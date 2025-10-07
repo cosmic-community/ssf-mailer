@@ -36,8 +36,11 @@ export async function POST(request: NextRequest) {
       name,
       template_id,
       list_ids,
+      contact_ids,
+      target_tags,
       subject,
       content,
+      send_date,
       public_sharing_enabled,
     } = await request.json();
 
@@ -45,6 +48,8 @@ export async function POST(request: NextRequest) {
       name,
       template_id,
       list_ids,
+      contact_ids,
+      target_tags,
       public_sharing_enabled,
     });
 
@@ -63,9 +68,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!list_ids || list_ids.length === 0) {
+    // Validate that at least one target is provided (lists, contacts, or tags)
+    const hasLists = list_ids && list_ids.length > 0;
+    const hasContacts = contact_ids && contact_ids.length > 0;
+    const hasTags = target_tags && target_tags.length > 0;
+
+    if (!hasLists && !hasContacts && !hasTags) {
       return NextResponse.json(
-        { error: "At least one list is required" },
+        { error: "At least one target is required (lists, contacts, or tags)" },
         { status: 400 }
       );
     }
@@ -75,8 +85,11 @@ export async function POST(request: NextRequest) {
       name,
       template_id, // Only used to copy content, not stored
       list_ids,
+      contact_ids,
+      target_tags,
       subject,
       content,
+      send_date,
       public_sharing_enabled: public_sharing_enabled ?? true, // Default to true if not specified
     });
 
