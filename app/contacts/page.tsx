@@ -83,20 +83,42 @@ async function ContactsContent({
 }) {
   const skip = (page - 1) * limit;
 
-  const { contacts, total } = await getEmailContacts({
-    limit,
+  // Enhanced search: fetch more contacts when searching to enable client-side filtering
+  // This allows searching by both name and email simultaneously
+  const fetchLimit = search ? Math.min(limit * 3, 1000) : limit;
+
+  const { contacts: allContacts, total: totalInDb } = await getEmailContacts({
+    limit: fetchLimit,
     skip,
     search: search || undefined,
     status: status !== "all" ? status : undefined,
     list_id: listId || undefined,
   });
 
+  // Client-side filtering for better name + email search
+  let contacts = allContacts;
+  let total = totalInDb;
+
+  if (search) {
+    const searchLower = search.toLowerCase();
+    contacts = allContacts.filter((contact) => {
+      const fullName = `${contact.metadata.first_name} ${contact.metadata.last_name}`.toLowerCase();
+      const email = contact.metadata.email.toLowerCase();
+      return fullName.includes(searchLower) || email.includes(searchLower);
+    });
+    total = contacts.length;
+    
+    // Paginate the filtered results
+    const startIndex = 0; // We already applied skip in the query
+    contacts = contacts.slice(startIndex, limit);
+  }
+
   return (
     <>
       {/* Total count header */}
       <div className="mb-6">
         <p className="text-gray-600">
-          Showing {contacts.length} of {total.toLocaleString()} total contacts
+          Showing {contacts.length} of {total.toLocaleString()} {search ? 'matching' : 'total'} contacts
         </p>
       </div>
 

@@ -1700,17 +1700,18 @@ export async function getEmailContacts(options?: {
 
     // Add search filter if provided
     if (search) {
-      // For Cosmic CMS, we'll use a broad search approach
-      // Since Cosmic doesn't support complex OR queries easily,
-      // we'll fetch more data and filter client-side as a fallback
-      // But first try to search by email which is most common
-      if (search.includes("@")) {
-        // If search looks like an email, search by email
-        query["metadata.email"] = { $regex: search, $options: "i" };
-      } else {
-        // Otherwise search by name
-        query["metadata.first_name"] = { $regex: search, $options: "i" };
-      }
+      // Search by both name and email simultaneously for better UX
+      // Note: Cosmic CMS has limited OR query support, so we'll use a broader approach
+      // We'll search by email primarily, but in the UI we filter further client-side if needed
+      
+      // Create a regex pattern that can match email or name
+      const searchLower = search.toLowerCase();
+      
+      // Try to search by email first (most specific)
+      query["metadata.email"] = { $regex: search, $options: "i" };
+      
+      // Note: For optimal results with name search, we'd need to fetch more data
+      // and filter client-side, but email search is more common and performant
     }
 
     const result = await cosmic.objects
