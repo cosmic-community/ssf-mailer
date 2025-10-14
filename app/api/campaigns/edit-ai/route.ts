@@ -43,6 +43,8 @@ async function fetchWebpageContent(url: string) {
     }
   } catch (error) {
     console.error('Error fetching webpage:', error)
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Webpage fetch error details:', errorMsg)
     return {
       title: 'Error loading webpage',
       content: `Failed to load content from ${url}`,
@@ -77,6 +79,8 @@ async function processMediaFile(url: string) {
     }
   } catch (error) {
     console.error('Error processing media file:', error)
+    const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+    console.error('Media processing error details:', errorMsg)
     return {
       title: 'Media file',
       media_url: url,
@@ -139,20 +143,27 @@ export async function POST(request: NextRequest) {
               )
               
               const contextPromises = context_items.map(async (item: any) => {
-                if (item.type === 'webpage') {
-                  controller.enqueue(
-                    encoder.encode('data: {"type":"status","message":"Analyzing webpage for style references...","progress":40}\n\n')
-                  )
-                  const webContent = await fetchWebpageContent(item.url)
-                  return `\nStyle Reference - ${webContent.title}:\nContent: ${webContent.content}\n${webContent.images.length > 0 ? `Images found: ${webContent.images.join(', ')}` : ''}\n---\n`
-                } else if (item.type === 'file') {
-                  controller.enqueue(
-                    encoder.encode('data: {"type":"status","message":"Processing reference media...","progress":40}\n\n')
-                  )
-                  const mediaData = await processMediaFile(item.url)
-                  return `\nReference Media: ${mediaData.title}\nURL: ${mediaData.media_url}\n${mediaData.imgix_url ? `Optimized URL: ${mediaData.imgix_url}` : ''}\n---\n`
+                try {
+                  if (item.type === 'webpage') {
+                    controller.enqueue(
+                      encoder.encode('data: {"type":"status","message":"Analyzing webpage for style references...","progress":40}\n\n')
+                    )
+                    const webContent = await fetchWebpageContent(item.url)
+                    return `\nStyle Reference - ${webContent.title}:\nContent: ${webContent.content}\n${webContent.images.length > 0 ? `Images found: ${webContent.images.join(', ')}` : ''}\n---\n`
+                  } else if (item.type === 'file') {
+                    controller.enqueue(
+                      encoder.encode('data: {"type":"status","message":"Processing reference media...","progress":40}\n\n')
+                    )
+                    const mediaData = await processMediaFile(item.url)
+                    return `\nReference Media: ${mediaData.title}\nURL: ${mediaData.media_url}\n${mediaData.imgix_url ? `Optimized URL: ${mediaData.imgix_url}` : ''}\n---\n`
+                  }
+                  return `\nReference: ${item.url}\n---\n`
+                } catch (error) {
+                  console.error('Error processing context item:', error)
+                  const errorMsg = error instanceof Error ? error.message : 'Unknown error'
+                  console.error('Context item processing error details:', errorMsg)
+                  return `\nReference: ${item.url} (failed to process: ${errorMsg})\n---\n`
                 }
-                return `\nReference: ${item.url}\n---\n`
               })
               
               const contextResults = await Promise.all(contextPromises)
@@ -220,80 +231,101 @@ IMPORTANT: DO NOT include or modify any unsubscribe links - these are added auto
               aiRequestOptions.media_url = firstMediaUrl
             }
 
-            const aiResponse = await cosmic.ai.generateText(aiRequestOptions)
+            try {
+              const aiResponse = await cosmic.ai.generateText(aiRequestOptions)
 
-            // Handle both streaming and non-streaming responses
-            if (aiResponse && typeof aiResponse === 'object' && 'on' in aiResponse) {
-              // Streaming response
-              const aiStream = aiResponse as TextStreamingResponse
-              let improvedContent = ''
-              let isComplete = false
+              // Handle both streaming and non-streaming responses
+              if (aiResponse && typeof aiResponse === 'object' && 'on' in aiResponse) {
+                // Streaming response
+                const aiStream = aiResponse as TextStreamingResponse
+                let improvedContent = ''
+                let isComplete = false
 
-              aiStream.on('text', (text: string) => {
-                improvedContent += text
+                aiStream.on('text', (text: string) => {
+                  improvedContent += text
+                  
+                  // Stream the content in real-time
+                  controller.enqueue(
+                    encoder.encode(`data: {"type":"content","text":"${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","progress":75}\n\n`)
+                  )
+                })
+
+                aiStream.on('end', () => {
+                  try {
+                    if (isComplete) return
+                    isComplete = true
+
+                    controller.enqueue(
+                      encoder.encode('data: {"type":"status","message":"AI editing completed successfully!","progress":100}\n\n')
+                    )
+
+                    // Use the content as-is since we instructed AI not to use backticks
+                    const finalContent = improvedContent.trim()
+
+                    // Send complete response with content only
+                    controller.enqueue(
+                      encoder.encode(`data: {"type":"complete","data":{"content":"${finalContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
+                    )
+
+                    controller.close()
+                  } catch (endError) {
+                    console.error('Stream end error:', endError)
+                    const endErrorMsg = endError instanceof Error ? endError.message : 'Unknown error'
+                    console.error('Stream end error details:', endErrorMsg)
+                    console.error('Error stack:', endError instanceof Error ? endError.stack : 'No stack trace')
+                    controller.enqueue(
+                      encoder.encode(`data: {"type":"error","error":"Failed to complete editing: ${endErrorMsg}"}\n\n`)
+                    )
+                    controller.close()
+                  }
+                })
+
+                aiStream.on('error', (error: any) => {
+                  console.error('AI stream error:', error)
+                  const streamErrorMsg = error instanceof Error ? error.message : (error?.message || 'Unknown error')
+                  console.error('AI stream error details:', streamErrorMsg)
+                  console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+                  if (!isComplete) {
+                    controller.enqueue(
+                      encoder.encode(`data: {"type":"error","error":"AI editing failed: ${streamErrorMsg}"}\n\n`)
+                    )
+                    controller.close()
+                  }
+                })
+
+              } else {
+                // Non-streaming response fallback
+                const content = typeof aiResponse === 'string' ? aiResponse : 'Failed to generate content'
                 
-                // Stream the content in real-time
                 controller.enqueue(
-                  encoder.encode(`data: {"type":"content","text":"${text.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","progress":75}\n\n`)
+                  encoder.encode('data: {"type":"status","message":"Processing complete!","progress":100}\n\n')
                 )
-              })
+                
+                controller.enqueue(
+                  encoder.encode(`data: {"type":"complete","data":{"content":"${content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
+                )
+                
+                controller.close()
+              }
 
-              aiStream.on('end', () => {
-                try {
-                  if (isComplete) return
-                  isComplete = true
-
-                  controller.enqueue(
-                    encoder.encode('data: {"type":"status","message":"AI editing completed successfully!","progress":100}\n\n')
-                  )
-
-                  // Use the content as-is since we instructed AI not to use backticks
-                  const finalContent = improvedContent.trim()
-
-                  // Send complete response with content only
-                  controller.enqueue(
-                    encoder.encode(`data: {"type":"complete","data":{"content":"${finalContent.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
-                  )
-
-                  controller.close()
-                } catch (endError) {
-                  console.error('Stream end error:', endError)
-                  controller.enqueue(
-                    encoder.encode('data: {"type":"error","error":"Failed to complete editing"}\n\n')
-                  )
-                  controller.close()
-                }
-              })
-
-              aiStream.on('error', (error: any) => {
-                console.error('AI stream error:', error)
-                if (!isComplete) {
-                  controller.enqueue(
-                    encoder.encode('data: {"type":"error","error":"AI editing failed"}\n\n')
-                  )
-                  controller.close()
-                }
-              })
-
-            } else {
-              // Non-streaming response fallback
-              const content = typeof aiResponse === 'string' ? aiResponse : 'Failed to generate content'
-              
+            } catch (error) {
+              console.error('AI editing error:', error)
+              const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+              console.error('Detailed AI editing error:', errorMessage)
+              console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
               controller.enqueue(
-                encoder.encode('data: {"type":"status","message":"Processing complete!","progress":100}\n\n')
+                encoder.encode(`data: {"type":"error","error":"Failed to edit content: ${errorMessage}"}\n\n`)
               )
-              
-              controller.enqueue(
-                encoder.encode(`data: {"type":"complete","data":{"content":"${content.replace(/"/g, '\\"').replace(/\n/g, '\\n')}","subject":"${currentSubject?.replace(/"/g, '\\"') || ''}"}}\n\n`)
-              )
-              
               controller.close()
             }
 
           } catch (error) {
             console.error('AI editing error:', error)
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+            console.error('Detailed error:', errorMessage)
+            console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
             controller.enqueue(
-              encoder.encode('data: {"type":"error","error":"Failed to edit content"}\n\n')
+              encoder.encode(`data: {"type":"error","error":"Failed to edit content: ${errorMessage}"}\n\n`)
             )
             controller.close()
           }
@@ -311,8 +343,11 @@ IMPORTANT: DO NOT include or modify any unsubscribe links - these are added auto
 
   } catch (error) {
     console.error('API Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+    console.error('Detailed API error:', errorMessage)
+    console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace')
     return new Response(
-      JSON.stringify({ error: 'Internal server error' }),
+      JSON.stringify({ error: `Internal server error: ${errorMessage}` }),
       {
         status: 500,
         headers: { 'Content-Type': 'application/json' }
