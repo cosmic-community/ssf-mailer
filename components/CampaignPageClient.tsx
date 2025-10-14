@@ -12,9 +12,10 @@ import EditCampaignContentForm from "@/components/EditCampaignContentForm";
 import CampaignActions from "@/components/CampaignActions";
 import TimeAgo from "@/components/TimeAgo";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TrendingUp, Clock, UserMinus, Mail, RefreshCw } from "lucide-react";
+import { TrendingUp, Clock, UserMinus, Mail, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import ConfirmationModal from "@/components/ConfirmationModal";
 
 interface CampaignPageClientProps {
   campaign: MarketingCampaign;
@@ -40,6 +41,8 @@ export default function CampaignPageClient({
     (() => Promise<void>) | null
   >(null);
   const [isRefreshingStats, setIsRefreshingStats] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleFormDataChange = useCallback(
     (
@@ -72,6 +75,30 @@ export default function CampaignPageClient({
       alert("Failed to refresh stats. Please try again.");
     } finally {
       setIsRefreshingStats(false);
+    }
+  };
+
+  const handleDeleteConfirm = async () => {
+    setIsDeleting(true);
+    setShowDeleteModal(false);
+
+    try {
+      const response = await fetch(`/api/campaigns/${campaign.id}`, {
+        method: "DELETE",
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to delete campaign");
+      }
+
+      router.push("/campaigns");
+      router.refresh();
+    } catch (error) {
+      console.error("Delete error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete campaign";
+      alert(errorMessage);
+      setIsDeleting(false);
     }
   };
 
@@ -178,6 +205,33 @@ export default function CampaignPageClient({
             </Card>
           </div>
         )}
+
+        {/* Danger Zone - Delete Campaign */}
+        <div className="border-t pt-8 mt-8">
+          <Card className="border-red-200 bg-red-50/50">
+            <CardHeader>
+              <CardTitle className="text-red-800 flex items-center space-x-2">
+                <Trash2 className="h-5 w-5" />
+                <span>Danger Zone</span>
+              </CardTitle>
+              <p className="text-red-700 text-sm">
+                Permanently delete this campaign. This action cannot be undone.
+                {status === "Sending" && " Cannot delete campaigns that are currently sending."}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="destructive"
+                onClick={() => setShowDeleteModal(true)}
+                disabled={isDeleting || status === "Sending"}
+                className="flex items-center space-x-2"
+              >
+                <Trash2 className="h-4 w-4" />
+                <span>Delete Campaign</span>
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Right Column - Actions & Stats */}
@@ -379,6 +433,19 @@ export default function CampaignPageClient({
           </Card>
         )}
       </div>
+
+      {/* Delete Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={showDeleteModal}
+        onOpenChange={setShowDeleteModal}
+        title="Delete Campaign"
+        message={`Are you sure you want to delete "${campaign.metadata.name}"? This action cannot be undone and will permanently remove this campaign from your account.`}
+        confirmText="Delete Campaign"
+        cancelText="Cancel"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }
