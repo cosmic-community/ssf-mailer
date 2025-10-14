@@ -606,10 +606,16 @@ export default function EditCampaignContentForm({
   const addContextItem = async (url: string) => {
     if (!url.trim()) return;
 
+    // FIXED: Better detection of webpage vs file
+    // Check if URL starts with http:// or https:// to identify webpages
+    // Otherwise, check for common file extensions to identify files
+    const isWebpage = url.trim().startsWith('http://') || url.trim().startsWith('https://');
+    const hasFileExtension = /\.(pdf|doc|docx|txt|csv|xls|xlsx|zip|rar)$/i.test(url.trim());
+    
     const newItem: ContextItem = {
       id: Date.now().toString(),
       url: url.trim(),
-      type: url.includes(".") ? "file" : "webpage",
+      type: isWebpage ? "webpage" : (hasFileExtension ? "file" : "webpage"),
       status: "pending",
     };
 
