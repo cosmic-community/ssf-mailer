@@ -1,10 +1,8 @@
 import { Resend } from "resend";
 
-if (!process.env.RESEND_API_KEY) {
-  throw new Error("RESEND_API_KEY environment variable is not set");
-}
-
-export const resend = new Resend(process.env.RESEND_API_KEY);
+// Don't check environment variable at import time to avoid build errors
+// Instead, check it when functions are called
+export const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 // Type definitions for Resend API responses based on actual Resend library types
 export interface SendEmailOptions {
@@ -44,6 +42,15 @@ export class ResendRateLimitError extends Error {
 export async function sendEmail(
   options: SendEmailOptions
 ): Promise<ResendSuccessResponse> {
+  // Check for API key at runtime, not import time
+  if (!process.env.RESEND_API_KEY) {
+    throw new Error("RESEND_API_KEY environment variable is not set");
+  }
+
+  if (!resend) {
+    throw new Error("Resend client not initialized - RESEND_API_KEY is required");
+  }
+
   try {
     const baseUrl =
       process.env.NEXT_PUBLIC_APP_URL ||
