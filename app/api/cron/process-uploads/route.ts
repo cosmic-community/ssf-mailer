@@ -20,7 +20,7 @@ const PROCESSING_JOBS = new Map<string, { timestamp: number; processor: string }
 const JOB_LOCK_TIMEOUT = 240000; // 4 minutes lock timeout (longer than processing time)
 
 interface ContactData {
-  first_name: string;
+  first_name?: string; // Changed: Made optional
   last_name?: string;
   email: string;
   status: "Active" | "Unsubscribed" | "Bounced";
@@ -394,9 +394,9 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
   );
   const columnMap = createColumnMap(headers);
 
-  // Validate required columns
-  if (columnMap.email === undefined || columnMap.first_name === undefined) {
-    throw new Error("Required columns (email, first_name) not found");
+  // Validate required columns - ONLY email is required now
+  if (columnMap.email === undefined) {
+    throw new Error("Required column (email) not found");
   }
 
   // CRITICAL FIX: Use processed_contacts as the canonical counter (not resume_from_contact)
@@ -458,7 +458,8 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, "").trim() || "";
 
       contact.email = emailValue.toLowerCase();
-      contact.first_name = firstNameValue;
+      // Changed: Use email as fallback for first_name if not provided
+      contact.first_name = firstNameValue || emailValue.split('@')[0]; // Use part before @ as fallback
 
       // Optional fields
       if (columnMap.last_name !== undefined && row[columnMap.last_name] !== undefined) {
@@ -517,12 +518,7 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       continue;
     }
 
-    // Validation
-    if (!contact.first_name || contact.first_name.trim() === "") {
-      errors.push(`Row ${i + 1}: First name is required`);
-      continue;
-    }
-
+    // Validation - Changed: Only email is required, first_name is auto-generated if missing
     if (!contact.email || contact.email.trim() === "") {
       errors.push(`Row ${i + 1}: Email is required`);
       continue;
@@ -534,9 +530,9 @@ async function processUploadJobChunked(job: UploadJob, startTime: number) {
       continue;
     }
 
-    // Create valid contact
+    // Create valid contact - ensure first_name is always present
     const validContact: ContactData = {
-      first_name: contact.first_name,
+      first_name: contact.first_name || contact.email.split('@')[0], // Always provide fallback
       last_name: contact.last_name || "",
       email: contact.email,
       status: contact.status || "Active",

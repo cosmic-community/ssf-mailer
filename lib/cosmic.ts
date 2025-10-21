@@ -1824,10 +1824,10 @@ export async function createEmailContact(
 ): Promise<EmailContact> {
   try {
     const { object } = await cosmic.objects.insertOne({
-      title: `${data.first_name} ${data.last_name || ""}`.trim(),
+      title: `${data.first_name || data.email.split('@')[0]} ${data.last_name || ""}`.trim(), // Changed: Use email prefix as fallback
       type: "email-contacts",
       metadata: {
-        first_name: data.first_name,
+        first_name: data.first_name || data.email.split('@')[0], // Changed: Use email prefix as fallback if not provided
         last_name: data.last_name || "",
         email: data.email,
         status: {

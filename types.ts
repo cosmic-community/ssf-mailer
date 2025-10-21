@@ -122,7 +122,7 @@ export interface EmailList extends CosmicObject {
 export interface EmailContact extends CosmicObject {
   type: "email-contacts";
   metadata: {
-    first_name: string;
+    first_name?: string; // Changed: Made optional to support email-only imports
     last_name?: string;
     email: string;
     status: {
@@ -298,7 +298,7 @@ export interface CosmicResponse<T> {
 
 // Form data types
 export interface CreateContactData {
-  first_name: string;
+  first_name?: string; // Changed: Made optional to support email-only imports
   last_name?: string;
   email: string;
   status: "Active" | "Unsubscribed" | "Bounced";

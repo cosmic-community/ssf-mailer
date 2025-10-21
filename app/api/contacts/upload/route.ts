@@ -3,7 +3,7 @@ import { createUploadJob } from "@/lib/cosmic";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 interface ContactData {
-  first_name: string;
+  first_name?: string; // Changed: Made optional
   last_name?: string;
   email: string;
   status: "Active" | "Unsubscribed" | "Bounced";
@@ -185,7 +185,7 @@ export async function POST(
     // Create flexible column mapping
     const columnMap = createColumnMap(headers);
 
-    // Check if we found the required columns
+    // Check if we found the required columns - ONLY email is required now
     if (columnMap.email === undefined) {
       return NextResponse.json(
         {
@@ -196,15 +196,8 @@ export async function POST(
       );
     }
 
-    if (columnMap.first_name === undefined) {
-      return NextResponse.json(
-        {
-          error:
-            "First name column not found. Please ensure your CSV has a first name column (variations: first_name, firstname, fname, name)",
-        },
-        { status: 400 }
-      );
-    }
+    // Removed first_name requirement - it's now optional
+    // The system will use email as fallback for first_name if not provided
 
     // Basic validation - count valid rows for job creation
     let validContactCount = 0;
@@ -221,11 +214,8 @@ export async function POST(
         const emailValue = row[columnMap.email]?.replace(/^["']|["']$/g, "").trim() || "";
         const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, "").trim() || "";
 
-        // Basic validation
-        if (!firstNameValue) {
-          validationErrors.push(`Row ${i + 1}: First name is required`);
-          continue;
-        }
+        // Changed: First name validation is no longer required
+        // If no first name is provided, we'll use part of the email as fallback
 
         if (!emailValue) {
           validationErrors.push(`Row ${i + 1}: Email is required`);

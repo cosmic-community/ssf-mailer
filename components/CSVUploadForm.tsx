@@ -173,8 +173,10 @@ export default function CSVUploadForm() {
                 <strong>Required columns (auto-detected):</strong>
                 <ul className="ml-4 mt-1 space-y-1">
                   <li>• <strong>Email:</strong> email, emailaddress, mail, e-mail</li>
-                  <li>• <strong>First Name:</strong> first_name, firstname, fname, name</li>
                 </ul>
+                <p className="mt-2 text-xs text-blue-600">
+                  <strong>Note:</strong> First name is now optional! If not provided, we'll automatically use the email prefix as the first name.
+                </p>
               </div>
             </div>
           </div>
@@ -184,6 +186,7 @@ export default function CSVUploadForm() {
           <div className="p-4 bg-green-50 border border-green-200 rounded-md">
             <h3 className="text-sm font-medium text-green-800 mb-2">Optional Fields (auto-detected)</h3>
             <ul className="text-sm text-green-700 space-y-1">
+              <li>• <strong>First Name:</strong> first_name, firstname, fname, name (optional - fallback to email prefix)</li>
               <li>• <strong>Last Name:</strong> last_name, lastname, surname</li>
               <li>• <strong>Status:</strong> status, state, subscription</li>
               <li>• <strong>Tags/Interests:</strong> tags, categories, groups, interests</li>
@@ -237,7 +240,7 @@ export default function CSVUploadForm() {
               required
             />
             <p className="text-sm text-gray-500">
-              Any CSV format with email and name columns will work. Maximum file size: 200MB. Background processing handles massive datasets automatically.
+              Any CSV format with email columns will work. First name is optional - we'll use email prefix as fallback. Maximum file size: 200MB. Background processing handles massive datasets automatically.
             </p>
           </div>
 
