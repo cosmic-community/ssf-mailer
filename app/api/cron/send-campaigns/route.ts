@@ -100,9 +100,29 @@ export async function GET(request: NextRequest) {
             // This is a datetime-local format (no timezone info)
             // We need to treat this as Pacific Time (PT)
             // Convert PT to UTC for comparison
-            const [datePart, timePart] = sendDate.split('T');
-            const [year, month, day] = datePart.split('-').map(Number);
-            const [hour, minute] = timePart.split(':').map(Number);
+            const dateParts = sendDate.split('T');
+            const datePart = dateParts[0];
+            const timePart = dateParts[1];
+            
+            // CRITICAL FIX: Add undefined checks for datePart and timePart
+            if (!datePart || !timePart) {
+              console.error(`Invalid send_date format: ${sendDate}`);
+              continue;
+            }
+            
+            const dateComponents = datePart.split('-').map(Number);
+            const timeComponents = timePart.split(':').map(Number);
+            const year = dateComponents[0];
+            const month = dateComponents[1];
+            const day = dateComponents[2];
+            const hour = timeComponents[0];
+            const minute = timeComponents[1];
+            
+            // CRITICAL FIX: Add undefined checks for parsed components
+            if (year === undefined || month === undefined || day === undefined || hour === undefined) {
+              console.error(`Failed to parse send_date components: ${sendDate}`);
+              continue;
+            }
             
             // Create date in Pacific timezone
             // Note: JavaScript months are 0-indexed
