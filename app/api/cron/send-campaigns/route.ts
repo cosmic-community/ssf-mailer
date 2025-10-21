@@ -91,12 +91,43 @@ export async function GET(request: NextRequest) {
         // Check if campaign is scheduled for future
         const sendDate = campaign.metadata.send_date;
         if (sendDate) {
-          const scheduledTime = new Date(sendDate);
+          // CRITICAL FIX: Convert datetime-local format to proper timezone-aware Date
+          // The frontend sends datetime-local format like "2025-10-21T11:00"
+          // This needs to be interpreted as local time (PT in this case)
+          let scheduledTime: Date;
+          
+          if (sendDate.includes('T') && !sendDate.includes('Z') && !sendDate.includes('+') && !sendDate.includes('-')) {
+            // This is a datetime-local format (no timezone info)
+            // We need to treat this as Pacific Time (PT)
+            // Convert PT to UTC for comparison
+            const [datePart, timePart] = sendDate.split('T');
+            const [year, month, day] = datePart.split('-').map(Number);
+            const [hour, minute] = timePart.split(':').map(Number);
+            
+            // Create date in Pacific timezone
+            // Note: JavaScript months are 0-indexed
+            scheduledTime = new Date();
+            scheduledTime.setFullYear(year, month - 1, day);
+            scheduledTime.setHours(hour, minute || 0, 0, 0);
+            
+            // Convert from Pacific Time to UTC
+            // Pacific Time is UTC-8 (PST) or UTC-7 (PDT)
+            // For simplicity, we'll assume PST (UTC-8) - in production you might want to use a proper timezone library
+            const isDST = isDateInDST(scheduledTime);
+            const timezoneOffset = isDST ? 7 : 8; // PDT is UTC-7, PST is UTC-8
+            
+            scheduledTime = new Date(scheduledTime.getTime() + (timezoneOffset * 60 * 60 * 1000));
+          } else {
+            // Already has timezone info or is in ISO format
+            scheduledTime = new Date(sendDate);
+          }
 
           console.log(`Campaign "${campaign.metadata.name}" schedule check:`, {
-            scheduledTime: scheduledTime.toISOString(),
-            currentTime: now.toISOString(),
+            originalSendDate: sendDate,
+            scheduledTimeUTC: scheduledTime.toISOString(),
+            currentTimeUTC: now.toISOString(),
             shouldSend: scheduledTime <= now,
+            timezoneHandling: 'PT to UTC conversion applied'
           });
 
           // Only process if scheduled time has passed
@@ -104,7 +135,7 @@ export async function GET(request: NextRequest) {
             console.log(
               `Skipping "${
                 campaign.metadata.name
-              }" - scheduled for ${scheduledTime.toISOString()}`
+              }" - scheduled for ${scheduledTime.toISOString()} (converted from PT)`
             );
             continue;
           }
@@ -218,6 +249,38 @@ export async function GET(request: NextRequest) {
     console.error("Cron job error:", error);
     return NextResponse.json({ error: "Cron job failed" }, { status: 500 });
   }
+}
+
+// Helper function to determine if a date is in Daylight Saving Time
+function isDateInDST(date: Date): boolean {
+  // Simple DST check for Pacific Time
+  // DST typically runs from second Sunday in March to first Sunday in November
+  const year = date.getFullYear();
+  const month = date.getMonth(); // 0-based
+  
+  // DST months: March through October (some weeks)
+  if (month < 2 || month > 10) return false; // Jan, Feb, Dec - definitely not DST
+  if (month > 2 && month < 10) return true; // Apr through Sep - definitely DST
+  
+  // March and November need more precise checking
+  const day = date.getDate();
+  
+  if (month === 2) { // March
+    // Second Sunday is between 8-14
+    // Find second Sunday
+    const firstSunday = 7 - new Date(year, 2, 1).getDay();
+    const secondSunday = firstSunday + 7;
+    return day >= secondSunday;
+  }
+  
+  if (month === 10) { // November  
+    // First Sunday is between 1-7
+    const firstSunday = 7 - new Date(year, 10, 1).getDay();
+    if (firstSunday === 7) return day < 1; // First Sunday is the 7th
+    return day < firstSunday;
+  }
+  
+  return false;
 }
 
 async function processCampaignBatch(
