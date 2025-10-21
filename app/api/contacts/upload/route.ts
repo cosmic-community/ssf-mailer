@@ -211,8 +211,12 @@ export async function POST(
 
       try {
         const row = parseCSVLine(currentLine);
-        const emailValue = row[columnMap.email]?.replace(/^["']|["']$/g, "").trim() || "";
-        const firstNameValue = row[columnMap.first_name]?.replace(/^["']|["']$/g, "").trim() || "";
+        // FIXED: Add proper undefined check for column mapping access
+        const emailIndex = columnMap.email;
+        const firstNameIndex = columnMap.first_name;
+        
+        const emailValue = (emailIndex !== undefined && row[emailIndex]) ? row[emailIndex].replace(/^["']|["']$/g, "").trim() : "";
+        const firstNameValue = (firstNameIndex !== undefined && row[firstNameIndex]) ? row[firstNameIndex].replace(/^["']|["']$/g, "").trim() : "";
 
         // Changed: First name validation is no longer required
         // If no first name is provided, we'll use part of the email as fallback

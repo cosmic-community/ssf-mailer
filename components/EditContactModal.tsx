@@ -132,7 +132,7 @@ export default function EditContactModal({ contact, children }: EditContactModal
               <Label htmlFor="first_name">First Name *</Label>
               <Input
                 id="first_name"
-                value={formData.first_name}
+                value={formData.first_name || ''} // FIXED: Add null coalescing to prevent undefined
                 onChange={(e) => handleInputChange('first_name', e.target.value)}
                 placeholder="John"
                 required
@@ -258,7 +258,7 @@ export default function EditContactModal({ contact, children }: EditContactModal
             </Button>
             <Button
               type="submit"
-              disabled={isSubmitting || !formData.first_name.trim() || !formData.email.trim()}
+              disabled={isSubmitting || !(formData.first_name || '').trim() || !formData.email.trim()} // FIXED: Add null coalescing and proper check
               className="min-w-[120px]"
             >
               {isSubmitting ? (
